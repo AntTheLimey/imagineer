@@ -12,13 +12,16 @@
 /**
  * Hook for tracking dirty state and preventing navigation with unsaved changes.
  *
- * Uses react-router-dom's useBlocker for in-app navigation and the
- * beforeunload event for browser navigation/refresh. Provides a
- * confirmation dialog component for handling blocked navigation.
+ * Uses the beforeunload event for browser navigation/refresh. For in-app
+ * navigation, provides a confirmation mechanism that can be used with
+ * navigation handlers.
+ *
+ * Note: React Router's useBlocker requires a data router (createBrowserRouter),
+ * which would require refactoring App.tsx. This implementation uses beforeunload
+ * for browser navigation and provides manual confirmation for in-app navigation.
  */
 
 import { useState, useEffect, useCallback, ReactNode } from 'react';
-import { useBlocker, BlockerFunction } from 'react-router-dom';
 import {
     Button,
     Dialog,
@@ -102,8 +105,12 @@ interface UseUnsavedChangesReturn {
     markDirty: () => void;
     /** Clear dirty state */
     clearDirty: () => void;
-    /** Manually confirm navigation (bypasses the dialog) */
-    confirmNavigation: () => void;
+    /** Show the confirmation dialog */
+    showConfirmDialog: () => void;
+    /** Hide the confirmation dialog */
+    hideConfirmDialog: () => void;
+    /** Check if should block and show dialog if needed. Returns true if blocked. */
+    checkUnsavedChanges: (onConfirm?: () => void) => boolean;
     /** The confirmation dialog component to render */
     ConfirmDialog: ReactNode;
 }
@@ -121,6 +128,7 @@ interface UseUnsavedChangesReturn {
  *   setIsDirty,
  *   markDirty,
  *   clearDirty,
+ *   checkUnsavedChanges,
  *   ConfirmDialog,
  * } = useUnsavedChanges({
  *   message: 'Your entity changes will be lost.',
@@ -138,6 +146,13 @@ interface UseUnsavedChangesReturn {
  *   clearDirty();
  * };
  *
+ * // Handle back navigation
+ * const handleBack = () => {
+ *   if (!checkUnsavedChanges(() => navigate(-1))) {
+ *     navigate(-1);
+ *   }
+ * };
+ *
  * // Render the dialog
  * return (
  *   <>
@@ -153,20 +168,10 @@ export function useUnsavedChanges({
     enabled = true,
 }: UseUnsavedChangesOptions = {}): UseUnsavedChangesReturn {
     const [isDirty, setIsDirtyState] = useState(initialDirty);
-
-    // Blocker function for react-router
-    const shouldBlock: BlockerFunction = useCallback(
-        ({ currentLocation, nextLocation }) => {
-            return (
-                enabled &&
-                isDirty &&
-                currentLocation.pathname !== nextLocation.pathname
-            );
-        },
-        [enabled, isDirty]
+    const [dialogOpen, setDialogOpen] = useState(false);
+    const [pendingAction, setPendingAction] = useState<(() => void) | null>(
+        null
     );
-
-    const blocker = useBlocker(shouldBlock);
 
     /**
      * Set the dirty state.
@@ -190,22 +195,55 @@ export function useUnsavedChanges({
     }, []);
 
     /**
-     * Manually confirm navigation.
+     * Show the confirmation dialog.
      */
-    const confirmNavigation = useCallback(() => {
-        if (blocker.state === 'blocked') {
-            blocker.proceed();
-        }
-    }, [blocker]);
+    const showConfirmDialog = useCallback(() => {
+        setDialogOpen(true);
+    }, []);
 
     /**
-     * Cancel blocked navigation.
+     * Hide the confirmation dialog.
      */
-    const cancelNavigation = useCallback(() => {
-        if (blocker.state === 'blocked') {
-            blocker.reset();
+    const hideConfirmDialog = useCallback(() => {
+        setDialogOpen(false);
+        setPendingAction(null);
+    }, []);
+
+    /**
+     * Check if should block navigation and show dialog if needed.
+     * Returns true if blocked (dialog shown), false if can proceed.
+     */
+    const checkUnsavedChanges = useCallback(
+        (onConfirm?: () => void): boolean => {
+            if (!enabled || !isDirty) {
+                return false;
+            }
+            setPendingAction(() => onConfirm || null);
+            setDialogOpen(true);
+            return true;
+        },
+        [enabled, isDirty]
+    );
+
+    /**
+     * Handle dialog confirmation.
+     */
+    const handleConfirm = useCallback(() => {
+        setDialogOpen(false);
+        setIsDirtyState(false);
+        if (pendingAction) {
+            pendingAction();
         }
-    }, [blocker]);
+        setPendingAction(null);
+    }, [pendingAction]);
+
+    /**
+     * Handle dialog cancellation.
+     */
+    const handleCancel = useCallback(() => {
+        setDialogOpen(false);
+        setPendingAction(null);
+    }, []);
 
     // Handle browser beforeunload event
     useEffect(() => {
@@ -231,10 +269,10 @@ export function useUnsavedChanges({
     // Build the confirmation dialog
     const ConfirmDialog = (
         <ConfirmNavigationDialog
-            open={blocker.state === 'blocked'}
+            open={dialogOpen}
             message={message}
-            onConfirm={confirmNavigation}
-            onCancel={cancelNavigation}
+            onConfirm={handleConfirm}
+            onCancel={handleCancel}
         />
     );
 
@@ -243,7 +281,9 @@ export function useUnsavedChanges({
         setIsDirty,
         markDirty,
         clearDirty,
-        confirmNavigation,
+        showConfirmDialog,
+        hideConfirmDialog,
+        checkUnsavedChanges,
         ConfirmDialog,
     };
 }

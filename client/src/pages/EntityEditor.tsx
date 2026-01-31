@@ -186,9 +186,11 @@ export default function EntityEditor() {
     const [showDraftRecovery, setShowDraftRecovery] = useState(false);
 
     // Unsaved changes protection
-    const { isDirty, setIsDirty, clearDirty, ConfirmDialog } = useUnsavedChanges({
-        message: 'You have unsaved changes to this entity. Are you sure you want to leave?',
-    });
+    const { isDirty, setIsDirty, clearDirty, checkUnsavedChanges, ConfirmDialog } =
+        useUnsavedChanges({
+            message:
+                'You have unsaved changes to this entity. Are you sure you want to leave?',
+        });
 
     // Autosave
     const { lastSaved } = useAutosave({
@@ -365,11 +367,17 @@ export default function EntityEditor() {
     }, [handleSave, navigate, campaignId]);
 
     /**
-     * Handle back navigation.
+     * Handle back navigation with unsaved changes check.
      */
     const handleBack = useCallback(() => {
-        navigate(`/campaigns/${campaignId}/entities`);
-    }, [navigate, campaignId]);
+        const goBack = () => navigate(`/campaigns/${campaignId}/entities`);
+        // If there are unsaved changes, checkUnsavedChanges will show the dialog
+        // and return true. If the user confirms, it will call goBack.
+        // If there are no unsaved changes, it returns false and we navigate directly.
+        if (!checkUnsavedChanges(goBack)) {
+            goBack();
+        }
+    }, [navigate, campaignId, checkUnsavedChanges]);
 
     // Build breadcrumbs
     const breadcrumbs = useMemo(
