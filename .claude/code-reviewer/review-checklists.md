@@ -36,7 +36,7 @@ This document provides checklists for reviewing different types of changes.
 - [ ] Input validation present
 - [ ] No SQL injection vectors
 - [ ] Sensitive data protected
-- [ ] Keeper notes not exposed
+- [ ] GM notes not exposed
 
 ### Imagineer-Specific
 
@@ -143,7 +143,7 @@ This document provides checklists for reviewing different types of changes.
 
 - [ ] Authentication required
 - [ ] Campaign access verified
-- [ ] Keeper vs player access checked
+- [ ] GM vs player access checked
 
 ### Response
 

@@ -132,15 +132,15 @@ This document records major architectural decisions for Imagineer.
 - Preserves human judgment for narrative decisions
 - No silent data loss
 - Audit trail of conflicts
-- Keeper makes final call
+- GM makes final call
 
-## ADR-010: Keeper Notes as First-Class Field
+## ADR-010: GM Notes as First-Class Field
 
 **Status**: Accepted
 
 **Context**: Need GM-only content on entities.
 
-**Decision**: Dedicated keeper_notes column, never exposed to players.
+**Decision**: Dedicated gm_notes column, never exposed to players.
 
 **Rationale**:
 

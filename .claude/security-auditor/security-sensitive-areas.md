@@ -8,14 +8,14 @@ This document identifies code locations requiring security review.
 
 **Risk Level: CRITICAL**
 
-| Location | Security Concern |
-|----------|------------------|
-| `/internal/api/entities.go` | Keeper note exposure, authorization |
-| `/internal/models/entity.go` | Field filtering for player views |
+| Location                       | Security Concern                 |
+|--------------------------------|----------------------------------|
+| `/internal/api/entities.go`    | GM note exposure, authorization  |
+| `/internal/models/entity.go`   | Field filtering for player views |
 
 **Review checklist:**
 
-- [ ] Keeper notes filtered for player requests
+- [ ] GM notes filtered for player requests
 - [ ] Campaign ownership verified
 - [ ] Entity type validated
 - [ ] Input sanitized
@@ -24,10 +24,10 @@ This document identifies code locations requiring security review.
 
 **Risk Level: HIGH**
 
-| Location | Security Concern |
-|----------|------------------|
-| `/internal/importers/evernote/` | XML parsing, entity injection |
-| `/internal/importers/googledocs/` | URL validation, content injection |
+| Location                          | Security Concern                   |
+|-----------------------------------|-----------------------------------|
+| `/internal/importers/evernote/`   | XML parsing, entity injection      |
+| `/internal/importers/googledocs/` | URL validation, content injection  |
 
 **Review checklist:**
 
@@ -40,10 +40,10 @@ This document identifies code locations requiring security review.
 
 **Risk Level: HIGH**
 
-| Location | Security Concern |
-|----------|------------------|
+| Location              | Security Concern                   |
+|-----------------------|------------------------------------|
 | `/internal/database/` | SQL injection, credential handling |
-| `/migrations/` | Schema security |
+| `/migrations/`        | Schema security                    |
 
 **Review checklist:**
 
@@ -58,10 +58,10 @@ This document identifies code locations requiring security review.
 
 **Risk Level: HIGH**
 
-| Location | Security Concern |
-|----------|------------------|
+| Location         | Security Concern                |
+|------------------|---------------------------------|
 | `/internal/api/` | Input validation, authorization |
-| `/cmd/server/` | Server configuration |
+| `/cmd/server/`   | Server configuration            |
 
 **Review checklist:**
 
@@ -74,13 +74,13 @@ This document identifies code locations requiring security review.
 
 **Risk Level: HIGH**
 
-| Location | Security Concern |
-|----------|------------------|
+| Location                    | Security Concern      |
+|-----------------------------|-----------------------|
 | `/internal/api/sessions.go` | Session data exposure |
 
 **Review checklist:**
 
-- [ ] Prep notes protected (keeper only)
+- [ ] Prep notes protected (GM only)
 - [ ] Session ownership verified
 - [ ] Discovery data filtered by role
 
@@ -90,10 +90,10 @@ This document identifies code locations requiring security review.
 
 **Risk Level: MEDIUM**
 
-| Location | Security Concern |
-|----------|------------------|
-| `/client/src/pages/` | XSS, input validation |
-| `/client/src/components/` | User data display |
+| Location                  | Security Concern      |
+|---------------------------|-----------------------|
+| `/client/src/pages/`      | XSS, input validation |
+| `/client/src/components/` | User data display     |
 
 **Review checklist:**
 
@@ -105,10 +105,10 @@ This document identifies code locations requiring security review.
 
 **Risk Level: MEDIUM**
 
-| Location | Security Concern |
-|----------|------------------|
-| `/config/` | Secret management |
-| `.env` | Credential storage |
+| Location   | Security Concern   |
+|------------|-------------------|
+| `/config/` | Secret management  |
+| `.env`     | Credential storage |
 
 **Review checklist:**
 
@@ -124,7 +124,7 @@ This document identifies code locations requiring security review.
 // SQL string concatenation - ALWAYS VULNERABLE
 query := "SELECT * FROM entities WHERE id = " + entityID
 
-// Keeper notes in player response
+// GM notes in player response
 return entity  // Without filtering
 
 // Weak random for security
@@ -171,7 +171,7 @@ Import files       ────────────▶  │ ─────�
 API requests                      │                Server logic
                                   │
 Player requests    ────────────▶  │ ────────────▶  Filtered entities
-                                  │                (no keeper notes)
+                                  │                (no GM notes)
 ```
 
 ## Data Classification
@@ -179,6 +179,6 @@ Player requests    ────────────▶  │ ─────�
 | Classification | Examples | Handling |
 |----------------|----------|----------|
 | **Secret** | Session tokens | Never logged, encrypted |
-| **Keeper-Only** | Keeper notes, prep notes | Never sent to players |
+| **GM-Only** | GM notes, prep notes | Never sent to players |
 | **Campaign-Private** | All campaign data | Access control required |
 | **Public** | Game system schemas | No restrictions |

@@ -7,7 +7,7 @@ for Imagineer.
 
 ### Primary Goals
 
-1. **Data Confidentiality**: Keeper notes never exposed to players
+1. **Data Confidentiality**: GM notes never exposed to players
 2. **Data Integrity**: Canon conflicts detected, not silently resolved
 3. **Access Control**: Users only access their own campaigns
 4. **Input Validation**: All user input validated before processing
@@ -17,7 +17,7 @@ for Imagineer.
 **In Scope:**
 
 - Unauthorized access to campaigns
-- Keeper note exposure to players
+- GM note exposure to players
 - SQL injection attacks
 - Cross-site scripting (XSS)
 - Data tampering
@@ -34,8 +34,8 @@ for Imagineer.
 
 | Role | Description | Capabilities |
 |------|-------------|--------------|
-| Keeper | Game Master | Full access to campaign |
-| Player | Campaign participant | Read public entities, no keeper notes |
+| GM | Game Master | Full access to campaign |
+| Player | Campaign participant | Read public entities, no GM notes |
 | Guest | Unauthenticated | No access |
 
 ### Resource Ownership
@@ -51,20 +51,20 @@ User → owns → Campaign → contains → Entity
 ### Authorization Rules
 
 1. **Campaign Access**: Only owner can access campaign
-2. **Entity Visibility**: Players see entities minus keeper notes
-3. **Session Access**: Only keeper can see prep notes
-4. **Conflict Resolution**: Only keeper can resolve conflicts
+2. **Entity Visibility**: Players see entities minus GM notes
+3. **Session Access**: Only GM can see prep notes
+4. **Conflict Resolution**: Only GM can resolve conflicts
 
-## Keeper Note Protection
+## GM Note Protection
 
 ### Critical Requirement
 
-Keeper notes (GM-only content) must NEVER be exposed to players.
+GM notes (GM-only content) must NEVER be exposed to players.
 
 ### Implementation
 
 ```go
-// Entity fields with keeper-only content
+// Entity fields with GM-only content
 type Entity struct {
     // Public fields
     ID          string
@@ -72,8 +72,8 @@ type Entity struct {
     Description string
     // ...
 
-    // KEEPER-ONLY FIELDS
-    KeeperNotes       string  // Never send to players
+    // GM-ONLY FIELDS
+    GMNotes           string  // Never send to players
     DiscoveredSession string  // May reveal plot
 }
 
@@ -83,7 +83,7 @@ func FilterForPlayer(entity *Entity) *Entity {
         ID:          entity.ID,
         Name:        entity.Name,
         Description: entity.Description,
-        // KeeperNotes omitted
+        // GMNotes omitted
         // DiscoveredSession omitted
     }
 }
@@ -93,9 +93,9 @@ func FilterForPlayer(entity *Entity) *Entity {
 
 All API endpoints that return entities must:
 
-1. Check if requester is keeper or player
-2. Filter keeper-only fields for players
-3. Never include keeper notes in list responses to players
+1. Check if requester is GM or player
+2. Filter GM-only fields for players
+3. Never include GM notes in list responses to players
 
 ## Input Validation
 
@@ -223,7 +223,7 @@ crypto_rand.Read(token)  // Secure
 
 - [ ] Input validated on server
 - [ ] Authorization checked
-- [ ] Keeper notes protected
+- [ ] GM notes protected
 - [ ] No SQL injection vectors
 - [ ] No XSS vectors
 - [ ] Errors don't leak info
@@ -246,7 +246,7 @@ crypto_rand.Read(token)  // Secure
 
 ## Incident Response
 
-### If Keeper Notes Exposed
+### If GM Notes Exposed
 
 1. Identify affected campaigns
 2. Notify affected users

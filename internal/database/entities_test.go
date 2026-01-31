@@ -340,7 +340,7 @@ func TestCreateEntityRequest_NilTagsDefaulting(t *testing.T) {
 // with all fields including tags.
 func TestEntity_CompleteStructure(t *testing.T) {
 	description := "A test entity description"
-	keeperNotes := "Secret GM notes"
+	gmNotes := "Secret GM notes"
 	sourceDoc := "Test Document"
 
 	entity := models.Entity{
@@ -349,7 +349,7 @@ func TestEntity_CompleteStructure(t *testing.T) {
 		Description:      &description,
 		Attributes:       json.RawMessage(`{"str":10,"dex":12}`),
 		Tags:             []string{"tag1", "tag2", "tag3"},
-		KeeperNotes:      &keeperNotes,
+		GMNotes:          &gmNotes,
 		SourceDocument:   &sourceDoc,
 		SourceConfidence: models.SourceConfidenceDraft,
 		Version:          1,

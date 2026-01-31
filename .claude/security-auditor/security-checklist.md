@@ -14,8 +14,8 @@ Component-specific security checklists for Imagineer.
 ### Authorization
 
 - [ ] Campaign ownership verified
-- [ ] Keeper vs player role checked
-- [ ] Keeper notes filtered for players
+- [ ] GM vs player role checked
+- [ ] GM notes filtered for players
 - [ ] Resource access matches user
 
 ### Input Validation
@@ -127,7 +127,7 @@ Component-specific security checklists for Imagineer.
 ### Retrieval
 
 - [ ] Campaign ownership checked
-- [ ] Keeper notes filtered for players
+- [ ] GM notes filtered for players
 - [ ] Related data filtered
 - [ ] Query optimized
 
@@ -193,7 +193,7 @@ Component-specific security checklists for Imagineer.
 
 ## Incident Response Checklist
 
-### If Keeper Notes Exposed
+### If GM Notes Exposed
 
 1. [ ] Identify affected campaigns
 2. [ ] Notify affected users

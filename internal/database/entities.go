@@ -24,7 +24,7 @@ import (
 func (db *DB) ListEntitiesByCampaign(ctx context.Context, campaignID uuid.UUID) ([]models.Entity, error) {
 	query := `
         SELECT id, campaign_id, entity_type, name, description, attributes,
-               tags, keeper_notes, discovered_session, source_document,
+               tags, gm_notes, discovered_session, source_document,
                source_confidence, version, created_at, updated_at
         FROM entities
         WHERE campaign_id = $1
@@ -43,7 +43,7 @@ func (db *DB) ListEntitiesByCampaign(ctx context.Context, campaignID uuid.UUID) 
 func (db *DB) ListEntitiesByType(ctx context.Context, campaignID uuid.UUID, entityType models.EntityType) ([]models.Entity, error) {
 	query := `
         SELECT id, campaign_id, entity_type, name, description, attributes,
-               tags, keeper_notes, discovered_session, source_document,
+               tags, gm_notes, discovered_session, source_document,
                source_confidence, version, created_at, updated_at
         FROM entities
         WHERE campaign_id = $1 AND entity_type = $2
@@ -62,7 +62,7 @@ func (db *DB) ListEntitiesByType(ctx context.Context, campaignID uuid.UUID, enti
 func (db *DB) GetEntity(ctx context.Context, id uuid.UUID) (*models.Entity, error) {
 	query := `
         SELECT id, campaign_id, entity_type, name, description, attributes,
-               tags, keeper_notes, discovered_session, source_document,
+               tags, gm_notes, discovered_session, source_document,
                source_confidence, version, created_at, updated_at
         FROM entities
         WHERE id = $1`
@@ -70,7 +70,7 @@ func (db *DB) GetEntity(ctx context.Context, id uuid.UUID) (*models.Entity, erro
 	var e models.Entity
 	err := db.QueryRow(ctx, query, id).Scan(
 		&e.ID, &e.CampaignID, &e.EntityType, &e.Name, &e.Description,
-		&e.Attributes, &e.Tags, &e.KeeperNotes, &e.DiscoveredSession,
+		&e.Attributes, &e.Tags, &e.GMNotes, &e.DiscoveredSession,
 		&e.SourceDocument, &e.SourceConfidence, &e.Version,
 		&e.CreatedAt, &e.UpdatedAt,
 	)
@@ -102,21 +102,21 @@ func (db *DB) CreateEntity(ctx context.Context, campaignID uuid.UUID, req models
 
 	query := `
         INSERT INTO entities (id, campaign_id, entity_type, name, description,
-                              attributes, tags, keeper_notes, discovered_session,
+                              attributes, tags, gm_notes, discovered_session,
                               source_document, source_confidence)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING id, campaign_id, entity_type, name, description, attributes,
-                  tags, keeper_notes, discovered_session, source_document,
+                  tags, gm_notes, discovered_session, source_document,
                   source_confidence, version, created_at, updated_at`
 
 	var e models.Entity
 	err := db.QueryRow(ctx, query,
 		id, campaignID, req.EntityType, req.Name, req.Description,
-		attributes, tags, req.KeeperNotes, req.DiscoveredSession,
+		attributes, tags, req.GMNotes, req.DiscoveredSession,
 		req.SourceDocument, sourceConfidence,
 	).Scan(
 		&e.ID, &e.CampaignID, &e.EntityType, &e.Name, &e.Description,
-		&e.Attributes, &e.Tags, &e.KeeperNotes, &e.DiscoveredSession,
+		&e.Attributes, &e.Tags, &e.GMNotes, &e.DiscoveredSession,
 		&e.SourceDocument, &e.SourceConfidence, &e.Version,
 		&e.CreatedAt, &e.UpdatedAt,
 	)
@@ -161,9 +161,9 @@ func (db *DB) UpdateEntity(ctx context.Context, id uuid.UUID, req models.UpdateE
 		tags = req.Tags
 	}
 
-	keeperNotes := existing.KeeperNotes
-	if req.KeeperNotes != nil {
-		keeperNotes = req.KeeperNotes
+	gmNotes := existing.GMNotes
+	if req.GMNotes != nil {
+		gmNotes = req.GMNotes
 	}
 
 	discoveredSession := existing.DiscoveredSession
@@ -184,21 +184,21 @@ func (db *DB) UpdateEntity(ctx context.Context, id uuid.UUID, req models.UpdateE
 	query := `
         UPDATE entities
         SET entity_type = $2, name = $3, description = $4, attributes = $5,
-            tags = $6, keeper_notes = $7, discovered_session = $8,
+            tags = $6, gm_notes = $7, discovered_session = $8,
             source_document = $9, source_confidence = $10, version = version + 1
         WHERE id = $1
         RETURNING id, campaign_id, entity_type, name, description, attributes,
-                  tags, keeper_notes, discovered_session, source_document,
+                  tags, gm_notes, discovered_session, source_document,
                   source_confidence, version, created_at, updated_at`
 
 	var e models.Entity
 	err = db.QueryRow(ctx, query,
 		id, entityType, name, description, attributes,
-		tags, keeperNotes, discoveredSession,
+		tags, gmNotes, discoveredSession,
 		sourceDocument, sourceConfidence,
 	).Scan(
 		&e.ID, &e.CampaignID, &e.EntityType, &e.Name, &e.Description,
-		&e.Attributes, &e.Tags, &e.KeeperNotes, &e.DiscoveredSession,
+		&e.Attributes, &e.Tags, &e.GMNotes, &e.DiscoveredSession,
 		&e.SourceDocument, &e.SourceConfidence, &e.Version,
 		&e.CreatedAt, &e.UpdatedAt,
 	)
@@ -264,7 +264,7 @@ func (db *DB) CountEntitiesByType(ctx context.Context) (map[string]int, error) {
 func (db *DB) SearchEntitiesByName(ctx context.Context, campaignID uuid.UUID, name string, limit int) ([]models.Entity, error) {
 	query := `
         SELECT id, campaign_id, entity_type, name, description, attributes,
-               tags, keeper_notes, discovered_session, source_document,
+               tags, gm_notes, discovered_session, source_document,
                source_confidence, version, created_at, updated_at
         FROM entities
         WHERE campaign_id = $1 AND name % $2
@@ -287,7 +287,7 @@ func scanEntities(rows pgx.Rows) ([]models.Entity, error) {
 		var e models.Entity
 		err := rows.Scan(
 			&e.ID, &e.CampaignID, &e.EntityType, &e.Name, &e.Description,
-			&e.Attributes, &e.Tags, &e.KeeperNotes, &e.DiscoveredSession,
+			&e.Attributes, &e.Tags, &e.GMNotes, &e.DiscoveredSession,
 			&e.SourceDocument, &e.SourceConfidence, &e.Version,
 			&e.CreatedAt, &e.UpdatedAt,
 		)

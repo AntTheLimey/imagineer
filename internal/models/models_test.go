@@ -148,7 +148,7 @@ func TestCampaign_JSONMarshalUnmarshal(t *testing.T) {
 
 func TestEntity_JSONMarshalUnmarshal(t *testing.T) {
 	description := "A shady antiquarian with connections to the cult"
-	keeperNotes := "Hidden antagonist, reveal in session 5"
+	gmNotes := "Hidden antagonist, reveal in session 5"
 
 	tests := []struct {
 		name   string
@@ -164,7 +164,7 @@ func TestEntity_JSONMarshalUnmarshal(t *testing.T) {
 				Description:      &description,
 				Attributes:       json.RawMessage(`{"occupation": "Antiquarian", "age": 45}`),
 				Tags:             []string{"antagonist", "cultist", "london"},
-				KeeperNotes:      &keeperNotes,
+				GMNotes:          &gmNotes,
 				SourceConfidence: SourceConfidenceAuthoritative,
 				Version:          1,
 				CreatedAt:        time.Date(2025, 5, 1, 10, 0, 0, 0, time.UTC),

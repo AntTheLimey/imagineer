@@ -34,7 +34,7 @@ Imagineer is a system-agnostic TTRPG campaign intelligence platform.
 **1. Campaign Content (Per-Campaign, Private)**
 
 Content that gets vectorized per campaign:
-- Entity descriptions, attributes, keeper notes
+- Entity descriptions, attributes, GM notes
 - Session notes and scene content
 - Timeline events and their descriptions
 - Relationship descriptions
@@ -272,7 +272,7 @@ AI Prompt: [System instructions] + [Retrieved context] + [User request]
 - Rulebook content can be shared (with proper licensing)
 - Embedding API calls send content externally (note in privacy policy)
 - Local embedding option (Ollama) for sensitive campaigns
-- Never send keeper notes to shared/public systems
+- Never send GM notes to shared/public systems
 
 ## Data Model
 See SCHEMAS.md for detailed entity schemas.
@@ -365,7 +365,7 @@ A **Scene** is a discrete unit of narrative content with:
 - **Title** - Short descriptive name ("Arrival at the Village")
 - **Summary** - What happens in this scene
 - **Involved Entities** - NPCs, locations, items present
-- **GM Notes** - Private keeper information
+- **GM Notes** - Private GM information
 - **Memorable Moments** - Categorised highlights (Funny, Dramatic, Epic,
   Intriguing) added during or after play
 - **Outline Points** - Structured beats within the scene

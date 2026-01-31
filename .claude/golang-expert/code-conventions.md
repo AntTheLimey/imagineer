@@ -99,7 +99,7 @@ type Entity struct {
     Description string
 
     // Optional fields
-    KeeperNotes *string
+    GMNotes *string
     Tags        []string
 
     // Metadata

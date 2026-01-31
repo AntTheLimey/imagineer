@@ -39,7 +39,7 @@ entities (
     description         TEXT,
     attributes          JSONB,              -- system-specific stats
     tags                TEXT[],
-    keeper_notes        TEXT,               -- never player-visible
+    gm_notes            TEXT,               -- never player-visible
     discovered_session  UUID REFERENCES sessions(id),
     source_document     TEXT,               -- canon authority
     source_confidence   TEXT DEFAULT 'DRAFT', -- DRAFT, AUTHORITATIVE, SUPERSEDED

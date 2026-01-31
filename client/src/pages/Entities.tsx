@@ -52,6 +52,7 @@ import {
     useUpdateEntity,
     useDeleteEntity,
     useSimilarEntities,
+    useCampaignOwnership,
 } from '../hooks';
 import type { Entity, EntityType, SourceConfidence } from '../types';
 
@@ -105,7 +106,7 @@ interface EntityFormData {
     description: string;
     tags: string[];
     attributes: string;
-    keeperNotes: string;
+    gmNotes: string;
     sourceConfidence: SourceConfidence;
 }
 
@@ -118,7 +119,7 @@ const DEFAULT_FORM_DATA: EntityFormData = {
     description: '',
     tags: [],
     attributes: '{}',
-    keeperNotes: '',
+    gmNotes: '',
     sourceConfidence: 'DRAFT',
 };
 
@@ -147,6 +148,9 @@ function formatDate(dateString: string): string {
 
 export default function Entities() {
     const { id: campaignId } = useParams<{ id: string }>();
+
+    // Check if current user is the campaign owner (GM)
+    const { isOwner: isGM } = useCampaignOwnership(campaignId ?? '');
 
     // Pagination state
     const [page, setPage] = useState(0);
@@ -236,7 +240,7 @@ export default function Entities() {
                 description: formData.description.trim() || undefined,
                 tags: formData.tags.length > 0 ? formData.tags : undefined,
                 attributes: JSON.parse(formData.attributes),
-                keeperNotes: formData.keeperNotes.trim() || undefined,
+                gmNotes: formData.gmNotes.trim() || undefined,
                 sourceConfidence: formData.sourceConfidence,
             });
             setCreateDialogOpen(false);
@@ -260,7 +264,7 @@ export default function Entities() {
                     description: formData.description.trim() || undefined,
                     tags: formData.tags,
                     attributes: JSON.parse(formData.attributes),
-                    keeperNotes: formData.keeperNotes.trim() || undefined,
+                    gmNotes: formData.gmNotes.trim() || undefined,
                     sourceConfidence: formData.sourceConfidence,
                 },
             });
@@ -304,7 +308,7 @@ export default function Entities() {
             description: entity.description ?? '',
             tags: entity.tags ?? [],
             attributes: JSON.stringify(entity.attributes ?? {}, null, 2),
-            keeperNotes: entity.keeperNotes ?? '',
+            gmNotes: entity.gmNotes ?? '',
             sourceConfidence: entity.sourceConfidence,
         });
         setFormErrors({});
@@ -638,11 +642,18 @@ export default function Entities() {
                     <Autocomplete
                         multiple
                         freeSolo
+                        autoSelect
                         options={[]}
                         value={formData.tags}
                         onChange={(_event, newValue) =>
                             setFormData({ ...formData, tags: newValue as string[] })
                         }
+                        onBlur={(event) => {
+                            const inputValue = (event.target as HTMLInputElement).value?.trim();
+                            if (inputValue && !formData.tags.includes(inputValue)) {
+                                setFormData({ ...formData, tags: [...formData.tags, inputValue] });
+                            }
+                        }}
                         renderTags={(value, getTagProps) =>
                             value.map((option, index) => (
                                 <Chip
@@ -657,7 +668,7 @@ export default function Entities() {
                             <TextField
                                 {...params}
                                 label="Tags"
-                                placeholder="Press Enter to add tags"
+                                placeholder="Type and press Enter to add tags"
                                 sx={{ mt: 2 }}
                             />
                         )}
@@ -678,16 +689,18 @@ export default function Entities() {
                         }}
                     />
 
-                    <TextField
-                        label="Keeper Notes (GM Only)"
-                        fullWidth
-                        multiline
-                        rows={3}
-                        value={formData.keeperNotes}
-                        onChange={(e) => setFormData({ ...formData, keeperNotes: e.target.value })}
-                        sx={{ mt: 2 }}
-                        helperText="Private notes visible only to the Game Master"
-                    />
+                    {isGM && (
+                        <TextField
+                            label="GM Notes"
+                            fullWidth
+                            multiline
+                            rows={3}
+                            value={formData.gmNotes}
+                            onChange={(e) => setFormData({ ...formData, gmNotes: e.target.value })}
+                            sx={{ mt: 2 }}
+                            helperText="Private notes visible only to the Game Master"
+                        />
+                    )}
 
                     <FormControl fullWidth sx={{ mt: 2 }}>
                         <InputLabel>Source Confidence</InputLabel>
@@ -809,17 +822,17 @@ export default function Entities() {
                                     </Box>
                                 )}
 
-                            {selectedEntity.keeperNotes && (
+                            {isGM && selectedEntity.gmNotes && (
                                 <Box sx={{ mb: 2 }}>
                                     <Typography variant="subtitle2" color="text.secondary">
-                                        Keeper Notes (GM Only)
+                                        GM Notes
                                     </Typography>
                                     <Paper
                                         variant="outlined"
                                         sx={{ p: 2, bgcolor: 'warning.light', color: 'warning.contrastText' }}
                                     >
                                         <Typography variant="body2">
-                                            {selectedEntity.keeperNotes}
+                                            {selectedEntity.gmNotes}
                                         </Typography>
                                     </Paper>
                                 </Box>
@@ -923,11 +936,18 @@ export default function Entities() {
                     <Autocomplete
                         multiple
                         freeSolo
+                        autoSelect
                         options={[]}
                         value={formData.tags}
                         onChange={(_event, newValue) =>
                             setFormData({ ...formData, tags: newValue as string[] })
                         }
+                        onBlur={(event) => {
+                            const inputValue = (event.target as HTMLInputElement).value?.trim();
+                            if (inputValue && !formData.tags.includes(inputValue)) {
+                                setFormData({ ...formData, tags: [...formData.tags, inputValue] });
+                            }
+                        }}
                         renderTags={(value, getTagProps) =>
                             value.map((option, index) => (
                                 <Chip
@@ -942,7 +962,7 @@ export default function Entities() {
                             <TextField
                                 {...params}
                                 label="Tags"
-                                placeholder="Press Enter to add tags"
+                                placeholder="Type and press Enter to add tags"
                                 sx={{ mt: 2 }}
                             />
                         )}
@@ -963,16 +983,18 @@ export default function Entities() {
                         }}
                     />
 
-                    <TextField
-                        label="Keeper Notes (GM Only)"
-                        fullWidth
-                        multiline
-                        rows={3}
-                        value={formData.keeperNotes}
-                        onChange={(e) => setFormData({ ...formData, keeperNotes: e.target.value })}
-                        sx={{ mt: 2 }}
-                        helperText="Private notes visible only to the Game Master"
-                    />
+                    {isGM && (
+                        <TextField
+                            label="GM Notes"
+                            fullWidth
+                            multiline
+                            rows={3}
+                            value={formData.gmNotes}
+                            onChange={(e) => setFormData({ ...formData, gmNotes: e.target.value })}
+                            sx={{ mt: 2 }}
+                            helperText="Private notes visible only to the Game Master"
+                        />
+                    )}
 
                     <FormControl fullWidth sx={{ mt: 2 }}>
                         <InputLabel>Source Confidence</InputLabel>

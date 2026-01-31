@@ -183,7 +183,7 @@ export function EntityCard({ entity, onClick }: EntityCardProps) {
 
 - [ ] Input validated
 - [ ] Authorization checked
-- [ ] Keeper notes protected
+- [ ] GM notes protected
 - [ ] No injection vectors
 
 ### Imagineer-Specific
@@ -211,13 +211,13 @@ if conflict {
 }
 ```
 
-### Exposing Keeper Notes
+### Exposing GM Notes
 
-Always filter keeper-only content for player views.
+Always filter GM-only content for player views.
 
 ```go
 // BAD
-return entity  // Includes keeper notes!
+return entity  // Includes GM notes!
 
 // GOOD
 return filterForPlayer(entity)  // Safe

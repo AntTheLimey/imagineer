@@ -14,6 +14,7 @@ export interface Campaign {
     id: string;
     name: string;
     systemId: string;
+    ownerId?: string;
     description?: string;
     settings: Record<string, unknown>;
     createdAt: string;
@@ -43,7 +44,7 @@ export interface Entity {
     description?: string;
     attributes: Record<string, unknown>;
     tags: string[];
-    keeperNotes?: string;
+    gmNotes?: string;
     discoveredSession?: string;
     sourceDocument?: string;
     sourceConfidence: SourceConfidence;

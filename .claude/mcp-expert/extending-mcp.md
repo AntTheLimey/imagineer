@@ -166,7 +166,7 @@ func (s *Server) registerResources() {
 - [ ] All parameters validated
 - [ ] Authorization verified
 - [ ] Campaign access checked
-- [ ] Keeper notes filtered for players
+- [ ] GM notes filtered for players
 - [ ] Rate limiting applied
 - [ ] Errors don't leak info
 - [ ] Audit logging added

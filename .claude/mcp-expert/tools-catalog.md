@@ -57,7 +57,7 @@ Get full entity details.
 }
 ```
 
-**Note:** Keeper notes filtered based on role.
+**Note:** GM notes filtered based on role.
 
 ### entity_create
 

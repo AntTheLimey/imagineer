@@ -218,7 +218,7 @@ if existing != nil {
 3. **Promote to AUTHORITATIVE**
    Confirm important information
 
-4. **Use keeper notes**
+4. **Use GM notes**
    Track reasoning for decisions
 
 ### For Development

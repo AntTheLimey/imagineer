@@ -36,7 +36,7 @@ export interface CreateEntityInput {
     description?: string;
     attributes?: Record<string, unknown>;
     tags?: string[];
-    keeperNotes?: string;
+    gmNotes?: string;
     discoveredSession?: string;
     sourceDocument?: string;
     sourceConfidence?: SourceConfidence;
@@ -50,7 +50,7 @@ export interface UpdateEntityInput {
     description?: string;
     attributes?: Record<string, unknown>;
     tags?: string[];
-    keeperNotes?: string;
+    gmNotes?: string;
     discoveredSession?: string;
     sourceDocument?: string;
     sourceConfidence?: SourceConfidence;
@@ -80,9 +80,11 @@ export const entitiesApi = {
 
     /**
      * Get a single entity by ID.
+     * Note: campaignId is kept for API consistency but not used in the URL.
+     * The server verifies campaign ownership via the entity's campaign_id.
      */
-    get(campaignId: string, entityId: string): Promise<Entity> {
-        return apiClient.get<Entity>(`/campaigns/${campaignId}/entities/${entityId}`);
+    get(_campaignId: string, entityId: string): Promise<Entity> {
+        return apiClient.get<Entity>(`/entities/${entityId}`);
     },
 
     /**
@@ -95,16 +97,20 @@ export const entitiesApi = {
 
     /**
      * Update an existing entity.
+     * Note: campaignId is kept for API consistency but not used in the URL.
+     * The server verifies campaign ownership via the entity's campaign_id.
      */
-    update(campaignId: string, entityId: string, input: UpdateEntityInput): Promise<Entity> {
-        return apiClient.put<Entity>(`/campaigns/${campaignId}/entities/${entityId}`, input);
+    update(_campaignId: string, entityId: string, input: UpdateEntityInput): Promise<Entity> {
+        return apiClient.put<Entity>(`/entities/${entityId}`, input);
     },
 
     /**
      * Delete an entity.
+     * Note: campaignId is kept for API consistency but not used in the URL.
+     * The server verifies campaign ownership via the entity's campaign_id.
      */
-    delete(campaignId: string, entityId: string): Promise<void> {
-        return apiClient.delete<void>(`/campaigns/${campaignId}/entities/${entityId}`);
+    delete(_campaignId: string, entityId: string): Promise<void> {
+        return apiClient.delete<void>(`/entities/${entityId}`);
     },
 
     /**

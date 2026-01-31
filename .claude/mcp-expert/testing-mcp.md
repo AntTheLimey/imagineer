@@ -14,7 +14,7 @@ func TestEntitySearch_Success(t *testing.T) {
         Return([]Entity{{ID: "1", Name: "Test"}}, nil)
 
     handler := NewHandler(db)
-    ctx := contextWithUser("user-1", "keeper")
+    ctx := contextWithUser("user-1", "gm")
 
     // Execute
     params := map[string]any{
@@ -40,7 +40,7 @@ func TestEntitySearch_Unauthorized(t *testing.T) {
         Return(&Campaign{OwnerID: "other-user"}, nil)
 
     handler := NewHandler(db)
-    ctx := contextWithUser("user-1", "keeper")  // Wrong user
+    ctx := contextWithUser("user-1", "gm")  // Wrong user
 
     params := map[string]any{
         "campaign_id": "campaign-1",
@@ -61,7 +61,7 @@ func TestEntityGet_PlayerFilteredNotes(t *testing.T) {
         Return(&Entity{
             ID:          "entity-1",
             Name:        "NPC",
-            KeeperNotes: "Secret info",  // Should be filtered
+            GMNotes: "Secret info",  // Should be filtered
         }, nil)
 
     handler := NewHandler(db)
@@ -74,7 +74,7 @@ func TestEntityGet_PlayerFilteredNotes(t *testing.T) {
 
     assert.NoError(t, err)
     entity := result.(*Entity)
-    assert.Empty(t, entity.KeeperNotes)  // Filtered
+    assert.Empty(t, entity.GMNotes)  // Filtered
 }
 ```
 
@@ -146,7 +146,7 @@ func TestMCPProtocol_ListTools(t *testing.T) {
 ```go
 func TestEntitySearch_InvalidCampaignID(t *testing.T) {
     handler := NewHandler(db)
-    ctx := contextWithUser("user-1", "keeper")
+    ctx := contextWithUser("user-1", "gm")
 
     params := map[string]any{
         "campaign_id": "not-a-uuid",
@@ -160,7 +160,7 @@ func TestEntitySearch_InvalidCampaignID(t *testing.T) {
 
 func TestEntitySearch_MissingRequired(t *testing.T) {
     handler := NewHandler(db)
-    ctx := contextWithUser("user-1", "keeper")
+    ctx := contextWithUser("user-1", "gm")
 
     params := map[string]any{}  // Missing campaign_id
     _, err := handler.HandleEntitySearch(ctx, params)
@@ -180,7 +180,7 @@ func TestEntityGet_DatabaseError(t *testing.T) {
         Return(nil, errors.New("connection failed"))
 
     handler := NewHandler(db)
-    ctx := contextWithUser("user-1", "keeper")
+    ctx := contextWithUser("user-1", "gm")
 
     params := map[string]any{
         "entity_id": "entity-1",

@@ -193,10 +193,10 @@ func CreateEntity(ctx context.Context, entity Entity) error {
 }
 ```
 
-### Exposing Keeper Notes to Players
+### Exposing GM Notes to Players
 
 ```go
-// BAD - Returns all fields including keeper notes
+// BAD - Returns all fields including GM notes
 func GetEntityForPlayer(id string) (*Entity, error) {
     return db.GetEntity(id)
 }
@@ -207,7 +207,7 @@ func GetEntityForPlayer(id string) (*Entity, error) {
     if err != nil {
         return nil, err
     }
-    entity.KeeperNotes = ""  // Strip GM-only content
+    entity.GMNotes = ""  // Strip GM-only content
     return entity, nil
 }
 ```

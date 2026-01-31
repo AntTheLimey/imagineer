@@ -24,7 +24,7 @@ This document maps API endpoints and input validation requirements.
 | `/api/entities/{id}` | PUT | Required + Owner | All fields |
 | `/api/entities/{id}` | DELETE | Required + Owner | UUID format |
 
-**Critical**: Entity GET must filter keeper notes for player access.
+**Critical**: Entity GET must filter GM notes for player access.
 
 ### Relationship Endpoints
 
@@ -40,7 +40,7 @@ This document maps API endpoints and input validation requirements.
 | `/api/campaigns/{id}/sessions` | GET | Required + Owner | UUID |
 | `/api/campaigns/{id}/sessions` | POST | Required + Owner | All fields |
 
-**Critical**: Session prep notes are keeper-only.
+**Critical**: Session prep notes are GM-only.
 
 ### Timeline Endpoints
 
@@ -75,7 +75,7 @@ func validateUUID(id string) error {
 |-------|------------|---------|----------|
 | Entity name | 200 | Printable | Yes |
 | Description | 10000 | Any | No |
-| Keeper notes | 50000 | Any | No |
+| GM notes | 50000 | Any | No |
 | Tags | 50 each | Alphanumeric | No |
 
 ### Entity Type
@@ -143,12 +143,12 @@ func authorizeForCampaign(ctx context.Context, userID, campaignID string) error 
 
 Entities inherit authorization from their campaign.
 
-### Player vs Keeper
+### Player vs GM
 
 ```go
 func filterEntityForRole(entity *Entity, role string) *Entity {
     if role == "player" {
-        entity.KeeperNotes = ""
+        entity.GMNotes = ""
         entity.DiscoveredSession = ""
     }
     return entity

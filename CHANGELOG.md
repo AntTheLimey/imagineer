@@ -54,7 +54,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Create dialog with duplicate detection
   - View/Edit dialogs with validation
   - Delete with confirmation
-  - Tags, keeper notes, and source confidence tracking
+  - Tags, GM notes, and source confidence tracking
 - Fully functional Timeline page with:
   - Vertical timeline layout with colored date indicators
   - Filter panel (date precision, visibility, date range)
@@ -205,7 +205,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
-- Security review identified areas for hardening before production: authentication, keeper note filtering, SSL for database, environment-based credentials
+- Security review identified areas for hardening before production: authentication, GM note filtering, SSL for database, environment-based credentials
 
 ### Infrastructure Details
 
