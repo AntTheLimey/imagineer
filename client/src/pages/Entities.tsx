@@ -642,11 +642,18 @@ export default function Entities() {
                     <Autocomplete
                         multiple
                         freeSolo
+                        autoSelect
                         options={[]}
                         value={formData.tags}
                         onChange={(_event, newValue) =>
                             setFormData({ ...formData, tags: newValue as string[] })
                         }
+                        onBlur={(event) => {
+                            const inputValue = (event.target as HTMLInputElement).value?.trim();
+                            if (inputValue && !formData.tags.includes(inputValue)) {
+                                setFormData({ ...formData, tags: [...formData.tags, inputValue] });
+                            }
+                        }}
                         renderTags={(value, getTagProps) =>
                             value.map((option, index) => (
                                 <Chip
@@ -661,7 +668,7 @@ export default function Entities() {
                             <TextField
                                 {...params}
                                 label="Tags"
-                                placeholder="Press Enter to add tags"
+                                placeholder="Type and press Enter to add tags"
                                 sx={{ mt: 2 }}
                             />
                         )}
@@ -929,11 +936,18 @@ export default function Entities() {
                     <Autocomplete
                         multiple
                         freeSolo
+                        autoSelect
                         options={[]}
                         value={formData.tags}
                         onChange={(_event, newValue) =>
                             setFormData({ ...formData, tags: newValue as string[] })
                         }
+                        onBlur={(event) => {
+                            const inputValue = (event.target as HTMLInputElement).value?.trim();
+                            if (inputValue && !formData.tags.includes(inputValue)) {
+                                setFormData({ ...formData, tags: [...formData.tags, inputValue] });
+                            }
+                        }}
                         renderTags={(value, getTagProps) =>
                             value.map((option, index) => (
                                 <Chip
@@ -948,7 +962,7 @@ export default function Entities() {
                             <TextField
                                 {...params}
                                 label="Tags"
-                                placeholder="Press Enter to add tags"
+                                placeholder="Type and press Enter to add tags"
                                 sx={{ mt: 2 }}
                             />
                         )}
