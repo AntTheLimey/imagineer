@@ -72,3 +72,4 @@
 - [x] Fix Timeline.tsx forEach lint error (CodeRabbit)
 - [x] Add campaign scoping to relationship/timeline handlers (CodeRabbit)
 - [x] Update PostgreSQL from 17 to 18 (pgedge-postgres:18-spock5-standard)
+- [x] Configure PostgreSQL extensions (vector, vectorizer, pg_cron, etc.)

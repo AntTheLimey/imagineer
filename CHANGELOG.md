@@ -61,6 +61,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Added copyright notice requirement for source files
 - Upgraded PostgreSQL from 17 to 18 (pgedge-postgres:18-spock5-standard)
 - CI workflow now tests against PostgreSQL 17 and 18 (was 16 and 17)
+- Added PostgreSQL extensions auto-configuration on container startup:
+  - pg_trgm, vector, pgedge_vectorizer, pg_tokenizer, vchord_bm25,
+    vectorize, pgmq, pg_cron
+- Added `make test-db` to verify database extensions are installed
 
 ### Added
 

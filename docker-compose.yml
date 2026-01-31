@@ -9,8 +9,13 @@ services:
       - PGDATA=/var/lib/postgresql/data/pgdata
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
+      - ./scripts/db-init:/docker-entrypoint-initdb.d:ro
     ports:
       - "5432:5432"
+    command: >
+      postgres
+      -c shared_preload_libraries=pg_cron,pg_tokenizer,pgedge_vectorizer
+      -c cron.database_name=imagineer
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U imagineer -d imagineer"]
       interval: 10s
