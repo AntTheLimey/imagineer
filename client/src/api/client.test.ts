@@ -38,21 +38,21 @@ describe('ApiError', () => {
 });
 
 describe('apiClient', () => {
-    const originalFetch = global.fetch;
+    const originalFetch = globalThis.fetch;
 
     beforeEach(() => {
-        global.fetch = vi.fn();
+        globalThis.fetch = vi.fn();
     });
 
     afterEach(() => {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
         vi.resetAllMocks();
     });
 
     describe('get', () => {
         it('should make a GET request and return JSON response', async () => {
             const mockData = { id: '123', name: 'Test' };
-            vi.mocked(global.fetch).mockResolvedValue({
+            vi.mocked(globalThis.fetch).mockResolvedValue({
                 ok: true,
                 status: 200,
                 json: () => Promise.resolve(mockData),
@@ -60,8 +60,8 @@ describe('apiClient', () => {
 
             const result = await apiClient.get('/test');
 
-            expect(global.fetch).toHaveBeenCalledTimes(1);
-            const [url, options] = vi.mocked(global.fetch).mock.calls[0];
+            expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+            const [url, options] = vi.mocked(globalThis.fetch).mock.calls[0];
             expect(url).toContain('/api/test');
             expect(options?.method).toBe('GET');
             expect(options?.headers).toEqual({ 'Content-Type': 'application/json' });
@@ -69,7 +69,7 @@ describe('apiClient', () => {
         });
 
         it('should include query parameters in the URL', async () => {
-            vi.mocked(global.fetch).mockResolvedValue({
+            vi.mocked(globalThis.fetch).mockResolvedValue({
                 ok: true,
                 status: 200,
                 json: () => Promise.resolve({}),
@@ -77,14 +77,14 @@ describe('apiClient', () => {
 
             await apiClient.get('/test', { page: 1, limit: 10, active: true });
 
-            const [url] = vi.mocked(global.fetch).mock.calls[0];
+            const [url] = vi.mocked(globalThis.fetch).mock.calls[0];
             expect(url).toContain('page=1');
             expect(url).toContain('limit=10');
             expect(url).toContain('active=true');
         });
 
         it('should skip undefined query parameters', async () => {
-            vi.mocked(global.fetch).mockResolvedValue({
+            vi.mocked(globalThis.fetch).mockResolvedValue({
                 ok: true,
                 status: 200,
                 json: () => Promise.resolve({}),
@@ -92,7 +92,7 @@ describe('apiClient', () => {
 
             await apiClient.get('/test', { page: 1, limit: undefined });
 
-            const [url] = vi.mocked(global.fetch).mock.calls[0];
+            const [url] = vi.mocked(globalThis.fetch).mock.calls[0];
             expect(url).toContain('page=1');
             expect(url).not.toContain('limit');
         });
@@ -102,7 +102,7 @@ describe('apiClient', () => {
         it('should make a POST request with JSON body', async () => {
             const requestBody = { name: 'New Item' };
             const responseData = { id: '456', name: 'New Item' };
-            vi.mocked(global.fetch).mockResolvedValue({
+            vi.mocked(globalThis.fetch).mockResolvedValue({
                 ok: true,
                 status: 201,
                 json: () => Promise.resolve(responseData),
@@ -110,8 +110,8 @@ describe('apiClient', () => {
 
             const result = await apiClient.post('/items', requestBody);
 
-            expect(global.fetch).toHaveBeenCalledTimes(1);
-            const [url, options] = vi.mocked(global.fetch).mock.calls[0];
+            expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+            const [url, options] = vi.mocked(globalThis.fetch).mock.calls[0];
             expect(url).toContain('/api/items');
             expect(options?.method).toBe('POST');
             expect(options?.body).toBe(JSON.stringify(requestBody));
@@ -122,7 +122,7 @@ describe('apiClient', () => {
     describe('put', () => {
         it('should make a PUT request with JSON body', async () => {
             const requestBody = { name: 'Updated Item' };
-            vi.mocked(global.fetch).mockResolvedValue({
+            vi.mocked(globalThis.fetch).mockResolvedValue({
                 ok: true,
                 status: 200,
                 json: () => Promise.resolve(requestBody),
@@ -130,7 +130,7 @@ describe('apiClient', () => {
 
             const result = await apiClient.put('/items/123', requestBody);
 
-            const [url, options] = vi.mocked(global.fetch).mock.calls[0];
+            const [url, options] = vi.mocked(globalThis.fetch).mock.calls[0];
             expect(url).toContain('/api/items/123');
             expect(options?.method).toBe('PUT');
             expect(options?.body).toBe(JSON.stringify(requestBody));
@@ -141,7 +141,7 @@ describe('apiClient', () => {
     describe('patch', () => {
         it('should make a PATCH request with JSON body', async () => {
             const requestBody = { name: 'Patched Item' };
-            vi.mocked(global.fetch).mockResolvedValue({
+            vi.mocked(globalThis.fetch).mockResolvedValue({
                 ok: true,
                 status: 200,
                 json: () => Promise.resolve(requestBody),
@@ -149,7 +149,7 @@ describe('apiClient', () => {
 
             const result = await apiClient.patch('/items/123', requestBody);
 
-            const [url, options] = vi.mocked(global.fetch).mock.calls[0];
+            const [url, options] = vi.mocked(globalThis.fetch).mock.calls[0];
             expect(url).toContain('/api/items/123');
             expect(options?.method).toBe('PATCH');
             expect(options?.body).toBe(JSON.stringify(requestBody));
@@ -159,20 +159,20 @@ describe('apiClient', () => {
 
     describe('delete', () => {
         it('should make a DELETE request', async () => {
-            vi.mocked(global.fetch).mockResolvedValue({
+            vi.mocked(globalThis.fetch).mockResolvedValue({
                 ok: true,
                 status: 204,
             } as Response);
 
             await apiClient.delete('/items/123');
 
-            const [url, options] = vi.mocked(global.fetch).mock.calls[0];
+            const [url, options] = vi.mocked(globalThis.fetch).mock.calls[0];
             expect(url).toContain('/api/items/123');
             expect(options?.method).toBe('DELETE');
         });
 
         it('should handle 204 No Content response', async () => {
-            vi.mocked(global.fetch).mockResolvedValue({
+            vi.mocked(globalThis.fetch).mockResolvedValue({
                 ok: true,
                 status: 204,
             } as Response);
@@ -186,7 +186,7 @@ describe('apiClient', () => {
     describe('error handling', () => {
         it('should throw ApiError on non-2xx response with JSON body', async () => {
             const errorBody = { message: 'Not found', code: 'NOT_FOUND' };
-            vi.mocked(global.fetch).mockResolvedValue({
+            vi.mocked(globalThis.fetch).mockResolvedValue({
                 ok: false,
                 status: 404,
                 statusText: 'Not Found',
@@ -207,7 +207,7 @@ describe('apiClient', () => {
         });
 
         it('should throw ApiError with status text when response body is not JSON', async () => {
-            vi.mocked(global.fetch).mockResolvedValue({
+            vi.mocked(globalThis.fetch).mockResolvedValue({
                 ok: false,
                 status: 500,
                 statusText: 'Internal Server Error',
@@ -226,7 +226,7 @@ describe('apiClient', () => {
         });
 
         it('should throw ApiError on 401 Unauthorized', async () => {
-            vi.mocked(global.fetch).mockResolvedValue({
+            vi.mocked(globalThis.fetch).mockResolvedValue({
                 ok: false,
                 status: 401,
                 statusText: 'Unauthorized',
@@ -249,7 +249,7 @@ describe('apiClient', () => {
         it('should upload a file using FormData', async () => {
             const mockFile = new File(['test content'], 'test.txt', { type: 'text/plain' });
             const responseData = { id: '789', filename: 'test.txt' };
-            vi.mocked(global.fetch).mockResolvedValue({
+            vi.mocked(globalThis.fetch).mockResolvedValue({
                 ok: true,
                 status: 200,
                 json: () => Promise.resolve(responseData),
@@ -257,8 +257,8 @@ describe('apiClient', () => {
 
             const result = await apiClient.upload('/upload', mockFile);
 
-            expect(global.fetch).toHaveBeenCalledTimes(1);
-            const [url, options] = vi.mocked(global.fetch).mock.calls[0];
+            expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+            const [url, options] = vi.mocked(globalThis.fetch).mock.calls[0];
             expect(url).toBe('/api/upload');
             expect(options?.method).toBe('POST');
             expect(options?.body).toBeInstanceOf(FormData);
@@ -267,7 +267,7 @@ describe('apiClient', () => {
 
         it('should include additional data in FormData', async () => {
             const mockFile = new File(['test'], 'test.txt', { type: 'text/plain' });
-            vi.mocked(global.fetch).mockResolvedValue({
+            vi.mocked(globalThis.fetch).mockResolvedValue({
                 ok: true,
                 status: 200,
                 json: () => Promise.resolve({}),
@@ -275,14 +275,14 @@ describe('apiClient', () => {
 
             await apiClient.upload('/upload', mockFile, { campaignId: '123' });
 
-            const [, options] = vi.mocked(global.fetch).mock.calls[0];
+            const [, options] = vi.mocked(globalThis.fetch).mock.calls[0];
             const formData = options?.body as FormData;
             expect(formData.get('campaignId')).toBe('123');
         });
 
         it('should throw ApiError on upload failure', async () => {
             const mockFile = new File(['test'], 'test.txt', { type: 'text/plain' });
-            vi.mocked(global.fetch).mockResolvedValue({
+            vi.mocked(globalThis.fetch).mockResolvedValue({
                 ok: false,
                 status: 400,
                 statusText: 'Bad Request',

@@ -48,7 +48,7 @@ describe('Dashboard', () => {
             data: mockDashboardStats,
             isLoading: false,
             error: null,
-        } as ReturnType<typeof useDashboardStats>);
+        } as unknown as ReturnType<typeof useDashboardStats>);
 
         render(<Dashboard />);
 
@@ -60,7 +60,7 @@ describe('Dashboard', () => {
             data: mockDashboardStats,
             isLoading: false,
             error: null,
-        } as ReturnType<typeof useDashboardStats>);
+        } as unknown as ReturnType<typeof useDashboardStats>);
 
         render(<Dashboard />);
 
@@ -72,7 +72,7 @@ describe('Dashboard', () => {
             data: mockDashboardStats,
             isLoading: false,
             error: null,
-        } as ReturnType<typeof useDashboardStats>);
+        } as unknown as ReturnType<typeof useDashboardStats>);
 
         render(<Dashboard />);
 
@@ -92,7 +92,7 @@ describe('Dashboard', () => {
             data: mockDashboardStats,
             isLoading: false,
             error: null,
-        } as ReturnType<typeof useDashboardStats>);
+        } as unknown as ReturnType<typeof useDashboardStats>);
 
         render(<Dashboard />);
 
@@ -107,7 +107,7 @@ describe('Dashboard', () => {
             data: undefined,
             isLoading: true,
             error: null,
-        } as ReturnType<typeof useDashboardStats>);
+        } as unknown as ReturnType<typeof useDashboardStats>);
 
         render(<Dashboard />);
 
@@ -121,7 +121,7 @@ describe('Dashboard', () => {
             data: undefined,
             isLoading: false,
             error: new Error('Failed to fetch'),
-        } as ReturnType<typeof useDashboardStats>);
+        } as unknown as ReturnType<typeof useDashboardStats>);
 
         render(<Dashboard />);
 
@@ -134,7 +134,7 @@ describe('Dashboard', () => {
             data: mockDashboardStats,
             isLoading: false,
             error: null,
-        } as ReturnType<typeof useDashboardStats>);
+        } as unknown as ReturnType<typeof useDashboardStats>);
 
         render(<Dashboard />);
 
@@ -146,7 +146,7 @@ describe('Dashboard', () => {
             data: mockDashboardStats,
             isLoading: false,
             error: null,
-        } as ReturnType<typeof useDashboardStats>);
+        } as unknown as ReturnType<typeof useDashboardStats>);
 
         render(<Dashboard />);
 
@@ -170,7 +170,7 @@ describe('Dashboard', () => {
             },
             isLoading: false,
             error: null,
-        } as ReturnType<typeof useDashboardStats>);
+        } as unknown as ReturnType<typeof useDashboardStats>);
 
         render(<Dashboard />);
 
@@ -184,7 +184,7 @@ describe('Dashboard', () => {
             data: undefined,
             isLoading: true,
             error: new Error('Some error'),
-        } as ReturnType<typeof useDashboardStats>);
+        } as unknown as ReturnType<typeof useDashboardStats>);
 
         render(<Dashboard />);
 

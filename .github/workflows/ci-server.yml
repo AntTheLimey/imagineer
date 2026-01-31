@@ -85,9 +85,6 @@ jobs:
             - name: Build server
               run: go build -o bin/imagineer ./cmd/server
 
-            - name: Build CLI
-              run: go build -o bin/imagineer-cli ./cmd/cli
-
             - name: Wait for PostgreSQL
               run: |
                   until pg_isready -h localhost -p 5432 -U imagineer; do
