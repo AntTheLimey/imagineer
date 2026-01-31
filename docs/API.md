@@ -204,7 +204,7 @@ POST /api/campaigns/:id/entities
 | description | string | No | Public description |
 | attributes | object | No | System-specific attributes |
 | tags | string[] | No | Searchable tags |
-| gmNotes | string | No | GM-only notes |
+| gmNotes | string | No | GM-only notes (returns empty string for non-owners) |
 
 **Response:** `201 Created` with the created entity object.
 

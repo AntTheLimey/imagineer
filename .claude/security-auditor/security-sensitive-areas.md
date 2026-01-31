@@ -8,10 +8,10 @@ This document identifies code locations requiring security review.
 
 **Risk Level: CRITICAL**
 
-| Location | Security Concern |
-|----------|------------------|
-| `/internal/api/entities.go` | GM note exposure, authorization |
-| `/internal/models/entity.go` | Field filtering for player views |
+| Location                       | Security Concern                 |
+|--------------------------------|----------------------------------|
+| `/internal/api/entities.go`    | GM note exposure, authorization  |
+| `/internal/models/entity.go`   | Field filtering for player views |
 
 **Review checklist:**
 
@@ -24,10 +24,10 @@ This document identifies code locations requiring security review.
 
 **Risk Level: HIGH**
 
-| Location | Security Concern |
-|----------|------------------|
-| `/internal/importers/evernote/` | XML parsing, entity injection |
-| `/internal/importers/googledocs/` | URL validation, content injection |
+| Location                          | Security Concern                   |
+|-----------------------------------|-----------------------------------|
+| `/internal/importers/evernote/`   | XML parsing, entity injection      |
+| `/internal/importers/googledocs/` | URL validation, content injection  |
 
 **Review checklist:**
 
@@ -40,10 +40,10 @@ This document identifies code locations requiring security review.
 
 **Risk Level: HIGH**
 
-| Location | Security Concern |
-|----------|------------------|
+| Location              | Security Concern                   |
+|-----------------------|------------------------------------|
 | `/internal/database/` | SQL injection, credential handling |
-| `/migrations/` | Schema security |
+| `/migrations/`        | Schema security                    |
 
 **Review checklist:**
 
@@ -58,10 +58,10 @@ This document identifies code locations requiring security review.
 
 **Risk Level: HIGH**
 
-| Location | Security Concern |
-|----------|------------------|
+| Location         | Security Concern                |
+|------------------|---------------------------------|
 | `/internal/api/` | Input validation, authorization |
-| `/cmd/server/` | Server configuration |
+| `/cmd/server/`   | Server configuration            |
 
 **Review checklist:**
 
@@ -74,8 +74,8 @@ This document identifies code locations requiring security review.
 
 **Risk Level: HIGH**
 
-| Location | Security Concern |
-|----------|------------------|
+| Location                    | Security Concern      |
+|-----------------------------|-----------------------|
 | `/internal/api/sessions.go` | Session data exposure |
 
 **Review checklist:**
@@ -90,10 +90,10 @@ This document identifies code locations requiring security review.
 
 **Risk Level: MEDIUM**
 
-| Location | Security Concern |
-|----------|------------------|
-| `/client/src/pages/` | XSS, input validation |
-| `/client/src/components/` | User data display |
+| Location                  | Security Concern      |
+|---------------------------|-----------------------|
+| `/client/src/pages/`      | XSS, input validation |
+| `/client/src/components/` | User data display     |
 
 **Review checklist:**
 
@@ -105,10 +105,10 @@ This document identifies code locations requiring security review.
 
 **Risk Level: MEDIUM**
 
-| Location | Security Concern |
-|----------|------------------|
-| `/config/` | Secret management |
-| `.env` | Credential storage |
+| Location   | Security Concern   |
+|------------|-------------------|
+| `/config/` | Secret management  |
+| `.env`     | Credential storage |
 
 **Review checklist:**
 
