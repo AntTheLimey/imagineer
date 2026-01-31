@@ -95,6 +95,13 @@ func NewRouter(db *database.DB) http.Handler {
 					r.Put("/", h.UpdateTimelineEvent)
 					r.Delete("/", h.DeleteTimelineEvent)
 				})
+
+				// Campaign import endpoints
+				r.Route("/import", func(r chi.Router) {
+					r.Post("/evernote", importHandler.ImportEvernote)
+					r.Post("/google-docs", importHandler.ImportGoogleDocs)
+					r.Post("/file", importHandler.ImportFile)
+				})
 			})
 		})
 
@@ -111,11 +118,6 @@ func NewRouter(db *database.DB) http.Handler {
 		r.Get("/stats", h.GetStats)
 		r.Get("/stats/dashboard", h.GetDashboardStats)
 
-		// Import endpoints
-		r.Route("/import", func(r chi.Router) {
-			r.Post("/evernote", importHandler.ImportEvernote)
-			r.Post("/google-docs", importHandler.ImportGoogleDocs)
-		})
 	})
 
 	// Health check endpoint
