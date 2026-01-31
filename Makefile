@@ -79,9 +79,20 @@ test-all: lint coverage
 
 lint:
 	@echo "=== Running linters ==="
-	@which golangci-lint > /dev/null || (echo "Installing golangci-lint..." && go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest)
-	golangci-lint run ./...
-	gofmt -l . | (! grep .) || (echo "Some files need gofmt" && exit 1)
+	@if ! command -v golangci-lint &> /dev/null; then \
+		echo "Installing golangci-lint..."; \
+		go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest; \
+	fi
+	@GOBIN_PATH=$$(go env GOPATH)/bin; \
+	if command -v golangci-lint &> /dev/null; then \
+		golangci-lint run ./...; \
+	elif [ -x "$$GOBIN_PATH/golangci-lint" ]; then \
+		$$GOBIN_PATH/golangci-lint run ./...; \
+	else \
+		echo "ERROR: golangci-lint not found. Add $$GOBIN_PATH to your PATH or install manually."; \
+		exit 1; \
+	fi
+	@gofmt -l . | (! grep .) || (echo "Some files need gofmt" && exit 1)
 	@if [ -d "client" ] && [ -f "client/package.json" ]; then \
 		cd client && npm run lint; \
 	fi

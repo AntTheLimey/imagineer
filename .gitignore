@@ -69,6 +69,7 @@ data/postgres/
 CLAUDE.local.md
 WORK_TODO.md
 imagineer-instructions.md
+mobrpg.md
 
 # TypeScript build info
 *.tsbuildinfo

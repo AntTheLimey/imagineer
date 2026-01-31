@@ -8,6 +8,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- First analysis agent: consistency-checker
+  - Agent interface (`internal/agents/agent.go`) defines Result, Suggestion,
+    and Source structs for all analysis agents.
+  - Consistency checker (`internal/agents/consistency/checker.go`) implements
+    five data integrity checks:
+    - Orphaned entities detection finds entities with no relationships or
+      timeline references.
+    - Duplicate name detection uses pg_trgm similarity threshold of 0.7.
+    - Timeline conflict detection identifies entities in multiple events at
+      the same time.
+    - Invalid reference detection finds broken relationship pointers.
+    - Sessions without discoveries identifies completed sessions that added
+      no entities.
+  - Database consistency queries (`internal/database/consistency.go`) provide
+    efficient PostgreSQL queries for all checks.
+  - API endpoint POST `/api/campaigns/{id}/agents/consistency-check` exposes
+    the checker via the REST API.
+  - Comprehensive unit tests cover both the checker and database functions.
 - 15 new backend API endpoints for complete frontend-backend integration:
   - Game system lookup by ID and code
   - Entity search by name (fuzzy matching)

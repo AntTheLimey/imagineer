@@ -44,6 +44,7 @@ func NewRouter(db *database.DB) http.Handler {
 	// Create handlers
 	h := NewHandler(db)
 	importHandler := NewImportHandler(db)
+	agentHandler := NewAgentHandler(db)
 
 	// API routes
 	r.Route("/api", func(r chi.Router) {
@@ -101,6 +102,11 @@ func NewRouter(db *database.DB) http.Handler {
 					r.Post("/evernote", importHandler.ImportEvernote)
 					r.Post("/google-docs", importHandler.ImportGoogleDocs)
 					r.Post("/file", importHandler.ImportFile)
+				})
+
+				// Campaign agent endpoints
+				r.Route("/agents", func(r chi.Router) {
+					r.Post("/consistency-check", agentHandler.RunConsistencyCheck)
 				})
 			})
 		})
