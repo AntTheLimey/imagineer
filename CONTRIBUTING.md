@@ -71,8 +71,8 @@ Ready to contribute code? Follow the process outlined below.
 ### Go
 
 - Follow the standard Go project layout (`cmd/`, `internal/`, `pkg/`)
-- Run `gofmt` before committing
-- Use 4-space indentation
+- Use tabs for indentation (run `gofmt` to format code automatically)
+- All Go code must pass `gofmt` - this is the source of truth for formatting
 
 ### React/TypeScript
 
