@@ -52,7 +52,8 @@ func respondError(w http.ResponseWriter, status int, message string) {
 	})
 }
 
-// parseUUID parses a UUID from a URL parameter.
+// parseUUID parses a UUID from the URL parameter named by param.
+// It returns the parsed uuid.UUID, or an error if the parameter is missing or not a valid UUID.
 func parseUUID(r *http.Request, param string) (uuid.UUID, error) {
 	return uuid.Parse(chi.URLParam(r, param))
 }

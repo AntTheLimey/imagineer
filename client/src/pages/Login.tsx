@@ -21,8 +21,11 @@ import { Google as GoogleIcon } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 
 /**
- * Login page with Google OAuth sign-in.
- * Displays a centered card with Imagineer branding and a sign-in button.
+ * Render the login page and initiate Google OAuth sign-in.
+ *
+ * While authentication state is resolving, displays a full-screen loading indicator. If the user is already authenticated, redirects to the root path ("/"). Otherwise renders a branded sign-in card with a button that navigates the browser to the backend OAuth endpoint to start Google sign-in.
+ *
+ * @returns The React element for the login page.
  */
 export default function Login() {
     const { isAuthenticated, isLoading: authLoading } = useAuth();

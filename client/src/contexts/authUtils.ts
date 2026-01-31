@@ -12,9 +12,13 @@ export const USER_KEY = 'imagineer_user';
 
 /**
  * Decode the JWT payload from a token string.
+ *
  * Returns the parsed payload object or null if the token is invalid or
  * malformed. This function does NOT perform expiration checks; use
  * isTokenExpired for that purpose.
+ *
+ * @param token - The JWT string to decode
+ * @returns The decoded JWT payload (expected to include `exp`) or `null` if the token is malformed
  */
 export function parseJWT(token: string): { exp: number } | null {
     try {
@@ -41,7 +45,12 @@ export function parseJWT(token: string): { exp: number } | null {
 }
 
 /**
- * Check if a JWT token is expired.
+ * Determine whether a JWT is expired, applying a 60-second safety buffer.
+ *
+ * Treats missing or invalid token payloads as expired.
+ *
+ * @param token - The JWT string to evaluate
+ * @returns `true` if the token is expired or invalid, `false` otherwise
  */
 export function isTokenExpired(token: string): boolean {
     const payload = parseJWT(token);
@@ -53,8 +62,9 @@ export function isTokenExpired(token: string): boolean {
 }
 
 /**
- * Get the stored token directly from localStorage.
- * Useful for API client that needs token outside of React context.
+ * Retrieve the non-expired authentication token from localStorage for use outside React context.
+ *
+ * @returns The stored JWT if present and not expired, `null` otherwise.
  */
 export function getStoredToken(): string | null {
     const token = localStorage.getItem(TOKEN_KEY);
@@ -65,8 +75,7 @@ export function getStoredToken(): string | null {
 }
 
 /**
- * Clear stored auth data.
- * Useful for API client to clear auth on 401 responses.
+ * Remove stored authentication token and user information from localStorage.
  */
 export function clearStoredAuth(): void {
     localStorage.removeItem(TOKEN_KEY);

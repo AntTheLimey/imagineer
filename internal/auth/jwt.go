@@ -53,7 +53,13 @@ func (c *JWTClaims) Sign(secret []byte) (string, error) {
 	return signedToken, nil
 }
 
-// ParseAndVerify parses a JWT token and verifies its signature.
+// ParseAndVerify parses a JWT string, verifies its HS256 HMAC-SHA256 signature,
+// validates the header and expiration, and returns the decoded claims.
+//
+// It returns an error for any of the following conditions: token does not have
+// three dot-separated parts; signature is not valid base64 URL encoding or does
+// not match; header or claims fail base64 decoding or JSON unmarshaling; the
+// header algorithm is not "HS256"; or the token has expired.
 func ParseAndVerify(tokenString string, secret []byte) (*JWTClaims, error) {
 	// Create parser with leeway for clock skew
 	parser := jwt.NewParser(

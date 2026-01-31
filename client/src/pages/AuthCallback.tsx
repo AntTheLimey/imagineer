@@ -13,9 +13,15 @@ import { Box, CircularProgress, Typography, Alert } from '@mui/material';
 import { useAuth, User } from '../contexts/AuthContext';
 
 /**
- * AuthCallback handles the OAuth callback from the server.
- * It extracts the token and user info from URL parameters,
- * stores them in the auth context, and redirects to the dashboard.
+ * Handle the OAuth callback, complete sign-in, and navigate to the app root.
+ *
+ * Decodes and validates `token` and `user` from URL search parameters, stores
+ * authentication data via the auth context on success, and sets an error state
+ * when the callback contains an error or when required data is missing or invalid.
+ *
+ * @returns The component UI: a loading indicator while processing, an error
+ * alert with a login link when the callback fails, or performs a redirect to
+ * the root path on successful sign-in.
  */
 export default function AuthCallback() {
     const [searchParams] = useSearchParams();

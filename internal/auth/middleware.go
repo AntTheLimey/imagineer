@@ -27,7 +27,13 @@ const userClaimsKey contextKey = "userClaims"
 // AuthMiddleware returns chi middleware that validates JWT tokens.
 // It extracts the JWT from the Authorization header, validates it,
 // and attaches the user claims to the request context.
-// Returns 401 Unauthorized if the token is missing or invalid.
+// AuthMiddleware returns HTTP middleware that requires a valid JWT in the
+// Authorization header and, on success, attaches the parsed claims to the
+// request context under userClaimsKey.
+// 
+// It responds with 401 Unauthorized if the Authorization header is missing,
+// does not use the "Bearer " prefix, contains an empty token, or if token
+// verification fails. The jwtSecret parameter is used to verify the token.
 func AuthMiddleware(jwtSecret string) func(http.Handler) http.Handler {
 	secret := []byte(jwtSecret)
 
@@ -71,7 +77,8 @@ func AuthMiddleware(jwtSecret string) func(http.Handler) http.Handler {
 // work with or without authentication.
 // If a token is present and valid, the claims are attached to the context.
 // If no token is present, the request proceeds without claims.
-// Returns 401 Unauthorized only if a token is present but invalid.
+// OptionalAuthMiddleware returns middleware that validates a JWT when provided and attaches its claims to the request context.
+// If the Authorization header is missing or contains an empty Bearer token, the request proceeds without authentication; if a token is present but invalid, the middleware responds with HTTP 401 Unauthorized.
 func OptionalAuthMiddleware(jwtSecret string) func(http.Handler) http.Handler {
 	secret := []byte(jwtSecret)
 
@@ -114,14 +121,16 @@ func OptionalAuthMiddleware(jwtSecret string) func(http.Handler) http.Handler {
 }
 
 // GetUserFromContext retrieves the JWT claims from the request context.
-// Returns the claims and true if present, nil and false otherwise.
+// GetUserFromContext retrieves JWT claims from the context and reports whether they are present.
+// It returns the claims and true if present; otherwise nil and false.
 func GetUserFromContext(ctx context.Context) (*JWTClaims, bool) {
 	claims, ok := ctx.Value(userClaimsKey).(*JWTClaims)
 	return claims, ok
 }
 
 // GetUserIDFromContext retrieves the user ID from the request context.
-// Returns the UUID and true if present, uuid.Nil and false otherwise.
+// GetUserIDFromContext retrieves the user's UUID from the request context's JWT claims.
+// It returns the parsed UUID and true if claims are present and the UserID is a valid UUID; otherwise it returns uuid.Nil and false.
 func GetUserIDFromContext(ctx context.Context) (uuid.UUID, bool) {
 	claims, ok := GetUserFromContext(ctx)
 	if !ok {

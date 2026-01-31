@@ -59,7 +59,8 @@ func NewAuthHandler(db *database.DB, oauthCfg *OAuthConfig, jwtSecret []byte, jw
 	}
 }
 
-// generateState creates a cryptographically secure random state token.
+// generateState generates a cryptographically secure, URL-safe base64-encoded state token.
+// It returns the token or an error if secure random byte generation fails.
 func generateState() (string, error) {
 	b := make([]byte, stateLength)
 	if _, err := rand.Read(b); err != nil {
@@ -70,7 +71,10 @@ func generateState() (string, error) {
 
 // isSecureRequest determines if the request was made over a secure connection.
 // It first checks the X-Forwarded-Proto header (used when behind a reverse proxy
-// that terminates TLS), then falls back to checking r.TLS for direct connections.
+// isSecureRequest reports whether the incoming request was made over HTTPS.
+// It first checks the X-Forwarded-Proto header (used by reverse proxies) and
+// returns true if its value is "https"; if the header is absent, it returns
+// true when r.TLS is non-nil.
 func isSecureRequest(r *http.Request) bool {
 	if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
 		return proto == "https"
