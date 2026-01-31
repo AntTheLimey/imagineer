@@ -60,7 +60,11 @@ interface RequestOptions {
 }
 
 /**
- * Build a URL with query parameters.
+ * Constructs a full API URL for the given path and appends provided query parameters.
+ *
+ * @param path - The API path appended to the module's BASE_URL (e.g., '/users').
+ * @param params - A map of query parameters. Entries with `undefined` are omitted; values are converted to strings.
+ * @returns The absolute URL string including BASE_URL, the provided path, and serialized query parameters.
  */
 function buildUrl(path: string, params?: QueryParams): string {
     const url = new URL(`${BASE_URL}${path}`, window.location.origin);
@@ -77,7 +81,9 @@ function buildUrl(path: string, params?: QueryParams): string {
 }
 
 /**
- * Get authorization headers with JWT token if available.
+ * Provide an Authorization header with a Bearer JWT when a stored token exists.
+ *
+ * @returns An object containing `Authorization: Bearer <token>` if a token is stored, or an empty object otherwise.
  */
 function getAuthHeaders(): Record<string, string> {
     const token = getStoredToken();
@@ -100,9 +106,12 @@ function handleUnauthorized(): void {
 }
 
 /**
- * Make an API request with JSON content-type, authentication, and error handling.
- * Throws ApiError on non-2xx responses.
- * Automatically handles 401 responses by clearing auth and redirecting to login.
+ * Performs an HTTP request to the API, handling JSON bodies, optional authentication, and HTTP errors.
+ *
+ * @param path - The endpoint path appended to the API base URL
+ * @param options - Request options. If `options.skipAuth` is `true`, the Authorization header is not included.
+ * @returns The parsed JSON response as `T`; returns `undefined` when the response status is 204 No Content.
+ * @throws ApiError - Thrown for 401 responses (after clearing stored auth and triggering a redirect to login) and for other non-2xx responses, with the HTTP status and parsed error body.
  */
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
     const { method = 'GET', body, headers = {}, params, skipAuth = false } = options;

@@ -21,8 +21,12 @@ import AuthCallback from './pages/AuthCallback';
 import { ReactNode } from 'react';
 
 /**
- * ProtectedRoute guards routes that require authentication.
- * Redirects to login if user is not authenticated.
+ * Guards access to child routes based on authentication state.
+ *
+ * Renders a centered loading indicator while authentication is being determined, redirects to `/login` if the user is not authenticated, and renders `children` when authenticated.
+ *
+ * @param children - Elements to render when the user is authenticated
+ * @returns `children` when authenticated, a `<Navigate>` to `/login` when not authenticated, or a loading indicator while authentication is pending
  */
 function ProtectedRoute({ children }: { children: ReactNode }) {
     const { isAuthenticated, isLoading } = useAuth();
@@ -128,6 +132,11 @@ function AppRoutes() {
     );
 }
 
+/**
+ * Application root that initializes routing and authentication context.
+ *
+ * @returns The root React element that wraps the app with a BrowserRouter and AuthProvider, rendering the application routes.
+ */
 function App() {
     return (
         <BrowserRouter>

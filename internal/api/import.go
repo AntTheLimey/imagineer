@@ -35,7 +35,8 @@ type ImportHandler struct {
 	googledocsImporter common.Importer
 }
 
-// NewImportHandler creates a new ImportHandler.
+// NewImportHandler creates an ImportHandler configured with the provided database
+// and default Evernote and Google Docs importers.
 func NewImportHandler(db *database.DB) *ImportHandler {
 	return &ImportHandler{
 		db:                 db,

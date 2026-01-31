@@ -48,9 +48,11 @@ interface AuthProviderProps {
 }
 
 /**
- * AuthProvider manages authentication state and provides it to the app.
- * It persists the token and user to localStorage and checks token expiry
- * on load.
+ * Provides authentication state and handlers to descendant components via React context.
+ *
+ * Initializes state from localStorage and validates token expiry on mount. Persists token
+ * and user to localStorage on login and clears them on logout. The context value includes
+ * `user`, `token`, `isAuthenticated`, `isLoading`, `login`, and `logout`.
  */
 export function AuthProvider({ children }: AuthProviderProps) {
     const [user, setUser] = useState<User | null>(null);
@@ -125,8 +127,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 }
 
 /**
- * Hook to access authentication context.
- * Must be used within an AuthProvider.
+ * Accesses the current authentication context.
+ *
+ * @returns The AuthContextValue containing `user`, `token`, `isAuthenticated`, `isLoading`, `login`, and `logout`.
+ * @throws Error if called outside of an AuthProvider.
  */
 export function useAuth(): AuthContextValue {
     const context = useContext(AuthContext);

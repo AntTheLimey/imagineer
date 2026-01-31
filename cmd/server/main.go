@@ -26,6 +26,12 @@ import (
 	"github.com/antonypegg/imagineer/internal/database"
 )
 
+// main initializes application configuration and services, starts the HTTP server, and performs a graceful shutdown on interrupt signals.
+//
+// It prints the application name and version, reads configuration from environment variables (PORT, DB_CONFIG, JWT_SECRET, JWT_EXPIRY_HOURS),
+// loads and connects to the database, and conditionally initializes OAuth/JWT authentication if configuration is present.
+// It constructs the API router, starts the HTTP server with sensible timeouts, and blocks until an OS interrupt (SIGINT or SIGTERM) is received,
+// at which point it attempts a graceful shutdown within a configured timeout.
 func main() {
 	fmt.Println("Imagineer - TTRPG Campaign Intelligence Platform")
 	fmt.Println("Version: 0.1.0-dev")

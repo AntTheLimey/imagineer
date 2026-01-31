@@ -47,6 +47,13 @@ interface LayoutProps {
     children: ReactNode;
 }
 
+/**
+ * Provides a responsive application shell with an app bar, navigation drawer(s), and main content area.
+ *
+ * When a user is authenticated, displays their avatar and a user menu (including a sign-out action that calls `logout` and navigates to `/login`). The drawer is temporary on small screens and permanent on larger screens; the component also highlights the active route and renders its `children` as page content.
+ *
+ * @returns A React element containing the app shell (app bar, navigation drawers, and user UI) that wraps the provided children.
+ */
 export default function Layout({ children }: LayoutProps) {
     const [mobileOpen, setMobileOpen] = useState(false);
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);

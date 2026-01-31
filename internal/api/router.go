@@ -25,9 +25,15 @@ import (
 // ErrMissingJWTSecret is returned when the JWT secret is not configured.
 var ErrMissingJWTSecret = errors.New("JWT secret is required for authentication")
 
-// NewRouter creates a new chi router with all routes configured.
-// If authHandler is nil, auth routes will not be registered.
-// Returns an error if jwtSecret is empty, as authentication is required.
+// NewRouter creates and returns an HTTP router configured with common middleware,
+// CORS for localhost dev origins, and the application's API routes wired to the
+// provided database and handlers.
+//
+// If authHandler is non-nil, OAuth routes for Google are registered under /api/auth.
+// JWT authentication middleware is applied to protected routes (campaigns, entities,
+// stats, imports, agents).
+//
+// Returns an error if jwtSecret is empty, as authentication is required for security.
 func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string) (http.Handler, error) {
 	if jwtSecret == "" {
 		return nil, ErrMissingJWTSecret
