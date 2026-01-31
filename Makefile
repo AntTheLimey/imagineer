@@ -1,4 +1,4 @@
-.PHONY: help up down reset logs shell psql build test test-server test-client test-all test-db lint coverage migrate migrate-status backup restore status client-dev client-build
+.PHONY: help up down reset logs shell psql build test test-server test-client test-all test-db lint coverage migrate migrate-status backup restore status client-dev client-build dev
 
 # Default target
 help:
@@ -26,6 +26,7 @@ help:
 	@echo "  make restore        - Restore from backup"
 	@echo "  make client-dev     - Start React dev server"
 	@echo "  make client-build   - Build React client"
+	@echo "  make dev            - Start all services for development"
 
 # Docker commands
 up:
@@ -147,3 +148,7 @@ status:
 	@echo ""
 	@echo "=== Game Systems ==="
 	@docker exec imagineer-postgres psql -U imagineer -d imagineer -t -c "SELECT name FROM game_systems;" 2>/dev/null || echo "Not available"
+
+# Development commands
+dev:
+	@./scripts/dev.sh
