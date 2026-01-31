@@ -68,6 +68,16 @@ func generateState() (string, error) {
 	return base64.URLEncoding.EncodeToString(b), nil
 }
 
+// isSecureRequest determines if the request was made over a secure connection.
+// It first checks the X-Forwarded-Proto header (used when behind a reverse proxy
+// that terminates TLS), then falls back to checking r.TLS for direct connections.
+func isSecureRequest(r *http.Request) bool {
+	if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
+		return proto == "https"
+	}
+	return r.TLS != nil
+}
+
 // HandleGoogleLogin initiates the Google OAuth flow.
 // It generates a secure state token, stores it in a cookie, and redirects
 // the user to Google's OAuth consent screen.
@@ -86,7 +96,7 @@ func (h *AuthHandler) HandleGoogleLogin(w http.ResponseWriter, r *http.Request) 
 		Path:     "/",
 		MaxAge:   stateCookieMaxAge,
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   isSecureRequest(r),
 		SameSite: http.SameSiteLaxMode,
 	})
 
@@ -122,7 +132,7 @@ func (h *AuthHandler) HandleGoogleCallback(w http.ResponseWriter, r *http.Reques
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   isSecureRequest(r),
 		SameSite: http.SameSiteLaxMode,
 	})
 

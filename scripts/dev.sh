@@ -92,7 +92,13 @@ log_step "Running database migrations..."
 
 # Step 4: Load environment variables and start Go server
 log_step "Starting API server..."
-export $(grep -v '^#' .env | xargs)
+# Use set -a to automatically export all variables, then source the .env file
+# This is more robust than 'export $(grep ... | xargs)' which can break on
+# values containing spaces, quotes, or special characters
+set -a
+# shellcheck source=/dev/null
+source .env
+set +a
 
 # Kill any existing process on port 3001
 lsof -ti:3001 2>/dev/null | xargs -r kill -9 2>/dev/null || true

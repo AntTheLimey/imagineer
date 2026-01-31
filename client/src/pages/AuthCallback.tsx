@@ -30,7 +30,12 @@ export default function AuthCallback() {
 
         // Handle error from OAuth flow
         if (errorParam) {
-            setError(decodeURIComponent(errorParam));
+            try {
+                setError(decodeURIComponent(errorParam));
+            } catch {
+                // decodeURIComponent can throw URIError on malformed input
+                setError(errorParam);
+            }
             return;
         }
 
@@ -48,8 +53,11 @@ export default function AuthCallback() {
         // Parse user data
         let user: User;
         try {
-            user = JSON.parse(decodeURIComponent(userParam));
+            const decodedUserParam = decodeURIComponent(userParam);
+            user = JSON.parse(decodedUserParam);
         } catch {
+            // Catches both URIError from decodeURIComponent and
+            // SyntaxError from JSON.parse
             setError('Invalid user data');
             return;
         }

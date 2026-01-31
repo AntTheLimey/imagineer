@@ -20,7 +20,18 @@ export function parseJWT(token: string): { exp: number } | null {
         if (parts.length !== 3) {
             return null;
         }
-        const payload = JSON.parse(atob(parts[1]));
+        // JWTs use base64url encoding which differs from standard base64:
+        // - Uses '-' instead of '+'
+        // - Uses '_' instead of '/'
+        // - Does not require padding with '='
+        // Convert base64url to standard base64 before decoding
+        let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        // Add padding if needed
+        const padding = base64.length % 4;
+        if (padding) {
+            base64 += '='.repeat(4 - padding);
+        }
+        const payload = JSON.parse(atob(base64));
         return payload;
     } catch {
         return null;
