@@ -8,7 +8,7 @@
 // -------------------------------------------------------------------------
 
 import { useState, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
     Alert,
     Autocomplete,
@@ -148,6 +148,7 @@ function formatDate(dateString: string): string {
 
 export default function Entities() {
     const { id: campaignId } = useParams<{ id: string }>();
+    const navigate = useNavigate();
 
     // Check if current user is the campaign owner (GM)
     const { isOwner: isGM } = useCampaignOwnership(campaignId ?? '');
@@ -299,33 +300,21 @@ export default function Entities() {
         setViewDialogOpen(true);
     };
 
-    // Open edit dialog
-    const openEditDialog = (entity: Entity) => {
-        setSelectedEntityId(entity.id);
-        setFormData({
-            name: entity.name,
-            entityType: entity.entityType,
-            description: entity.description ?? '',
-            tags: entity.tags ?? [],
-            attributes: JSON.stringify(entity.attributes ?? {}, null, 2),
-            gmNotes: entity.gmNotes ?? '',
-            sourceConfidence: entity.sourceConfidence,
-        });
-        setFormErrors({});
-        setEditDialogOpen(true);
-    };
-
     // Open delete dialog
     const openDeleteDialog = (entity: Entity) => {
         setSelectedEntityId(entity.id);
         setDeleteDialogOpen(true);
     };
 
-    // Open create dialog
+    // Open create dialog (legacy) or navigate to full-screen editor
     const openCreateDialog = () => {
-        setFormData(DEFAULT_FORM_DATA);
-        setFormErrors({});
-        setCreateDialogOpen(true);
+        // Navigate to full-screen entity editor
+        navigate(`/campaigns/${campaignId}/entities/new`);
+    };
+
+    // Navigate to full-screen entity editor for editing
+    const navigateToEditor = (entityId: string) => {
+        navigate(`/campaigns/${campaignId}/entities/${entityId}/edit`);
     };
 
     // Handle page change
@@ -546,7 +535,7 @@ export default function Entities() {
                                                     size="small"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        openEditDialog(entity);
+                                                        navigateToEditor(entity.id);
                                                     }}
                                                 >
                                                     <EditIcon fontSize="small" />
@@ -881,7 +870,7 @@ export default function Entities() {
                             variant="contained"
                             onClick={() => {
                                 setViewDialogOpen(false);
-                                openEditDialog(selectedEntity);
+                                navigateToEditor(selectedEntity.id);
                             }}
                         >
                             Edit

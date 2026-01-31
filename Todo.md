@@ -46,8 +46,8 @@ Priority features for initial release, ordered by dependency.
 
 ### Campaign Permissions & Sharing
 
-- [ ] `[MVP-1]` Campaigns auto-assigned to creator as GM/owner
-- [ ] `[MVP-1]` Only owner can modify their campaigns
+- [x] `[MVP-1]` Campaigns auto-assigned to creator as GM/owner
+- [x] `[MVP-1]` Only owner can modify their campaigns
 - [ ] `[MVP-3]` As a GM, invite other users to be a player in your campaign
 - [ ] `[MVP-3]` Email-based invite system with notifications
 - [ ] Invite resend functionality
@@ -380,3 +380,5 @@ Features planned for after initial release.
 - [x] Add RPG terminology knowledge base for TTRPG expert agent
 - [x] Fix entity API URL routes (get/update/delete use /entities/{id})
 - [x] Fix Tags input UX (autoSelect and onBlur for better capture)
+- [x] Campaigns auto-assigned to creator as GM/owner (was already implemented)
+- [x] Only owner can modify their campaigns (was already implemented)
