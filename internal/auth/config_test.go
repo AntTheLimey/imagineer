@@ -66,6 +66,30 @@ func TestNewOAuthConfigFromEnv(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Capture original values for restoration
+			envKeys := []string{"GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URL"}
+			originalValues := make(map[string]string)
+			originalExists := make(map[string]bool)
+			for _, k := range envKeys {
+				if val, exists := os.LookupEnv(k); exists {
+					originalValues[k] = val
+					originalExists[k] = true
+				} else {
+					originalExists[k] = false
+				}
+			}
+
+			// Restore original values after test completes
+			t.Cleanup(func() {
+				for _, k := range envKeys {
+					if originalExists[k] {
+						os.Setenv(k, originalValues[k])
+					} else {
+						os.Unsetenv(k)
+					}
+				}
+			})
+
 			// Clear all OAuth env vars first
 			os.Unsetenv("GOOGLE_CLIENT_ID")
 			os.Unsetenv("GOOGLE_CLIENT_SECRET")

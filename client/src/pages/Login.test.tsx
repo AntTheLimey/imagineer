@@ -7,7 +7,7 @@
 //
 // -------------------------------------------------------------------------
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -20,14 +20,26 @@ vi.mock('../contexts/AuthContext', () => ({
     useAuth: () => mockUseAuth(),
 }));
 
+// Save original window.location to restore after tests
+const originalLocation = window.location;
+
 // Mock window.location
 const mockLocation = {
     href: '',
 };
 
-Object.defineProperty(window, 'location', {
-    value: mockLocation,
-    writable: true,
+beforeAll(() => {
+    Object.defineProperty(window, 'location', {
+        value: mockLocation,
+        writable: true,
+    });
+});
+
+afterAll(() => {
+    Object.defineProperty(window, 'location', {
+        value: originalLocation,
+        writable: true,
+    });
 });
 
 const renderLogin = () => {

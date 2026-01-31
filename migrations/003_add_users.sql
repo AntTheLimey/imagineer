@@ -22,7 +22,8 @@ CREATE TABLE users (
     name       TEXT NOT NULL,
     avatar_url TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ
 );
 
 COMMENT ON TABLE users IS 'User accounts authenticated via Google OAuth';
@@ -30,6 +31,7 @@ COMMENT ON COLUMN users.google_id IS 'Unique identifier from Google OAuth provid
 COMMENT ON COLUMN users.email IS 'User email address from Google account';
 COMMENT ON COLUMN users.name IS 'Display name from Google account';
 COMMENT ON COLUMN users.avatar_url IS 'URL to user profile image from Google';
+COMMENT ON COLUMN users.deleted_at IS 'Timestamp when user was soft-deleted (NULL means active)';
 
 -- ============================================
 -- Add owner_id to campaigns

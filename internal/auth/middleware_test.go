@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// gitleaks:allow
 const testSecret = "test-secret-key-at-least-32-bytes-long"
 
 // createValidToken creates a valid JWT token for testing.

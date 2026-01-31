@@ -78,6 +78,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
                     localStorage.removeItem(USER_KEY);
                 }
             }
+        } else if (storedToken || storedUser) {
+            // Inconsistent state: one key exists without the other
+            // Clear both to ensure consistent auth state
+            localStorage.removeItem(TOKEN_KEY);
+            localStorage.removeItem(USER_KEY);
         }
 
         setIsLoading(false);

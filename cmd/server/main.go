@@ -78,15 +78,12 @@ func main() {
 		}
 	}
 
-	// Log authentication middleware status
-	if jwtSecret != "" {
-		log.Println("JWT authentication middleware enabled for protected routes")
-	} else {
-		log.Println("JWT_SECRET not set - protected routes will be unauthenticated")
+	// Create router (requires JWT secret for authentication)
+	router, err := api.NewRouter(db, authHandler, jwtSecret)
+	if err != nil {
+		log.Fatalf("Failed to create router: %v", err)
 	}
-
-	// Create router
-	router := api.NewRouter(db, authHandler, jwtSecret)
+	log.Println("JWT authentication middleware enabled for protected routes")
 
 	// Create HTTP server
 	server := &http.Server{

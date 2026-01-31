@@ -13,10 +13,12 @@ package database
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/antonypegg/imagineer/internal/models"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 // ListCampaigns retrieves all campaigns. This is deprecated in favor of
@@ -399,7 +401,10 @@ func (db *DB) VerifyCampaignOwnership(ctx context.Context, campaignID uuid.UUID,
 	var exists int
 	err := db.QueryRow(ctx, query, campaignID, ownerID).Scan(&exists)
 	if err != nil {
-		return fmt.Errorf("campaign not found")
+		if errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("campaign not found")
+		}
+		return fmt.Errorf("failed to verify campaign ownership: %w", err)
 	}
 	return nil
 }

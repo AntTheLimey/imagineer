@@ -11,8 +11,10 @@ export const TOKEN_KEY = 'imagineer_token';
 export const USER_KEY = 'imagineer_user';
 
 /**
- * Parse JWT to extract payload and check expiration.
- * Returns null if token is invalid or expired.
+ * Decode the JWT payload from a token string.
+ * Returns the parsed payload object or null if the token is invalid or
+ * malformed. This function does NOT perform expiration checks; use
+ * isTokenExpired for that purpose.
  */
 export function parseJWT(token: string): { exp: number } | null {
     try {

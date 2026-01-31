@@ -22,6 +22,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// testJWTSecret is a test-only secret for router initialization.
+// gitleaks:allow
+const testJWTSecret = "test-jwt-secret-for-router-tests-32bytes"
+
 func TestHealthEndpoint(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -40,7 +44,8 @@ func TestHealthEndpoint(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create router without database (health endpoint doesn't need it)
-			router := NewRouter(nil, nil, "")
+			router, err := NewRouter(nil, nil, testJWTSecret)
+			require.NoError(t, err)
 
 			// Create request
 			req := httptest.NewRequest(tt.method, "/health", nil)
@@ -54,7 +59,7 @@ func TestHealthEndpoint(t *testing.T) {
 
 			// Check response body
 			var body map[string]string
-			err := json.Unmarshal(rec.Body.Bytes(), &body)
+			err = json.Unmarshal(rec.Body.Bytes(), &body)
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedBody, body)
 
@@ -237,7 +242,8 @@ func TestAPIErrorResponse_Structure(t *testing.T) {
 
 func TestCORSHeaders(t *testing.T) {
 	// Test that CORS headers are set correctly
-	router := NewRouter(nil, nil, "")
+	router, err := NewRouter(nil, nil, testJWTSecret)
+	require.NoError(t, err)
 
 	// Create OPTIONS preflight request
 	req := httptest.NewRequest(http.MethodOptions, "/health", nil)
@@ -295,7 +301,8 @@ func TestJSONRequestDecoding(t *testing.T) {
 
 func TestContentTypeHeader(t *testing.T) {
 	// Verify that all JSON responses have correct Content-Type
-	router := NewRouter(nil, nil, "")
+	router, err := NewRouter(nil, nil, testJWTSecret)
+	require.NoError(t, err)
 
 	endpoints := []struct {
 		method string
@@ -319,7 +326,8 @@ func TestContentTypeHeader(t *testing.T) {
 
 func TestRouterMiddleware(t *testing.T) {
 	// Test that the router has required middleware
-	router := NewRouter(nil, nil, "")
+	router, err := NewRouter(nil, nil, testJWTSecret)
+	require.NoError(t, err)
 
 	// Test request ID middleware by checking response headers
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
@@ -332,7 +340,8 @@ func TestRouterMiddleware(t *testing.T) {
 }
 
 func TestHealthEndpoint_ResponseFormat(t *testing.T) {
-	router := NewRouter(nil, nil, "")
+	router, err := NewRouter(nil, nil, testJWTSecret)
+	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
@@ -342,4 +351,13 @@ func TestHealthEndpoint_ResponseFormat(t *testing.T) {
 	// Verify exact response format
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, `{"status":"ok"}`, rec.Body.String())
+}
+
+func TestNewRouter_MissingJWTSecret(t *testing.T) {
+	// Test that NewRouter returns an error when jwtSecret is empty
+	router, err := NewRouter(nil, nil, "")
+
+	assert.Nil(t, router)
+	assert.Error(t, err)
+	assert.Equal(t, ErrMissingJWTSecret, err)
 }

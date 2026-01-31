@@ -11,6 +11,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
@@ -21,10 +22,16 @@ import (
 	"github.com/go-chi/cors"
 )
 
+// ErrMissingJWTSecret is returned when the JWT secret is not configured.
+var ErrMissingJWTSecret = errors.New("JWT secret is required for authentication")
+
 // NewRouter creates a new chi router with all routes configured.
 // If authHandler is nil, auth routes will not be registered.
-// If jwtSecret is empty, authentication middleware will not be applied.
-func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string) http.Handler {
+// Returns an error if jwtSecret is empty, as authentication is required.
+func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string) (http.Handler, error) {
+	if jwtSecret == "" {
+		return nil, ErrMissingJWTSecret
+	}
 	r := chi.NewRouter()
 
 	// Middleware
@@ -67,12 +74,10 @@ func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string)
 			r.Get("/code/{code}", h.GetGameSystemByCode)
 		})
 
-		// Protected routes - require authentication when jwtSecret is configured
+		// Protected routes - require authentication
 		r.Group(func(r chi.Router) {
-			// Apply authentication middleware if jwtSecret is provided
-			if jwtSecret != "" {
-				r.Use(auth.AuthMiddleware(jwtSecret))
-			}
+			// Apply authentication middleware (jwtSecret is validated at router creation)
+			r.Use(auth.AuthMiddleware(jwtSecret))
 
 			// Campaigns
 			r.Route("/campaigns", func(r chi.Router) {
@@ -151,5 +156,5 @@ func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	return r
+	return r, nil
 }

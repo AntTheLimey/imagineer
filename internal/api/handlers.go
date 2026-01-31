@@ -338,6 +338,7 @@ func (h *Handler) CreateEntity(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetEntity handles GET /api/entities/:id
+// Verifies the user owns the entity's campaign before returning the entity.
 func (h *Handler) GetEntity(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(r, "id")
 	if err != nil {
@@ -352,14 +353,33 @@ func (h *Handler) GetEntity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Verify the user owns the entity's campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, entity.CampaignID); !ok {
+		return
+	}
+
 	respondJSON(w, http.StatusOK, entity)
 }
 
 // UpdateEntity handles PUT /api/entities/:id
+// Verifies the user owns the entity's campaign before updating the entity.
 func (h *Handler) UpdateEntity(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid entity ID")
+		return
+	}
+
+	// Fetch the entity first to get its campaign ID
+	existingEntity, err := h.db.GetEntity(r.Context(), id)
+	if err != nil {
+		log.Printf("Error getting entity: %v", err)
+		respondError(w, http.StatusNotFound, "Entity not found")
+		return
+	}
+
+	// Verify the user owns the entity's campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, existingEntity.CampaignID); !ok {
 		return
 	}
 
@@ -380,10 +400,24 @@ func (h *Handler) UpdateEntity(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteEntity handles DELETE /api/entities/:id
+// Verifies the user owns the entity's campaign before deleting the entity.
 func (h *Handler) DeleteEntity(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid entity ID")
+		return
+	}
+
+	// Fetch the entity first to get its campaign ID
+	existingEntity, err := h.db.GetEntity(r.Context(), id)
+	if err != nil {
+		log.Printf("Error getting entity: %v", err)
+		respondError(w, http.StatusNotFound, "Entity not found")
+		return
+	}
+
+	// Verify the user owns the entity's campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, existingEntity.CampaignID); !ok {
 		return
 	}
 
