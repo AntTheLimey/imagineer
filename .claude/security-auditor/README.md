@@ -31,9 +31,9 @@ Component-specific security checklists.
 
 ## Critical Security Requirements
 
-### Keeper Notes Protection
+### GM Notes Protection
 
-Keeper notes (GM-only content) must NEVER be exposed to players. This is
+GM notes (GM-only content) must NEVER be exposed to players. This is
 the most critical security requirement in Imagineer.
 
 ### Canon Conflict Handling
@@ -44,7 +44,7 @@ Never auto-resolve canon conflicts. Data integrity requires human decision.
 
 ### OWASP Top 10 Focus
 
-1. Broken Access Control - Keeper/player separation
+1. Broken Access Control - GM/player separation
 2. Injection - SQL parameterization
 3. XSS - React escaping, no dangerouslySetInnerHTML
 

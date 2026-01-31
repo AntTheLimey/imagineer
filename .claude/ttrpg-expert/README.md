@@ -10,6 +10,7 @@ This knowledge base provides:
 - Canon management guidelines
 - Entity type definitions
 - Relationship modeling patterns
+- RPG terminology across different systems
 
 ## Documents
 
@@ -53,6 +54,15 @@ Campaign organization:
 - Timeline events
 - Discovery tracking
 
+### [rpg-terminology.md](rpg-terminology.md)
+
+Comprehensive terminology reference:
+
+- Core RPG roles (GM, player, PC, NPC)
+- System-specific GM titles
+- Common gameplay terms
+- Imagineer terminology choices
+
 ## Quick Reference
 
 ### Entity Types
@@ -89,4 +99,4 @@ Campaign organization:
 | fearful | Fear-based |
 | respectful | Admiration |
 
-Last Updated: 2026-01-30
+Last Updated: 2026-01-31

@@ -76,3 +76,10 @@ export {
     useImportFile,
     useImportFiles,
 } from './useImport';
+
+// Ownership hooks
+export {
+    useCampaignOwnership,
+    isCampaignOwner,
+} from './useCampaignOwnership';
+export type { CampaignOwnershipResult } from './useCampaignOwnership';

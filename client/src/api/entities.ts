@@ -36,7 +36,7 @@ export interface CreateEntityInput {
     description?: string;
     attributes?: Record<string, unknown>;
     tags?: string[];
-    keeperNotes?: string;
+    gmNotes?: string;
     discoveredSession?: string;
     sourceDocument?: string;
     sourceConfidence?: SourceConfidence;
@@ -50,7 +50,7 @@ export interface UpdateEntityInput {
     description?: string;
     attributes?: Record<string, unknown>;
     tags?: string[];
-    keeperNotes?: string;
+    gmNotes?: string;
     discoveredSession?: string;
     sourceDocument?: string;
     sourceConfidence?: SourceConfidence;

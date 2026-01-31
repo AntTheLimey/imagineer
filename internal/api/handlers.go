@@ -12,6 +12,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -74,6 +75,33 @@ func (h *Handler) verifyCampaignOwnership(w http.ResponseWriter, r *http.Request
 	}
 
 	return userID, true
+}
+
+// isUserCampaignOwner checks if the given user ID matches the campaign's owner.
+// This is used to determine if GM-only content (like gm_notes) should be visible.
+func (h *Handler) isUserCampaignOwner(ctx context.Context, campaignID uuid.UUID, userID uuid.UUID) bool {
+	err := h.db.VerifyCampaignOwnership(ctx, campaignID, userID)
+	return err == nil
+}
+
+// filterEntityGMNotes removes GM notes from an entity if the user is not the
+// campaign owner. This protects sensitive GM-only content from being exposed
+// to players who may have read access to the campaign.
+func filterEntityGMNotes(entity *models.Entity, isGM bool) {
+	if !isGM {
+		entity.GMNotes = nil
+	}
+}
+
+// filterEntitiesGMNotes removes GM notes from a slice of entities if the user
+// is not the campaign owner. Modifies the entities in place.
+func filterEntitiesGMNotes(entities []models.Entity, isGM bool) {
+	if isGM {
+		return
+	}
+	for i := range entities {
+		entities[i].GMNotes = nil
+	}
 }
 
 // ListGameSystems handles GET /api/game-systems
@@ -263,6 +291,7 @@ func (h *Handler) DeleteCampaign(w http.ResponseWriter, r *http.Request) {
 
 // ListEntities handles GET /api/campaigns/:id/entities
 // Verifies the user owns the campaign before listing entities.
+// GM notes are only visible to the campaign owner (GM).
 func (h *Handler) ListEntities(w http.ResponseWriter, r *http.Request) {
 	campaignID, err := parseUUID(r, "id")
 	if err != nil {
@@ -271,7 +300,8 @@ func (h *Handler) ListEntities(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify the user owns this campaign
-	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+	userID, ok := h.verifyCampaignOwnership(w, r, campaignID)
+	if !ok {
 		return
 	}
 
@@ -294,6 +324,10 @@ func (h *Handler) ListEntities(w http.ResponseWriter, r *http.Request) {
 	if entities == nil {
 		entities = []models.Entity{}
 	}
+
+	// Filter GM notes for non-owners
+	isGM := h.isUserCampaignOwner(r.Context(), campaignID, userID)
+	filterEntitiesGMNotes(entities, isGM)
 
 	respondJSON(w, http.StatusOK, entities)
 }
@@ -340,6 +374,7 @@ func (h *Handler) CreateEntity(w http.ResponseWriter, r *http.Request) {
 
 // GetEntity handles GET /api/entities/:id
 // Verifies the user owns the entity's campaign before returning the entity.
+// GM notes are only visible to the campaign owner (GM).
 func (h *Handler) GetEntity(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(r, "id")
 	if err != nil {
@@ -355,9 +390,14 @@ func (h *Handler) GetEntity(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify the user owns the entity's campaign
-	if _, ok := h.verifyCampaignOwnership(w, r, entity.CampaignID); !ok {
+	userID, ok := h.verifyCampaignOwnership(w, r, entity.CampaignID)
+	if !ok {
 		return
 	}
+
+	// Filter GM notes for non-owners
+	isGM := h.isUserCampaignOwner(r.Context(), entity.CampaignID, userID)
+	filterEntityGMNotes(entity, isGM)
 
 	respondJSON(w, http.StatusOK, entity)
 }
@@ -433,6 +473,7 @@ func (h *Handler) DeleteEntity(w http.ResponseWriter, r *http.Request) {
 
 // SearchEntities handles GET /api/campaigns/{campaignId}/entities/search
 // Verifies the user owns the campaign before searching entities.
+// GM notes are only visible to the campaign owner (GM).
 func (h *Handler) SearchEntities(w http.ResponseWriter, r *http.Request) {
 	campaignID, err := parseUUID(r, "id")
 	if err != nil {
@@ -441,7 +482,8 @@ func (h *Handler) SearchEntities(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify the user owns this campaign
-	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+	userID, ok := h.verifyCampaignOwnership(w, r, campaignID)
+	if !ok {
 		return
 	}
 
@@ -464,6 +506,10 @@ func (h *Handler) SearchEntities(w http.ResponseWriter, r *http.Request) {
 	if entities == nil {
 		entities = []models.Entity{}
 	}
+
+	// Filter GM notes for non-owners
+	isGM := h.isUserCampaignOwner(r.Context(), campaignID, userID)
+	filterEntitiesGMNotes(entities, isGM)
 
 	respondJSON(w, http.StatusOK, entities)
 }

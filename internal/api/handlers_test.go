@@ -16,8 +16,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/antonypegg/imagineer/internal/models"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -360,4 +362,227 @@ func TestNewRouter_MissingJWTSecret(t *testing.T) {
 	assert.Nil(t, router)
 	assert.Error(t, err)
 	assert.Equal(t, ErrMissingJWTSecret, err)
+}
+
+func TestFilterEntityGMNotes(t *testing.T) {
+	gmNotes := "Secret GM information about this NPC"
+
+	tests := []struct {
+		name          string
+		entity        models.Entity
+		isGM          bool
+		expectGMNotes bool
+		expectedNotes *string
+	}{
+		{
+			name: "GM sees gm_notes",
+			entity: models.Entity{
+				ID:         uuid.New(),
+				CampaignID: uuid.New(),
+				EntityType: models.EntityTypeNPC,
+				Name:       "Test NPC",
+				GMNotes:    &gmNotes,
+				CreatedAt:  time.Now(),
+				UpdatedAt:  time.Now(),
+			},
+			isGM:          true,
+			expectGMNotes: true,
+			expectedNotes: &gmNotes,
+		},
+		{
+			name: "non-GM gets empty gm_notes",
+			entity: models.Entity{
+				ID:         uuid.New(),
+				CampaignID: uuid.New(),
+				EntityType: models.EntityTypeNPC,
+				Name:       "Test NPC",
+				GMNotes:    &gmNotes,
+				CreatedAt:  time.Now(),
+				UpdatedAt:  time.Now(),
+			},
+			isGM:          false,
+			expectGMNotes: false,
+			expectedNotes: nil,
+		},
+		{
+			name: "non-GM with nil gm_notes stays nil",
+			entity: models.Entity{
+				ID:         uuid.New(),
+				CampaignID: uuid.New(),
+				EntityType: models.EntityTypeLocation,
+				Name:       "Test Location",
+				GMNotes:    nil,
+				CreatedAt:  time.Now(),
+				UpdatedAt:  time.Now(),
+			},
+			isGM:          false,
+			expectGMNotes: false,
+			expectedNotes: nil,
+		},
+		{
+			name: "GM with nil gm_notes stays nil",
+			entity: models.Entity{
+				ID:         uuid.New(),
+				CampaignID: uuid.New(),
+				EntityType: models.EntityTypeLocation,
+				Name:       "Test Location",
+				GMNotes:    nil,
+				CreatedAt:  time.Now(),
+				UpdatedAt:  time.Now(),
+			},
+			isGM:          true,
+			expectGMNotes: false,
+			expectedNotes: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Make a copy to avoid modifying original
+			entity := tt.entity
+
+			filterEntityGMNotes(&entity, tt.isGM)
+
+			if tt.expectGMNotes {
+				assert.NotNil(t, entity.GMNotes)
+				assert.Equal(t, *tt.expectedNotes, *entity.GMNotes)
+			} else {
+				assert.Nil(t, entity.GMNotes)
+			}
+
+			// Verify other fields are unchanged
+			assert.Equal(t, tt.entity.ID, entity.ID)
+			assert.Equal(t, tt.entity.Name, entity.Name)
+			assert.Equal(t, tt.entity.EntityType, entity.EntityType)
+		})
+	}
+}
+
+func TestFilterEntitiesGMNotes(t *testing.T) {
+	gmNotes1 := "Secret about NPC 1"
+	gmNotes2 := "Secret about NPC 2"
+
+	tests := []struct {
+		name     string
+		entities []models.Entity
+		isGM     bool
+	}{
+		{
+			name: "GM sees all gm_notes",
+			entities: []models.Entity{
+				{
+					ID:         uuid.New(),
+					CampaignID: uuid.New(),
+					EntityType: models.EntityTypeNPC,
+					Name:       "NPC 1",
+					GMNotes:    &gmNotes1,
+					CreatedAt:  time.Now(),
+					UpdatedAt:  time.Now(),
+				},
+				{
+					ID:         uuid.New(),
+					CampaignID: uuid.New(),
+					EntityType: models.EntityTypeNPC,
+					Name:       "NPC 2",
+					GMNotes:    &gmNotes2,
+					CreatedAt:  time.Now(),
+					UpdatedAt:  time.Now(),
+				},
+			},
+			isGM: true,
+		},
+		{
+			name: "non-GM gets no gm_notes",
+			entities: []models.Entity{
+				{
+					ID:         uuid.New(),
+					CampaignID: uuid.New(),
+					EntityType: models.EntityTypeNPC,
+					Name:       "NPC 1",
+					GMNotes:    &gmNotes1,
+					CreatedAt:  time.Now(),
+					UpdatedAt:  time.Now(),
+				},
+				{
+					ID:         uuid.New(),
+					CampaignID: uuid.New(),
+					EntityType: models.EntityTypeNPC,
+					Name:       "NPC 2",
+					GMNotes:    &gmNotes2,
+					CreatedAt:  time.Now(),
+					UpdatedAt:  time.Now(),
+				},
+			},
+			isGM: false,
+		},
+		{
+			name:     "empty slice is handled",
+			entities: []models.Entity{},
+			isGM:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Make a copy to work with
+			entities := make([]models.Entity, len(tt.entities))
+			copy(entities, tt.entities)
+
+			filterEntitiesGMNotes(entities, tt.isGM)
+
+			for i, entity := range entities {
+				if tt.isGM {
+					// GM should see gm_notes (if original had them)
+					if tt.entities[i].GMNotes != nil {
+						assert.NotNil(t, entity.GMNotes)
+						assert.Equal(t, *tt.entities[i].GMNotes, *entity.GMNotes)
+					}
+				} else {
+					// Non-GM should never see gm_notes
+					assert.Nil(t, entity.GMNotes)
+				}
+
+				// Verify other fields are unchanged
+				assert.Equal(t, tt.entities[i].Name, entity.Name)
+				assert.Equal(t, tt.entities[i].EntityType, entity.EntityType)
+			}
+		})
+	}
+}
+
+func TestFilterEntitiesGMNotes_MixedNotes(t *testing.T) {
+	// Test a scenario with mixed nil and non-nil gm_notes
+	gmNotes := "Secret info"
+
+	entities := []models.Entity{
+		{
+			ID:         uuid.New(),
+			CampaignID: uuid.New(),
+			EntityType: models.EntityTypeNPC,
+			Name:       "NPC with notes",
+			GMNotes:    &gmNotes,
+			CreatedAt:  time.Now(),
+			UpdatedAt:  time.Now(),
+		},
+		{
+			ID:         uuid.New(),
+			CampaignID: uuid.New(),
+			EntityType: models.EntityTypeLocation,
+			Name:       "Location without notes",
+			GMNotes:    nil,
+			CreatedAt:  time.Now(),
+			UpdatedAt:  time.Now(),
+		},
+	}
+
+	// Test non-GM scenario
+	filterEntitiesGMNotes(entities, false)
+
+	// Both should have nil gm_notes
+	assert.Nil(t, entities[0].GMNotes, "NPC gm_notes should be nil for non-GM")
+	assert.Nil(t, entities[1].GMNotes, "Location gm_notes should remain nil")
+
+	// Names should be unchanged
+	assert.Equal(t, "NPC with notes", entities[0].Name)
+	assert.Equal(t, "Location without notes", entities[1].Name)
 }

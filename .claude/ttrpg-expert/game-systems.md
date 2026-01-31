@@ -225,7 +225,7 @@ All systems share:
 - Name (required)
 - Description
 - Tags
-- Keeper notes (GM-only)
+- GM notes (GM-only)
 - Source document
 - Source confidence
 

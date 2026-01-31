@@ -31,9 +31,9 @@ Support multiple TTRPG systems without system-specific coupling.
 
 ### 3. Separation of Concerns
 
-Clear boundaries between keeper (GM) and player information.
+Clear boundaries between GM and player information.
 
-- **Keeper Notes**: GM-only content never exposed to players
+- **GM Notes**: GM-only content never exposed to players
 - **Discovery Tracking**: Track when players learn information
 - **Session-Based Visibility**: Content revealed through play
 - **Access Control**: API enforces visibility rules
@@ -145,6 +145,6 @@ Imagineer is successful when:
 1. GMs can manage campaigns without losing track of canon
 2. Canon conflicts are detected and surfaced for resolution
 3. Multiple game systems work with the same core interface
-4. Keeper notes remain private from players
+4. GM notes remain private from players
 5. Entity relationships are easy to explore and update
 6. Importing content preserves source attribution

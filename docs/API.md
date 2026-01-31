@@ -169,7 +169,7 @@ GET /api/campaigns/550e8400.../entities?type=npc
       "age": 38
     },
     "tags": ["ally", "author", "investigator"],
-    "keeperNotes": "Will be murdered in Chapter 1",
+    "gmNotes": "Will be murdered in Chapter 1",
     "createdAt": "2024-01-15T10:00:00Z",
     "updatedAt": "2024-01-15T10:00:00Z"
   }
@@ -193,7 +193,7 @@ POST /api/campaigns/:id/entities
     "age": 38
   },
   "tags": ["ally", "author"],
-  "keeperNotes": "Will be murdered in Chapter 1"
+  "gmNotes": "Will be murdered in Chapter 1"
 }
 ```
 
@@ -204,7 +204,7 @@ POST /api/campaigns/:id/entities
 | description | string | No | Public description |
 | attributes | object | No | System-specific attributes |
 | tags | string[] | No | Searchable tags |
-| keeperNotes | string | No | GM-only notes |
+| gmNotes | string | No | GM-only notes |
 
 **Response:** `201 Created` with the created entity object.
 

@@ -27,9 +27,9 @@ storage. Every MVP feature includes its AI component.
 
 ### Security (from CodeRabbit review)
 
-- [ ] Keeper notes GM filtering - requires auth system first
-  - API: Filter keeper_notes field from responses for non-GM users
-  - Client: Wrap keeper notes UI in GM authorization check
+- [ ] GM notes filtering - requires auth system first
+  - API: Filter gm_notes field from responses for non-GM users
+  - Client: Wrap GM notes UI in GM authorization check
 - [ ] `[MVP-3]` Import validation with duplicate detection
   - Pre-create: Levenshtein name similarity check for NPCs
   - Post-create: Run consistency checks on imported batch
@@ -149,7 +149,7 @@ The layout is the UX framework into which all features fit.
   - Environment variable injection into container
 - [ ] `[MVP-1]` Enable vectorization on campaign content tables:
   - [ ] entities.description (hybrid strategy)
-  - [ ] entities.keeper_notes (hybrid strategy)
+  - [ ] entities.gm_notes (hybrid strategy)
   - [ ] sessions.notes (hybrid strategy)
   - [ ] timeline_events.description
 

@@ -325,7 +325,7 @@ Keep these files up to date throughout every session:
 
 - Review all changes for security implications.
 
-- Keeper notes (GM-only content) must never be exposed to players.
+- GM notes (GM-only content) must never be exposed to players.
 
 ## Code Style
 

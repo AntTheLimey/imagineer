@@ -46,8 +46,8 @@ Imagineer uses MCP to expose campaign management tools to LLM clients
 
 ### Security Considerations
 
-- All tools must respect keeper/player access
-- Keeper notes never exposed via MCP
+- All tools must respect GM/player access
+- GM notes never exposed via MCP
 - Campaign ownership verified
 - Rate limiting applied
 

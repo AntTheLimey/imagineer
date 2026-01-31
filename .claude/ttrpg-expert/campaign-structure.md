@@ -45,7 +45,7 @@ PLANNED → COMPLETED
 | planned_date | date | Scheduled date |
 | actual_date | date | When it happened |
 | status | enum | PLANNED/COMPLETED/SKIPPED |
-| prep_notes | text | GM preparation (keeper-only) |
+| prep_notes | text | GM preparation (GM-only) |
 | planned_scenes | JSONB | Anticipated scenes |
 | actual_notes | text | What happened |
 | discoveries | JSONB | What players learned |

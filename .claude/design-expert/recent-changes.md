@@ -122,7 +122,7 @@ When implementing:
 
 - Add user table and authentication
 - Add campaign membership
-- Implement keeper vs player views
+- Implement GM vs player views
 - Consider real-time updates
 
 ### API Completion

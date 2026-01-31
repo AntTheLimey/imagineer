@@ -10,12 +10,12 @@ This document identifies code locations requiring security review.
 
 | Location | Security Concern |
 |----------|------------------|
-| `/internal/api/entities.go` | Keeper note exposure, authorization |
+| `/internal/api/entities.go` | GM note exposure, authorization |
 | `/internal/models/entity.go` | Field filtering for player views |
 
 **Review checklist:**
 
-- [ ] Keeper notes filtered for player requests
+- [ ] GM notes filtered for player requests
 - [ ] Campaign ownership verified
 - [ ] Entity type validated
 - [ ] Input sanitized
@@ -80,7 +80,7 @@ This document identifies code locations requiring security review.
 
 **Review checklist:**
 
-- [ ] Prep notes protected (keeper only)
+- [ ] Prep notes protected (GM only)
 - [ ] Session ownership verified
 - [ ] Discovery data filtered by role
 
@@ -124,7 +124,7 @@ This document identifies code locations requiring security review.
 // SQL string concatenation - ALWAYS VULNERABLE
 query := "SELECT * FROM entities WHERE id = " + entityID
 
-// Keeper notes in player response
+// GM notes in player response
 return entity  // Without filtering
 
 // Weak random for security
@@ -171,7 +171,7 @@ Import files       ────────────▶  │ ─────�
 API requests                      │                Server logic
                                   │
 Player requests    ────────────▶  │ ────────────▶  Filtered entities
-                                  │                (no keeper notes)
+                                  │                (no GM notes)
 ```
 
 ## Data Classification
@@ -179,6 +179,6 @@ Player requests    ────────────▶  │ ─────�
 | Classification | Examples | Handling |
 |----------------|----------|----------|
 | **Secret** | Session tokens | Never logged, encrypted |
-| **Keeper-Only** | Keeper notes, prep notes | Never sent to players |
+| **GM-Only** | GM notes, prep notes | Never sent to players |
 | **Campaign-Private** | All campaign data | Access control required |
 | **Public** | Game system schemas | No restrictions |

@@ -40,7 +40,7 @@ People controlled by the Game Master.
             {"name": "Occult", "value": 60}
         ]
     },
-    "keeperNotes": "Knows about the Necronomicon"
+    "gmNotes": "Knows about the Necronomicon"
 }
 ```
 
@@ -277,7 +277,7 @@ In-game texts and records.
 ### Entity Management
 
 1. Track source documents
-2. Update keeper notes
+2. Update GM notes
 3. Maintain relationships
 4. Link to timeline events
 5. Flag canon conflicts

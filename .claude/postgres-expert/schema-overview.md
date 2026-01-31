@@ -56,7 +56,7 @@ CREATE TABLE entities (
     description TEXT,
     attributes JSONB NOT NULL DEFAULT '{}',
     tags TEXT[] DEFAULT '{}',
-    keeper_notes TEXT,
+    gm_notes TEXT,
     discovered_session UUID REFERENCES sessions(id),
     source_document TEXT,
     source_confidence TEXT DEFAULT 'DRAFT',

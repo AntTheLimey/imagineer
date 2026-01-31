@@ -30,7 +30,7 @@ const userClaimsKey contextKey = "userClaims"
 // AuthMiddleware returns HTTP middleware that requires a valid JWT in the
 // Authorization header and, on success, attaches the parsed claims to the
 // request context under userClaimsKey.
-// 
+//
 // It responds with 401 Unauthorized if the Authorization header is missing,
 // does not use the "Bearer " prefix, contains an empty token, or if token
 // verification fails. The jwtSecret parameter is used to verify the token.

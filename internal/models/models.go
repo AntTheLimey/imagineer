@@ -96,7 +96,7 @@ type Entity struct {
 	Description       *string          `json:"description,omitempty"`
 	Attributes        json.RawMessage  `json:"attributes,omitempty"`
 	Tags              []string         `json:"tags,omitempty"`
-	KeeperNotes       *string          `json:"keeperNotes,omitempty"`
+	GMNotes           *string          `json:"gmNotes,omitempty"`
 	DiscoveredSession *uuid.UUID       `json:"discoveredSession,omitempty"`
 	SourceDocument    *string          `json:"sourceDocument,omitempty"`
 	SourceConfidence  SourceConfidence `json:"sourceConfidence"`
@@ -112,7 +112,7 @@ type CreateEntityRequest struct {
 	Description       *string           `json:"description,omitempty"`
 	Attributes        json.RawMessage   `json:"attributes,omitempty"`
 	Tags              []string          `json:"tags,omitempty"`
-	KeeperNotes       *string           `json:"keeperNotes,omitempty"`
+	GMNotes           *string           `json:"gmNotes,omitempty"`
 	DiscoveredSession *uuid.UUID        `json:"discoveredSession,omitempty"`
 	SourceDocument    *string           `json:"sourceDocument,omitempty"`
 	SourceConfidence  *SourceConfidence `json:"sourceConfidence,omitempty"`
@@ -125,7 +125,7 @@ type UpdateEntityRequest struct {
 	Description       *string           `json:"description,omitempty"`
 	Attributes        json.RawMessage   `json:"attributes,omitempty"`
 	Tags              []string          `json:"tags,omitempty"`
-	KeeperNotes       *string           `json:"keeperNotes,omitempty"`
+	GMNotes           *string           `json:"gmNotes,omitempty"`
 	DiscoveredSession *uuid.UUID        `json:"discoveredSession,omitempty"`
 	SourceDocument    *string           `json:"sourceDocument,omitempty"`
 	SourceConfidence  *SourceConfidence `json:"sourceConfidence,omitempty"`

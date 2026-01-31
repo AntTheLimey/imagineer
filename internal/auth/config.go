@@ -32,6 +32,7 @@ type OAuthConfig struct {
 //   - GOOGLE_CLIENT_ID: Google OAuth client ID
 //   - GOOGLE_CLIENT_SECRET: Google OAuth client secret
 //   - GOOGLE_REDIRECT_URL: OAuth callback URL (e.g., http://localhost:3001/api/auth/google/callback)
+//
 // NewOAuthConfigFromEnv constructs an OAuthConfig populated from environment variables.
 // It requires GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URL to be set; FRONTEND_URL defaults to "http://localhost:5173" if unset.
 // Returns an error if any required environment variable is missing.
