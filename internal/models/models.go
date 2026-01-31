@@ -35,6 +35,7 @@ type Campaign struct {
 	ID          uuid.UUID       `json:"id"`
 	Name        string          `json:"name"`
 	SystemID    *uuid.UUID      `json:"systemId,omitempty"`
+	OwnerID     *uuid.UUID      `json:"ownerId,omitempty"`
 	Description *string         `json:"description,omitempty"`
 	Settings    json.RawMessage `json:"settings,omitempty"`
 	CreatedAt   time.Time       `json:"createdAt"`
@@ -42,6 +43,7 @@ type Campaign struct {
 
 	// Joined fields (not in database)
 	System *GameSystem `json:"system,omitempty"`
+	Owner  *User       `json:"owner,omitempty"`
 }
 
 // CreateCampaignRequest represents the request body for creating a campaign.

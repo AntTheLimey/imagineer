@@ -10,6 +10,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { apiClient, ApiError } from './client';
 
+// Mock the AuthContext functions
+vi.mock('../contexts/AuthContext', () => ({
+    getStoredToken: vi.fn(() => null),
+    clearStoredAuth: vi.fn(),
+}));
+
 describe('ApiError', () => {
     it('should create an error with message and status', () => {
         const error = new ApiError('Not Found', 404);
@@ -225,7 +231,7 @@ describe('apiClient', () => {
             }
         });
 
-        it('should throw ApiError on 401 Unauthorized', async () => {
+        it('should throw ApiError on 401 Unauthorized and clear auth', async () => {
             vi.mocked(globalThis.fetch).mockResolvedValue({
                 ok: false,
                 status: 401,
@@ -240,7 +246,7 @@ describe('apiClient', () => {
             } catch (error) {
                 const apiError = error as ApiError;
                 expect(apiError.status).toBe(401);
-                expect(apiError.message).toBe('Authentication required');
+                expect(apiError.message).toBe('Unauthorized');
             }
         });
     });
@@ -298,6 +304,45 @@ describe('apiClient', () => {
                 expect(apiError.status).toBe(400);
                 expect(apiError.message).toBe('Invalid file type');
             }
+        });
+    });
+
+    describe('authentication', () => {
+        it('should include Authorization header when token is available', async () => {
+            const { getStoredToken } = await import('../contexts/AuthContext');
+            vi.mocked(getStoredToken).mockReturnValue('test-jwt-token');
+
+            vi.mocked(globalThis.fetch).mockResolvedValue({
+                ok: true,
+                status: 200,
+                json: () => Promise.resolve({}),
+            } as Response);
+
+            await apiClient.get('/test');
+
+            const [, options] = vi.mocked(globalThis.fetch).mock.calls[0];
+            expect(options?.headers).toEqual({
+                'Content-Type': 'application/json',
+                Authorization: 'Bearer test-jwt-token',
+            });
+        });
+
+        it('should not include Authorization header when no token', async () => {
+            const { getStoredToken } = await import('../contexts/AuthContext');
+            vi.mocked(getStoredToken).mockReturnValue(null);
+
+            vi.mocked(globalThis.fetch).mockResolvedValue({
+                ok: true,
+                status: 200,
+                json: () => Promise.resolve({}),
+            } as Response);
+
+            await apiClient.get('/test');
+
+            const [, options] = vi.mocked(globalThis.fetch).mock.calls[0];
+            expect(options?.headers).toEqual({
+                'Content-Type': 'application/json',
+            });
         });
     });
 });

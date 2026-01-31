@@ -40,7 +40,7 @@ func TestHealthEndpoint(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create router without database (health endpoint doesn't need it)
-			router := NewRouter(nil)
+			router := NewRouter(nil, nil, "")
 
 			// Create request
 			req := httptest.NewRequest(tt.method, "/health", nil)
@@ -237,7 +237,7 @@ func TestAPIErrorResponse_Structure(t *testing.T) {
 
 func TestCORSHeaders(t *testing.T) {
 	// Test that CORS headers are set correctly
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, "")
 
 	// Create OPTIONS preflight request
 	req := httptest.NewRequest(http.MethodOptions, "/health", nil)
@@ -295,7 +295,7 @@ func TestJSONRequestDecoding(t *testing.T) {
 
 func TestContentTypeHeader(t *testing.T) {
 	// Verify that all JSON responses have correct Content-Type
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, "")
 
 	endpoints := []struct {
 		method string
@@ -319,7 +319,7 @@ func TestContentTypeHeader(t *testing.T) {
 
 func TestRouterMiddleware(t *testing.T) {
 	// Test that the router has required middleware
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, "")
 
 	// Test request ID middleware by checking response headers
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
@@ -332,7 +332,7 @@ func TestRouterMiddleware(t *testing.T) {
 }
 
 func TestHealthEndpoint_ResponseFormat(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, "")
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()

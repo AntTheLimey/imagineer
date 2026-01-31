@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/antonypegg/imagineer/internal/auth"
 	"github.com/antonypegg/imagineer/internal/database"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -21,7 +22,9 @@ import (
 )
 
 // NewRouter creates a new chi router with all routes configured.
-func NewRouter(db *database.DB) http.Handler {
+// If authHandler is nil, auth routes will not be registered.
+// If jwtSecret is empty, authentication middleware will not be applied.
+func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string) http.Handler {
 	r := chi.NewRouter()
 
 	// Middleware
@@ -48,85 +51,101 @@ func NewRouter(db *database.DB) http.Handler {
 
 	// API routes
 	r.Route("/api", func(r chi.Router) {
-		// Game Systems
+		// Authentication routes (only if auth handler is configured)
+		// These routes are always public - they handle the OAuth flow
+		if authHandler != nil {
+			r.Route("/auth", func(r chi.Router) {
+				r.Get("/google", authHandler.HandleGoogleLogin)
+				r.Get("/google/callback", authHandler.HandleGoogleCallback)
+			})
+		}
+
+		// Game Systems - public reference data, no authentication required
 		r.Route("/game-systems", func(r chi.Router) {
 			r.Get("/", h.ListGameSystems)
 			r.Get("/{id}", h.GetGameSystem)
 			r.Get("/code/{code}", h.GetGameSystemByCode)
 		})
 
-		// Campaigns
-		r.Route("/campaigns", func(r chi.Router) {
-			r.Get("/", h.ListCampaigns)
-			r.Post("/", h.CreateCampaign)
+		// Protected routes - require authentication when jwtSecret is configured
+		r.Group(func(r chi.Router) {
+			// Apply authentication middleware if jwtSecret is provided
+			if jwtSecret != "" {
+				r.Use(auth.AuthMiddleware(jwtSecret))
+			}
 
-			r.Route("/{id}", func(r chi.Router) {
-				r.Get("/", h.GetCampaign)
-				r.Put("/", h.UpdateCampaign)
-				r.Delete("/", h.DeleteCampaign)
+			// Campaigns
+			r.Route("/campaigns", func(r chi.Router) {
+				r.Get("/", h.ListCampaigns)
+				r.Post("/", h.CreateCampaign)
 
-				// Campaign stats
-				r.Get("/stats", h.GetCampaignStats)
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", h.GetCampaign)
+					r.Put("/", h.UpdateCampaign)
+					r.Delete("/", h.DeleteCampaign)
 
-				// Campaign entities
-				r.Get("/entities", h.ListEntities)
-				r.Post("/entities", h.CreateEntity)
-				r.Get("/entities/search", h.SearchEntities)
+					// Campaign stats
+					r.Get("/stats", h.GetCampaignStats)
 
-				// Entity-specific routes within campaign context
-				r.Route("/entities/{entityId}", func(r chi.Router) {
-					r.Get("/relationships", h.GetEntityRelationships)
-					r.Get("/timeline", h.GetEntityTimelineEvents)
-				})
+					// Campaign entities
+					r.Get("/entities", h.ListEntities)
+					r.Post("/entities", h.CreateEntity)
+					r.Get("/entities/search", h.SearchEntities)
 
-				// Campaign relationships
-				r.Get("/relationships", h.ListRelationships)
-				r.Post("/relationships", h.CreateRelationship)
-				r.Route("/relationships/{relationshipId}", func(r chi.Router) {
-					r.Get("/", h.GetRelationship)
-					r.Put("/", h.UpdateRelationship)
-					r.Delete("/", h.DeleteRelationship)
-				})
+					// Entity-specific routes within campaign context
+					r.Route("/entities/{entityId}", func(r chi.Router) {
+						r.Get("/relationships", h.GetEntityRelationships)
+						r.Get("/timeline", h.GetEntityTimelineEvents)
+					})
 
-				// Campaign timeline
-				r.Get("/timeline", h.ListTimelineEvents)
-				r.Post("/timeline", h.CreateTimelineEvent)
-				r.Route("/timeline/{eventId}", func(r chi.Router) {
-					r.Get("/", h.GetTimelineEvent)
-					r.Put("/", h.UpdateTimelineEvent)
-					r.Delete("/", h.DeleteTimelineEvent)
-				})
+					// Campaign relationships
+					r.Get("/relationships", h.ListRelationships)
+					r.Post("/relationships", h.CreateRelationship)
+					r.Route("/relationships/{relationshipId}", func(r chi.Router) {
+						r.Get("/", h.GetRelationship)
+						r.Put("/", h.UpdateRelationship)
+						r.Delete("/", h.DeleteRelationship)
+					})
 
-				// Campaign import endpoints
-				r.Route("/import", func(r chi.Router) {
-					r.Post("/evernote", importHandler.ImportEvernote)
-					r.Post("/google-docs", importHandler.ImportGoogleDocs)
-					r.Post("/file", importHandler.ImportFile)
-				})
+					// Campaign timeline
+					r.Get("/timeline", h.ListTimelineEvents)
+					r.Post("/timeline", h.CreateTimelineEvent)
+					r.Route("/timeline/{eventId}", func(r chi.Router) {
+						r.Get("/", h.GetTimelineEvent)
+						r.Put("/", h.UpdateTimelineEvent)
+						r.Delete("/", h.DeleteTimelineEvent)
+					})
 
-				// Campaign agent endpoints
-				r.Route("/agents", func(r chi.Router) {
-					r.Post("/consistency-check", agentHandler.RunConsistencyCheck)
+					// Campaign import endpoints
+					r.Route("/import", func(r chi.Router) {
+						r.Post("/evernote", importHandler.ImportEvernote)
+						r.Post("/google-docs", importHandler.ImportGoogleDocs)
+						r.Post("/file", importHandler.ImportFile)
+					})
+
+					// Campaign agent endpoints
+					r.Route("/agents", func(r chi.Router) {
+						r.Post("/consistency-check", agentHandler.RunConsistencyCheck)
+					})
 				})
 			})
-		})
 
-		// Entities (direct access by ID)
-		r.Route("/entities", func(r chi.Router) {
-			r.Route("/{id}", func(r chi.Router) {
-				r.Get("/", h.GetEntity)
-				r.Put("/", h.UpdateEntity)
-				r.Delete("/", h.DeleteEntity)
+			// Entities (direct access by ID)
+			r.Route("/entities", func(r chi.Router) {
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", h.GetEntity)
+					r.Put("/", h.UpdateEntity)
+					r.Delete("/", h.DeleteEntity)
+				})
 			})
+
+			// Statistics
+			r.Get("/stats", h.GetStats)
+			r.Get("/stats/dashboard", h.GetDashboardStats)
 		})
-
-		// Statistics
-		r.Get("/stats", h.GetStats)
-		r.Get("/stats/dashboard", h.GetDashboardStats)
-
 	})
 
-	// Health check endpoint
+	// Health check endpoint - always public
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
