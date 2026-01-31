@@ -130,6 +130,64 @@ func (db *DB) CreateRelationship(ctx context.Context, campaignID uuid.UUID, req 
 	return &r, nil
 }
 
+// UpdateRelationship updates an existing relationship.
+func (db *DB) UpdateRelationship(ctx context.Context, id uuid.UUID, req models.UpdateRelationshipRequest) (*models.Relationship, error) {
+	// First get the existing relationship
+	existing, err := db.GetRelationship(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Apply updates
+	relationshipType := existing.RelationshipType
+	if req.RelationshipType != nil {
+		relationshipType = *req.RelationshipType
+	}
+
+	tone := existing.Tone
+	if req.Tone != nil {
+		tone = req.Tone
+	}
+
+	description := existing.Description
+	if req.Description != nil {
+		description = req.Description
+	}
+
+	bidirectional := existing.Bidirectional
+	if req.Bidirectional != nil {
+		bidirectional = *req.Bidirectional
+	}
+
+	strength := existing.Strength
+	if req.Strength != nil {
+		strength = req.Strength
+	}
+
+	query := `
+        UPDATE relationships
+        SET relationship_type = $2, tone = $3, description = $4,
+            bidirectional = $5, strength = $6
+        WHERE id = $1
+        RETURNING id, campaign_id, source_entity_id, target_entity_id,
+                  relationship_type, tone, description, bidirectional,
+                  strength, created_at, updated_at`
+
+	var r models.Relationship
+	err = db.QueryRow(ctx, query,
+		id, relationshipType, tone, description, bidirectional, strength,
+	).Scan(
+		&r.ID, &r.CampaignID, &r.SourceEntityID, &r.TargetEntityID,
+		&r.RelationshipType, &r.Tone, &r.Description, &r.Bidirectional,
+		&r.Strength, &r.CreatedAt, &r.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update relationship: %w", err)
+	}
+
+	return &r, nil
+}
+
 // DeleteRelationship deletes a relationship by ID.
 func (db *DB) DeleteRelationship(ctx context.Context, id uuid.UUID) error {
 	query := `DELETE FROM relationships WHERE id = $1`

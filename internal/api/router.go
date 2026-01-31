@@ -48,7 +48,11 @@ func NewRouter(db *database.DB) http.Handler {
 	// API routes
 	r.Route("/api", func(r chi.Router) {
 		// Game Systems
-		r.Get("/game-systems", h.ListGameSystems)
+		r.Route("/game-systems", func(r chi.Router) {
+			r.Get("/", h.ListGameSystems)
+			r.Get("/{id}", h.GetGameSystem)
+			r.Get("/code/{code}", h.GetGameSystemByCode)
+		})
 
 		// Campaigns
 		r.Route("/campaigns", func(r chi.Router) {
@@ -60,17 +64,44 @@ func NewRouter(db *database.DB) http.Handler {
 				r.Put("/", h.UpdateCampaign)
 				r.Delete("/", h.DeleteCampaign)
 
+				// Campaign stats
+				r.Get("/stats", h.GetCampaignStats)
+
 				// Campaign entities
 				r.Get("/entities", h.ListEntities)
 				r.Post("/entities", h.CreateEntity)
+				r.Get("/entities/search", h.SearchEntities)
+
+				// Entity-specific routes within campaign context
+				r.Route("/entities/{entityId}", func(r chi.Router) {
+					r.Get("/relationships", h.GetEntityRelationships)
+					r.Get("/timeline", h.GetEntityTimelineEvents)
+				})
 
 				// Campaign relationships
 				r.Get("/relationships", h.ListRelationships)
 				r.Post("/relationships", h.CreateRelationship)
+				r.Route("/relationships/{relationshipId}", func(r chi.Router) {
+					r.Get("/", h.GetRelationship)
+					r.Put("/", h.UpdateRelationship)
+					r.Delete("/", h.DeleteRelationship)
+				})
 
 				// Campaign timeline
 				r.Get("/timeline", h.ListTimelineEvents)
 				r.Post("/timeline", h.CreateTimelineEvent)
+				r.Route("/timeline/{eventId}", func(r chi.Router) {
+					r.Get("/", h.GetTimelineEvent)
+					r.Put("/", h.UpdateTimelineEvent)
+					r.Delete("/", h.DeleteTimelineEvent)
+				})
+
+				// Campaign import endpoints
+				r.Route("/import", func(r chi.Router) {
+					r.Post("/evernote", importHandler.ImportEvernote)
+					r.Post("/google-docs", importHandler.ImportGoogleDocs)
+					r.Post("/file", importHandler.ImportFile)
+				})
 			})
 		})
 
@@ -87,11 +118,6 @@ func NewRouter(db *database.DB) http.Handler {
 		r.Get("/stats", h.GetStats)
 		r.Get("/stats/dashboard", h.GetDashboardStats)
 
-		// Import endpoints
-		r.Route("/import", func(r chi.Router) {
-			r.Post("/evernote", importHandler.ImportEvernote)
-			r.Post("/google-docs", importHandler.ImportGoogleDocs)
-		})
 	})
 
 	// Health check endpoint

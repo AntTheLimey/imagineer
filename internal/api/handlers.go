@@ -72,6 +72,42 @@ func (h *Handler) ListGameSystems(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, systems)
 }
 
+// GetGameSystem handles GET /api/game-systems/{id}
+func (h *Handler) GetGameSystem(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid game system ID")
+		return
+	}
+
+	system, err := h.db.GetGameSystem(r.Context(), id)
+	if err != nil {
+		log.Printf("Error getting game system: %v", err)
+		respondError(w, http.StatusNotFound, "Game system not found")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, system)
+}
+
+// GetGameSystemByCode handles GET /api/game-systems/code/{code}
+func (h *Handler) GetGameSystemByCode(w http.ResponseWriter, r *http.Request) {
+	code := chi.URLParam(r, "code")
+	if code == "" {
+		respondError(w, http.StatusBadRequest, "Game system code is required")
+		return
+	}
+
+	system, err := h.db.GetGameSystemByCode(r.Context(), code)
+	if err != nil {
+		log.Printf("Error getting game system by code: %v", err)
+		respondError(w, http.StatusNotFound, "Game system not found")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, system)
+}
+
 // ListCampaigns handles GET /api/campaigns
 func (h *Handler) ListCampaigns(w http.ResponseWriter, r *http.Request) {
 	campaigns, err := h.db.ListCampaigns(r.Context())
@@ -294,6 +330,37 @@ func (h *Handler) DeleteEntity(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// SearchEntities handles GET /api/campaigns/{campaignId}/entities/search
+func (h *Handler) SearchEntities(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		respondError(w, http.StatusBadRequest, "Name query parameter is required")
+		return
+	}
+
+	// Default limit of 10 results
+	limit := 10
+
+	entities, err := h.db.SearchEntitiesByName(r.Context(), campaignID, name, limit)
+	if err != nil {
+		log.Printf("Error searching entities: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to search entities")
+		return
+	}
+
+	if entities == nil {
+		entities = []models.Entity{}
+	}
+
+	respondJSON(w, http.StatusOK, entities)
+}
+
 // ListRelationships handles GET /api/campaigns/:id/relationships
 func (h *Handler) ListRelationships(w http.ResponseWriter, r *http.Request) {
 	campaignID, err := parseUUID(r, "id")
@@ -355,6 +422,156 @@ func (h *Handler) CreateRelationship(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusCreated, relationship)
 }
 
+// GetRelationship handles GET /api/campaigns/{campaignId}/relationships/{id}
+func (h *Handler) GetRelationship(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	relationshipID, err := parseUUID(r, "relationshipId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid relationship ID")
+		return
+	}
+
+	relationship, err := h.db.GetRelationship(r.Context(), relationshipID)
+	if err != nil {
+		log.Printf("Error getting relationship: %v", err)
+		respondError(w, http.StatusNotFound, "Relationship not found")
+		return
+	}
+
+	// Verify the relationship belongs to the specified campaign
+	if relationship.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Relationship not found")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, relationship)
+}
+
+// UpdateRelationship handles PUT /api/campaigns/{campaignId}/relationships/{id}
+func (h *Handler) UpdateRelationship(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	relationshipID, err := parseUUID(r, "relationshipId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid relationship ID")
+		return
+	}
+
+	// Verify the relationship belongs to the specified campaign before updating
+	existing, err := h.db.GetRelationship(r.Context(), relationshipID)
+	if err != nil {
+		log.Printf("Error getting relationship: %v", err)
+		respondError(w, http.StatusNotFound, "Relationship not found")
+		return
+	}
+
+	if existing.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Relationship not found")
+		return
+	}
+
+	var req models.UpdateRelationshipRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	relationship, err := h.db.UpdateRelationship(r.Context(), relationshipID, req)
+	if err != nil {
+		log.Printf("Error updating relationship: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to update relationship")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, relationship)
+}
+
+// DeleteRelationship handles DELETE /api/campaigns/{campaignId}/relationships/{id}
+func (h *Handler) DeleteRelationship(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	relationshipID, err := parseUUID(r, "relationshipId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid relationship ID")
+		return
+	}
+
+	// Verify the relationship belongs to the specified campaign before deleting
+	existing, err := h.db.GetRelationship(r.Context(), relationshipID)
+	if err != nil {
+		log.Printf("Error getting relationship: %v", err)
+		respondError(w, http.StatusNotFound, "Relationship not found")
+		return
+	}
+
+	if existing.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Relationship not found")
+		return
+	}
+
+	if err := h.db.DeleteRelationship(r.Context(), relationshipID); err != nil {
+		log.Printf("Error deleting relationship: %v", err)
+		respondError(w, http.StatusNotFound, "Relationship not found")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// GetEntityRelationships handles GET /api/campaigns/{campaignId}/entities/{entityId}/relationships
+func (h *Handler) GetEntityRelationships(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	entityID, err := parseUUID(r, "entityId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid entity ID")
+		return
+	}
+
+	// Verify the entity belongs to the specified campaign
+	entity, err := h.db.GetEntity(r.Context(), entityID)
+	if err != nil {
+		log.Printf("Error getting entity: %v", err)
+		respondError(w, http.StatusNotFound, "Entity not found")
+		return
+	}
+
+	if entity.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Entity not found")
+		return
+	}
+
+	relationships, err := h.db.GetEntityRelationships(r.Context(), entityID)
+	if err != nil {
+		log.Printf("Error getting entity relationships: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to get entity relationships")
+		return
+	}
+
+	if relationships == nil {
+		relationships = []models.Relationship{}
+	}
+
+	respondJSON(w, http.StatusOK, relationships)
+}
+
 // ListTimelineEvents handles GET /api/campaigns/:id/timeline
 func (h *Handler) ListTimelineEvents(w http.ResponseWriter, r *http.Request) {
 	campaignID, err := parseUUID(r, "id")
@@ -406,6 +623,156 @@ func (h *Handler) CreateTimelineEvent(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusCreated, event)
 }
 
+// GetTimelineEvent handles GET /api/campaigns/{campaignId}/timeline/{id}
+func (h *Handler) GetTimelineEvent(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	eventID, err := parseUUID(r, "eventId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid timeline event ID")
+		return
+	}
+
+	event, err := h.db.GetTimelineEvent(r.Context(), eventID)
+	if err != nil {
+		log.Printf("Error getting timeline event: %v", err)
+		respondError(w, http.StatusNotFound, "Timeline event not found")
+		return
+	}
+
+	// Verify the event belongs to the specified campaign
+	if event.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Timeline event not found")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, event)
+}
+
+// UpdateTimelineEvent handles PUT /api/campaigns/{campaignId}/timeline/{id}
+func (h *Handler) UpdateTimelineEvent(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	eventID, err := parseUUID(r, "eventId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid timeline event ID")
+		return
+	}
+
+	// Verify the event belongs to the specified campaign before updating
+	existing, err := h.db.GetTimelineEvent(r.Context(), eventID)
+	if err != nil {
+		log.Printf("Error getting timeline event: %v", err)
+		respondError(w, http.StatusNotFound, "Timeline event not found")
+		return
+	}
+
+	if existing.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Timeline event not found")
+		return
+	}
+
+	var req models.UpdateTimelineEventRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	event, err := h.db.UpdateTimelineEvent(r.Context(), eventID, req)
+	if err != nil {
+		log.Printf("Error updating timeline event: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to update timeline event")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, event)
+}
+
+// DeleteTimelineEvent handles DELETE /api/campaigns/{campaignId}/timeline/{id}
+func (h *Handler) DeleteTimelineEvent(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	eventID, err := parseUUID(r, "eventId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid timeline event ID")
+		return
+	}
+
+	// Verify the event belongs to the specified campaign before deleting
+	existing, err := h.db.GetTimelineEvent(r.Context(), eventID)
+	if err != nil {
+		log.Printf("Error getting timeline event: %v", err)
+		respondError(w, http.StatusNotFound, "Timeline event not found")
+		return
+	}
+
+	if existing.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Timeline event not found")
+		return
+	}
+
+	if err := h.db.DeleteTimelineEvent(r.Context(), eventID); err != nil {
+		log.Printf("Error deleting timeline event: %v", err)
+		respondError(w, http.StatusNotFound, "Timeline event not found")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// GetEntityTimelineEvents handles GET /api/campaigns/{campaignId}/entities/{entityId}/timeline
+func (h *Handler) GetEntityTimelineEvents(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	entityID, err := parseUUID(r, "entityId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid entity ID")
+		return
+	}
+
+	// Verify the entity belongs to the specified campaign
+	entity, err := h.db.GetEntity(r.Context(), entityID)
+	if err != nil {
+		log.Printf("Error getting entity: %v", err)
+		respondError(w, http.StatusNotFound, "Entity not found")
+		return
+	}
+
+	if entity.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Entity not found")
+		return
+	}
+
+	events, err := h.db.GetTimelineEventsForEntity(r.Context(), entityID)
+	if err != nil {
+		log.Printf("Error getting entity timeline events: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to get entity timeline events")
+		return
+	}
+
+	if events == nil {
+		events = []models.TimelineEvent{}
+	}
+
+	respondJSON(w, http.StatusOK, events)
+}
+
 // GetStats handles GET /api/stats
 func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 	stats, err := h.db.GetDashboardStats(r.Context())
@@ -424,6 +791,24 @@ func (h *Handler) GetDashboardStats(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("Error getting dashboard stats: %v", err)
 		respondError(w, http.StatusInternalServerError, "Failed to get dashboard statistics")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, stats)
+}
+
+// GetCampaignStats handles GET /api/campaigns/{campaignId}/stats
+func (h *Handler) GetCampaignStats(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	stats, err := h.db.GetCampaignStats(r.Context(), campaignID)
+	if err != nil {
+		log.Printf("Error getting campaign stats: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to get campaign statistics")
 		return
 	}
 

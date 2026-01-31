@@ -1,4 +1,4 @@
-.PHONY: help up down reset logs shell psql build test test-server test-client test-all lint coverage migrate migrate-status backup restore status client-dev client-build
+.PHONY: help up down reset logs shell psql build test test-server test-client test-all test-db lint coverage migrate migrate-status backup restore status client-dev client-build
 
 # Default target
 help:
@@ -17,6 +17,7 @@ help:
 	@echo "  make test-server    - Run Go server tests"
 	@echo "  make test-client    - Run React client tests"
 	@echo "  make test-all       - Run all tests with coverage and linting"
+	@echo "  make test-db        - Test database extensions are installed"
 	@echo "  make lint           - Run linters"
 	@echo "  make coverage       - Run tests with coverage"
 	@echo "  make migrate        - Run pending database migrations"
@@ -92,6 +93,10 @@ coverage:
 	@if [ -d "client" ] && [ -f "client/package.json" ]; then \
 		cd client && npm run test:coverage; \
 	fi
+
+test-db:
+	@echo "=== Testing database extensions ==="
+	@./scripts/test-db-extensions.sh
 
 # Client commands
 client-dev:

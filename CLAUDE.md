@@ -155,9 +155,11 @@ For complex tasks, follow this workflow:
 
 5. **Review** - For security-sensitive changes, delegate to security-auditor.
 
-6. **Document** - For user-facing changes, update `CHANGELOG.md` with a
-   summary of the changes. Update `Todo.md` to reflect completed tasks and
-   any new tasks discovered during implementation.
+6. **Document** - **IMMEDIATELY after each commit** that contains user-facing
+   changes, update `CHANGELOG.md` with a summary. Do NOT batch changelog
+   updates at the end of a session. Each feature, fix, or user-visible change
+   gets its own changelog entry right after the commit. Also update `Todo.md`
+   to reflect completed tasks and any new tasks discovered.
 
 7. **Report** - Synthesize results and present a summary to the user.
 

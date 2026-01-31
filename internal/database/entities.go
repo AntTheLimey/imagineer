@@ -18,7 +18,6 @@ import (
 	"github.com/antonypegg/imagineer/internal/models"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/lib/pq"
 )
 
 // ListEntitiesByCampaign retrieves all entities for a campaign.
@@ -69,17 +68,15 @@ func (db *DB) GetEntity(ctx context.Context, id uuid.UUID) (*models.Entity, erro
         WHERE id = $1`
 
 	var e models.Entity
-	var tags []string
 	err := db.QueryRow(ctx, query, id).Scan(
 		&e.ID, &e.CampaignID, &e.EntityType, &e.Name, &e.Description,
-		&e.Attributes, pq.Array(&tags), &e.KeeperNotes, &e.DiscoveredSession,
+		&e.Attributes, &e.Tags, &e.KeeperNotes, &e.DiscoveredSession,
 		&e.SourceDocument, &e.SourceConfidence, &e.Version,
 		&e.CreatedAt, &e.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get entity: %w", err)
 	}
-	e.Tags = tags
 
 	return &e, nil
 }
@@ -113,21 +110,19 @@ func (db *DB) CreateEntity(ctx context.Context, campaignID uuid.UUID, req models
                   source_confidence, version, created_at, updated_at`
 
 	var e models.Entity
-	var returnedTags []string
 	err := db.QueryRow(ctx, query,
 		id, campaignID, req.EntityType, req.Name, req.Description,
-		attributes, pq.Array(tags), req.KeeperNotes, req.DiscoveredSession,
+		attributes, tags, req.KeeperNotes, req.DiscoveredSession,
 		req.SourceDocument, sourceConfidence,
 	).Scan(
 		&e.ID, &e.CampaignID, &e.EntityType, &e.Name, &e.Description,
-		&e.Attributes, pq.Array(&returnedTags), &e.KeeperNotes, &e.DiscoveredSession,
+		&e.Attributes, &e.Tags, &e.KeeperNotes, &e.DiscoveredSession,
 		&e.SourceDocument, &e.SourceConfidence, &e.Version,
 		&e.CreatedAt, &e.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create entity: %w", err)
 	}
-	e.Tags = returnedTags
 
 	return &e, nil
 }
@@ -197,21 +192,19 @@ func (db *DB) UpdateEntity(ctx context.Context, id uuid.UUID, req models.UpdateE
                   source_confidence, version, created_at, updated_at`
 
 	var e models.Entity
-	var returnedTags []string
 	err = db.QueryRow(ctx, query,
 		id, entityType, name, description, attributes,
-		pq.Array(tags), keeperNotes, discoveredSession,
+		tags, keeperNotes, discoveredSession,
 		sourceDocument, sourceConfidence,
 	).Scan(
 		&e.ID, &e.CampaignID, &e.EntityType, &e.Name, &e.Description,
-		&e.Attributes, pq.Array(&returnedTags), &e.KeeperNotes, &e.DiscoveredSession,
+		&e.Attributes, &e.Tags, &e.KeeperNotes, &e.DiscoveredSession,
 		&e.SourceDocument, &e.SourceConfidence, &e.Version,
 		&e.CreatedAt, &e.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update entity: %w", err)
 	}
-	e.Tags = returnedTags
 
 	return &e, nil
 }
@@ -292,17 +285,15 @@ func scanEntities(rows pgx.Rows) ([]models.Entity, error) {
 	var entities []models.Entity
 	for rows.Next() {
 		var e models.Entity
-		var tags []string
 		err := rows.Scan(
 			&e.ID, &e.CampaignID, &e.EntityType, &e.Name, &e.Description,
-			&e.Attributes, pq.Array(&tags), &e.KeeperNotes, &e.DiscoveredSession,
+			&e.Attributes, &e.Tags, &e.KeeperNotes, &e.DiscoveredSession,
 			&e.SourceDocument, &e.SourceConfidence, &e.Version,
 			&e.CreatedAt, &e.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan entity: %w", err)
 		}
-		e.Tags = tags
 		entities = append(entities, e)
 	}
 

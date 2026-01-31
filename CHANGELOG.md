@@ -6,6 +6,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- 15 new backend API endpoints for complete frontend-backend integration:
+  - Game system lookup by ID and code
+  - Entity search by name (fuzzy matching)
+  - Relationship CRUD and entity relationship queries
+  - Timeline event CRUD and entity timeline queries
+  - Campaign-specific statistics
+- Fully functional Entities page with:
+  - Entity list with type filtering and pagination
+  - Create dialog with duplicate detection
+  - View/Edit dialogs with validation
+  - Delete with confirmation
+  - Tags, keeper notes, and source confidence tracking
+- Fully functional Timeline page with:
+  - Vertical timeline layout with colored date indicators
+  - Filter panel (date precision, visibility, date range)
+  - Sort toggle (newest/oldest first)
+  - Create/Edit/Delete dialogs with entity linking
+- Import page connected to API with:
+  - Campaign selector
+  - Loading states and error handling
+  - Import result summary display
+  - Multi-file upload support
+- Server configuration with testable constants (`cmd/server/config.go`)
+- Database entity tests for array handling (`entities_test.go`)
+- Client environment example file (`client/.env.example`)
+
+### Fixed
+
+- Import routes now use RESTful pattern `/api/campaigns/{id}/import/*`
+  instead of `/api/import/*` with campaignId in body
+- Server default port changed from 8080 to 3001 to avoid conflict with
+  MCP server
+- Vite proxy now correctly targets port 3001
+- Entity creation bug caused by pgx/pq library incompatibility - removed
+  pq.Array() calls and use pgx native array handling
+- Timeline page crash when event.entityIds is undefined (CodeRabbit)
+- Timeline page forEach lint error from implicit return (CodeRabbit)
+- Campaign scoping security issue in relationship and timeline handlers -
+  now verify resources belong to the campaign specified in URL (CodeRabbit)
+
 ### Changed
 
 - CLAUDE.md Task Workflow now includes step 6 "Document" for automatic
@@ -17,6 +59,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Added documentation synchronization requirements
 - Added database test requirement ("Do not skip database tests")
 - Added copyright notice requirement for source files
+- Upgraded PostgreSQL from 17 to 18 (pgedge-postgres:18-spock5-standard)
+- CI workflow now tests against PostgreSQL 17 and 18 (was 16 and 17)
+- Added PostgreSQL extensions auto-configuration on container startup:
+  - pg_trgm, vector, pgedge_vectorizer, pg_tokenizer, vchord_bm25,
+    vectorize, pgmq, pg_cron
+- Added `make test-db` to verify database extensions are installed
 
 ### Added
 
@@ -151,8 +199,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## Project Statistics
 
 - **Database Tables**: 8 (including schema_migrations)
+- **API Endpoints**: 35+ (game-systems, campaigns, entities, relationships,
+  timeline, stats, import)
 - **Game Systems**: 3 (Call of Cthulhu 7e, GURPS 4e, Forged in the Dark)
 - **Sub-Agents**: 7 (golang, react, ttrpg, postgres, testing, mcp-server,
   design-compliance experts)
 - **React Pages**: 5 (Dashboard, Campaigns, Entities, Timeline, Import)
+- **React Query Hooks**: 31 (for all API domains)
 - **Importers**: 2 (Evernote, Google Docs)
