@@ -16,6 +16,7 @@ import (
 	"net/http"
 
 	"github.com/antonypegg/imagineer/internal/agents/consistency"
+	"github.com/antonypegg/imagineer/internal/auth"
 	"github.com/antonypegg/imagineer/internal/database"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -42,6 +43,7 @@ type ConsistencyCheckRequest struct {
 }
 
 // RunConsistencyCheck handles POST /api/campaigns/{id}/agents/consistency-check
+// Verifies the user owns the campaign before running the consistency check.
 func (h *AgentHandler) RunConsistencyCheck(w http.ResponseWriter, r *http.Request) {
 	campaignIDStr := chi.URLParam(r, "id")
 	campaignID, err := uuid.Parse(campaignIDStr)
@@ -50,10 +52,15 @@ func (h *AgentHandler) RunConsistencyCheck(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Verify campaign exists
-	_, err = h.db.GetCampaign(r.Context(), campaignID)
-	if err != nil {
-		log.Printf("Error getting campaign: %v", err)
+	// Verify the user owns this campaign
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	if err := h.db.VerifyCampaignOwnership(r.Context(), campaignID, userID); err != nil {
+		log.Printf("Error verifying campaign ownership: %v", err)
 		respondError(w, http.StatusNotFound, "Campaign not found")
 		return
 	}

@@ -16,6 +16,7 @@ services:
       postgres
       -c shared_preload_libraries=pg_cron,pg_tokenizer,pgedge_vectorizer
       -c cron.database_name=imagineer
+      -c listen_addresses='*'
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U imagineer -d imagineer"]
       interval: 10s

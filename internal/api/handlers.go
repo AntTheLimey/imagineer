@@ -16,6 +16,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/antonypegg/imagineer/internal/auth"
 	"github.com/antonypegg/imagineer/internal/database"
 	"github.com/antonypegg/imagineer/internal/models"
 	"github.com/go-chi/chi/v5"
@@ -54,6 +55,24 @@ func respondError(w http.ResponseWriter, status int, message string) {
 // parseUUID parses a UUID from a URL parameter.
 func parseUUID(r *http.Request, param string) (uuid.UUID, error) {
 	return uuid.Parse(chi.URLParam(r, param))
+}
+
+// verifyCampaignOwnership checks if the authenticated user owns the campaign.
+// Returns the user ID if successful, or writes an error response and returns
+// uuid.Nil if verification fails.
+func (h *Handler) verifyCampaignOwnership(w http.ResponseWriter, r *http.Request, campaignID uuid.UUID) (uuid.UUID, bool) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return uuid.Nil, false
+	}
+
+	if err := h.db.VerifyCampaignOwnership(r.Context(), campaignID, userID); err != nil {
+		respondError(w, http.StatusNotFound, "Campaign not found")
+		return uuid.Nil, false
+	}
+
+	return userID, true
 }
 
 // ListGameSystems handles GET /api/game-systems
@@ -109,8 +128,15 @@ func (h *Handler) GetGameSystemByCode(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListCampaigns handles GET /api/campaigns
+// Returns only campaigns owned by the authenticated user.
 func (h *Handler) ListCampaigns(w http.ResponseWriter, r *http.Request) {
-	campaigns, err := h.db.ListCampaigns(r.Context())
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	campaigns, err := h.db.ListCampaignsByOwner(r.Context(), userID)
 	if err != nil {
 		log.Printf("Error listing campaigns: %v", err)
 		respondError(w, http.StatusInternalServerError, "Failed to list campaigns")
@@ -125,7 +151,14 @@ func (h *Handler) ListCampaigns(w http.ResponseWriter, r *http.Request) {
 }
 
 // CreateCampaign handles POST /api/campaigns
+// Creates a new campaign owned by the authenticated user.
 func (h *Handler) CreateCampaign(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
 	var req models.CreateCampaignRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid request body")
@@ -137,7 +170,7 @@ func (h *Handler) CreateCampaign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	campaign, err := h.db.CreateCampaign(r.Context(), req)
+	campaign, err := h.db.CreateCampaignWithOwner(r.Context(), req, userID)
 	if err != nil {
 		log.Printf("Error creating campaign: %v", err)
 		respondError(w, http.StatusInternalServerError, "Failed to create campaign")
@@ -148,14 +181,21 @@ func (h *Handler) CreateCampaign(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetCampaign handles GET /api/campaigns/:id
+// Returns the campaign only if it belongs to the authenticated user.
 func (h *Handler) GetCampaign(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
 	id, err := parseUUID(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
 	}
 
-	campaign, err := h.db.GetCampaign(r.Context(), id)
+	campaign, err := h.db.GetCampaignByOwner(r.Context(), id, userID)
 	if err != nil {
 		log.Printf("Error getting campaign: %v", err)
 		respondError(w, http.StatusNotFound, "Campaign not found")
@@ -166,7 +206,14 @@ func (h *Handler) GetCampaign(w http.ResponseWriter, r *http.Request) {
 }
 
 // UpdateCampaign handles PUT /api/campaigns/:id
+// Updates the campaign only if it belongs to the authenticated user.
 func (h *Handler) UpdateCampaign(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
 	id, err := parseUUID(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
@@ -179,10 +226,10 @@ func (h *Handler) UpdateCampaign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	campaign, err := h.db.UpdateCampaign(r.Context(), id, req)
+	campaign, err := h.db.UpdateCampaignByOwner(r.Context(), id, userID, req)
 	if err != nil {
 		log.Printf("Error updating campaign: %v", err)
-		respondError(w, http.StatusInternalServerError, "Failed to update campaign")
+		respondError(w, http.StatusNotFound, "Campaign not found")
 		return
 	}
 
@@ -190,14 +237,21 @@ func (h *Handler) UpdateCampaign(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteCampaign handles DELETE /api/campaigns/:id
+// Deletes the campaign only if it belongs to the authenticated user.
 func (h *Handler) DeleteCampaign(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
 	id, err := parseUUID(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
 	}
 
-	if err := h.db.DeleteCampaign(r.Context(), id); err != nil {
+	if err := h.db.DeleteCampaignByOwner(r.Context(), id, userID); err != nil {
 		log.Printf("Error deleting campaign: %v", err)
 		respondError(w, http.StatusNotFound, "Campaign not found")
 		return
@@ -207,10 +261,16 @@ func (h *Handler) DeleteCampaign(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListEntities handles GET /api/campaigns/:id/entities
+// Verifies the user owns the campaign before listing entities.
 func (h *Handler) ListEntities(w http.ResponseWriter, r *http.Request) {
 	campaignID, err := parseUUID(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
 		return
 	}
 
@@ -238,10 +298,16 @@ func (h *Handler) ListEntities(w http.ResponseWriter, r *http.Request) {
 }
 
 // CreateEntity handles POST /api/campaigns/:id/entities
+// Verifies the user owns the campaign before creating an entity.
 func (h *Handler) CreateEntity(w http.ResponseWriter, r *http.Request) {
 	campaignID, err := parseUUID(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
 		return
 	}
 
@@ -272,6 +338,7 @@ func (h *Handler) CreateEntity(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetEntity handles GET /api/entities/:id
+// Verifies the user owns the entity's campaign before returning the entity.
 func (h *Handler) GetEntity(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(r, "id")
 	if err != nil {
@@ -286,14 +353,33 @@ func (h *Handler) GetEntity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Verify the user owns the entity's campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, entity.CampaignID); !ok {
+		return
+	}
+
 	respondJSON(w, http.StatusOK, entity)
 }
 
 // UpdateEntity handles PUT /api/entities/:id
+// Verifies the user owns the entity's campaign before updating the entity.
 func (h *Handler) UpdateEntity(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid entity ID")
+		return
+	}
+
+	// Fetch the entity first to get its campaign ID
+	existingEntity, err := h.db.GetEntity(r.Context(), id)
+	if err != nil {
+		log.Printf("Error getting entity: %v", err)
+		respondError(w, http.StatusNotFound, "Entity not found")
+		return
+	}
+
+	// Verify the user owns the entity's campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, existingEntity.CampaignID); !ok {
 		return
 	}
 
@@ -314,10 +400,24 @@ func (h *Handler) UpdateEntity(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteEntity handles DELETE /api/entities/:id
+// Verifies the user owns the entity's campaign before deleting the entity.
 func (h *Handler) DeleteEntity(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid entity ID")
+		return
+	}
+
+	// Fetch the entity first to get its campaign ID
+	existingEntity, err := h.db.GetEntity(r.Context(), id)
+	if err != nil {
+		log.Printf("Error getting entity: %v", err)
+		respondError(w, http.StatusNotFound, "Entity not found")
+		return
+	}
+
+	// Verify the user owns the entity's campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, existingEntity.CampaignID); !ok {
 		return
 	}
 
@@ -331,10 +431,16 @@ func (h *Handler) DeleteEntity(w http.ResponseWriter, r *http.Request) {
 }
 
 // SearchEntities handles GET /api/campaigns/{campaignId}/entities/search
+// Verifies the user owns the campaign before searching entities.
 func (h *Handler) SearchEntities(w http.ResponseWriter, r *http.Request) {
 	campaignID, err := parseUUID(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
 		return
 	}
 
@@ -362,10 +468,16 @@ func (h *Handler) SearchEntities(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListRelationships handles GET /api/campaigns/:id/relationships
+// Verifies the user owns the campaign before listing relationships.
 func (h *Handler) ListRelationships(w http.ResponseWriter, r *http.Request) {
 	campaignID, err := parseUUID(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
 		return
 	}
 
@@ -384,10 +496,16 @@ func (h *Handler) ListRelationships(w http.ResponseWriter, r *http.Request) {
 }
 
 // CreateRelationship handles POST /api/campaigns/:id/relationships
+// Verifies the user owns the campaign before creating a relationship.
 func (h *Handler) CreateRelationship(w http.ResponseWriter, r *http.Request) {
 	campaignID, err := parseUUID(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
 		return
 	}
 
@@ -423,10 +541,16 @@ func (h *Handler) CreateRelationship(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetRelationship handles GET /api/campaigns/{campaignId}/relationships/{id}
+// Verifies the user owns the campaign before getting the relationship.
 func (h *Handler) GetRelationship(w http.ResponseWriter, r *http.Request) {
 	campaignID, err := parseUUID(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
 		return
 	}
 
@@ -453,10 +577,16 @@ func (h *Handler) GetRelationship(w http.ResponseWriter, r *http.Request) {
 }
 
 // UpdateRelationship handles PUT /api/campaigns/{campaignId}/relationships/{id}
+// Verifies the user owns the campaign before updating the relationship.
 func (h *Handler) UpdateRelationship(w http.ResponseWriter, r *http.Request) {
 	campaignID, err := parseUUID(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
 		return
 	}
 
@@ -496,10 +626,16 @@ func (h *Handler) UpdateRelationship(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteRelationship handles DELETE /api/campaigns/{campaignId}/relationships/{id}
+// Verifies the user owns the campaign before deleting the relationship.
 func (h *Handler) DeleteRelationship(w http.ResponseWriter, r *http.Request) {
 	campaignID, err := parseUUID(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
 		return
 	}
 
@@ -532,10 +668,16 @@ func (h *Handler) DeleteRelationship(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetEntityRelationships handles GET /api/campaigns/{campaignId}/entities/{entityId}/relationships
+// Verifies the user owns the campaign before getting entity relationships.
 func (h *Handler) GetEntityRelationships(w http.ResponseWriter, r *http.Request) {
 	campaignID, err := parseUUID(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
 		return
 	}
 
@@ -573,10 +715,16 @@ func (h *Handler) GetEntityRelationships(w http.ResponseWriter, r *http.Request)
 }
 
 // ListTimelineEvents handles GET /api/campaigns/:id/timeline
+// Verifies the user owns the campaign before listing timeline events.
 func (h *Handler) ListTimelineEvents(w http.ResponseWriter, r *http.Request) {
 	campaignID, err := parseUUID(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
 		return
 	}
 
@@ -595,10 +743,16 @@ func (h *Handler) ListTimelineEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 // CreateTimelineEvent handles POST /api/campaigns/:id/timeline
+// Verifies the user owns the campaign before creating a timeline event.
 func (h *Handler) CreateTimelineEvent(w http.ResponseWriter, r *http.Request) {
 	campaignID, err := parseUUID(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
 		return
 	}
 
@@ -624,10 +778,16 @@ func (h *Handler) CreateTimelineEvent(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetTimelineEvent handles GET /api/campaigns/{campaignId}/timeline/{id}
+// Verifies the user owns the campaign before getting the timeline event.
 func (h *Handler) GetTimelineEvent(w http.ResponseWriter, r *http.Request) {
 	campaignID, err := parseUUID(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
 		return
 	}
 
@@ -654,10 +814,16 @@ func (h *Handler) GetTimelineEvent(w http.ResponseWriter, r *http.Request) {
 }
 
 // UpdateTimelineEvent handles PUT /api/campaigns/{campaignId}/timeline/{id}
+// Verifies the user owns the campaign before updating the timeline event.
 func (h *Handler) UpdateTimelineEvent(w http.ResponseWriter, r *http.Request) {
 	campaignID, err := parseUUID(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
 		return
 	}
 
@@ -697,10 +863,16 @@ func (h *Handler) UpdateTimelineEvent(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteTimelineEvent handles DELETE /api/campaigns/{campaignId}/timeline/{id}
+// Verifies the user owns the campaign before deleting the timeline event.
 func (h *Handler) DeleteTimelineEvent(w http.ResponseWriter, r *http.Request) {
 	campaignID, err := parseUUID(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
 		return
 	}
 
@@ -733,10 +905,16 @@ func (h *Handler) DeleteTimelineEvent(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetEntityTimelineEvents handles GET /api/campaigns/{campaignId}/entities/{entityId}/timeline
+// Verifies the user owns the campaign before getting entity timeline events.
 func (h *Handler) GetEntityTimelineEvents(w http.ResponseWriter, r *http.Request) {
 	campaignID, err := parseUUID(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
 		return
 	}
 
@@ -798,10 +976,16 @@ func (h *Handler) GetDashboardStats(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetCampaignStats handles GET /api/campaigns/{campaignId}/stats
+// Verifies the user owns the campaign before getting stats.
 func (h *Handler) GetCampaignStats(w http.ResponseWriter, r *http.Request) {
 	campaignID, err := parseUUID(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
 		return
 	}
 

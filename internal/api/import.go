@@ -18,6 +18,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/antonypegg/imagineer/internal/auth"
 	"github.com/antonypegg/imagineer/internal/database"
 	"github.com/antonypegg/imagineer/internal/importers/common"
 	"github.com/antonypegg/imagineer/internal/importers/evernote"
@@ -44,6 +45,7 @@ func NewImportHandler(db *database.DB) *ImportHandler {
 }
 
 // ImportEvernote handles POST /api/campaigns/{id}/import/evernote
+// Verifies the user owns the campaign before importing.
 func (h *ImportHandler) ImportEvernote(w http.ResponseWriter, r *http.Request) {
 	// Get the campaign ID from URL path
 	campaignIDStr := chi.URLParam(r, "id")
@@ -55,6 +57,18 @@ func (h *ImportHandler) ImportEvernote(w http.ResponseWriter, r *http.Request) {
 	campaignID, err := uuid.Parse(campaignIDStr)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	if err := h.db.VerifyCampaignOwnership(r.Context(), campaignID, userID); err != nil {
+		respondError(w, http.StatusNotFound, "Campaign not found")
 		return
 	}
 
@@ -114,6 +128,7 @@ func (h *ImportHandler) ImportEvernote(w http.ResponseWriter, r *http.Request) {
 }
 
 // ImportGoogleDocs handles POST /api/campaigns/{id}/import/google-docs
+// Verifies the user owns the campaign before importing.
 func (h *ImportHandler) ImportGoogleDocs(w http.ResponseWriter, r *http.Request) {
 	// Get the campaign ID from URL path
 	campaignIDStr := chi.URLParam(r, "id")
@@ -125,6 +140,18 @@ func (h *ImportHandler) ImportGoogleDocs(w http.ResponseWriter, r *http.Request)
 	campaignID, err := uuid.Parse(campaignIDStr)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	if err := h.db.VerifyCampaignOwnership(r.Context(), campaignID, userID); err != nil {
+		respondError(w, http.StatusNotFound, "Campaign not found")
 		return
 	}
 
@@ -194,6 +221,7 @@ func (h *ImportHandler) ImportGoogleDocs(w http.ResponseWriter, r *http.Request)
 
 // ImportFile handles POST /api/campaigns/{id}/import/file
 // This is a general file upload endpoint for importing various file types.
+// Verifies the user owns the campaign before importing.
 func (h *ImportHandler) ImportFile(w http.ResponseWriter, r *http.Request) {
 	// Get the campaign ID from URL path
 	campaignIDStr := chi.URLParam(r, "id")
@@ -205,6 +233,18 @@ func (h *ImportHandler) ImportFile(w http.ResponseWriter, r *http.Request) {
 	campaignID, err := uuid.Parse(campaignIDStr)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	if err := h.db.VerifyCampaignOwnership(r.Context(), campaignID, userID); err != nil {
+		respondError(w, http.StatusNotFound, "Campaign not found")
 		return
 	}
 

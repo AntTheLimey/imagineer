@@ -1,0 +1,1 @@
+Review the current uncommitted changes using CodeRabbit CLI (`coderabbit review --plain`), then analyze all issues found and fix them. After fixing, run `make test-all` to verify the fixes don't break anything.

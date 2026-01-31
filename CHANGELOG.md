@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Multi-User Foundation & Authentication
+  - Database migration `003_add_users.sql` adds users table and owner_id
+    foreign key on campaigns table.
+  - User model and database operations in Go backend handle user creation,
+    retrieval, and campaign ownership.
+  - Google OAuth authentication flow enables sign-in and sign-up via Google.
+  - JWT token generation and validation secure API requests.
+  - Authentication middleware extracts user from JWT and attaches the user
+    to the request context.
+  - Campaign ownership and data isolation ensure users only see their own
+    campaigns.
+  - React AuthContext manages client-side authentication state.
+  - Login page provides Google sign-in button and OAuth flow initiation.
+  - OAuth callback handling completes the authentication flow and stores
+    tokens.
+  - Protected routes in React app redirect unauthenticated users to login.
+  - User display in navigation shows avatar, name, and logout button.
 - First analysis agent: consistency-checker
   - Agent interface (`internal/agents/agent.go`) defines Result, Suggestion,
     and Source structs for all analysis agents.

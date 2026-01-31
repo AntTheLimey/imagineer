@@ -17,10 +17,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/antonypegg/imagineer/internal/api"
+	"github.com/antonypegg/imagineer/internal/auth"
 	"github.com/antonypegg/imagineer/internal/database"
 )
 
@@ -55,8 +57,33 @@ func main() {
 
 	log.Println("Connected to database")
 
-	// Create router
-	router := api.NewRouter(db)
+	// Initialize OAuth handler and JWT secret if configuration is available
+	var authHandler *auth.AuthHandler
+	jwtSecret := os.Getenv("JWT_SECRET")
+	oauthConfig, err := auth.NewOAuthConfigFromEnv()
+	if err != nil {
+		log.Printf("OAuth not configured: %v (authentication endpoints will be disabled)", err)
+	} else {
+		if jwtSecret == "" {
+			log.Printf("JWT_SECRET not set (authentication endpoints will be disabled)")
+		} else {
+			jwtExpiryHrs := 24 // Default to 24 hours
+			if expiryStr := os.Getenv("JWT_EXPIRY_HOURS"); expiryStr != "" {
+				if parsed, err := strconv.Atoi(expiryStr); err == nil && parsed > 0 {
+					jwtExpiryHrs = parsed
+				}
+			}
+			authHandler = auth.NewAuthHandler(db, oauthConfig, []byte(jwtSecret), jwtExpiryHrs)
+			log.Println("OAuth authentication enabled")
+		}
+	}
+
+	// Create router (requires JWT secret for authentication)
+	router, err := api.NewRouter(db, authHandler, jwtSecret)
+	if err != nil {
+		log.Fatalf("Failed to create router: %v", err)
+	}
+	log.Println("JWT authentication middleware enabled for protected routes")
 
 	// Create HTTP server
 	server := &http.Server{

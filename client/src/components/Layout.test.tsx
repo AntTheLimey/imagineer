@@ -18,6 +18,28 @@ vi.mock('@mui/icons-material', () => ({
     Dashboard: () => <span data-testid="dashboard-icon">Dashboard</span>,
     Folder: () => <span data-testid="folder-icon">Folder</span>,
     Upload: () => <span data-testid="upload-icon">Upload</span>,
+    Logout: () => <span data-testid="logout-icon">Logout</span>,
+}));
+
+// Mock the AuthContext
+const mockUser = {
+    id: 'test-user-id',
+    email: 'test@example.com',
+    name: 'Test User',
+    avatarUrl: 'https://example.com/avatar.jpg',
+};
+
+const mockLogout = vi.fn();
+
+vi.mock('../contexts/AuthContext', () => ({
+    useAuth: () => ({
+        user: mockUser,
+        token: 'test-token',
+        isAuthenticated: true,
+        isLoading: false,
+        login: vi.fn(),
+        logout: mockLogout,
+    }),
 }));
 
 const renderWithRouter = (ui: React.ReactElement, { route = '/' } = {}) => {
@@ -133,5 +155,53 @@ describe('Layout', () => {
 
         // The menu icon should be rendered (it's in the IconButton for mobile toggle)
         expect(screen.getByTestId('menu-icon')).toBeInTheDocument();
+    });
+
+    it('should display user name when authenticated', () => {
+        renderWithRouter(
+            <Layout>
+                <div>Test Content</div>
+            </Layout>
+        );
+
+        // User name should appear in the drawer and possibly in the menu
+        const userNames = screen.getAllByText('Test User');
+        expect(userNames.length).toBeGreaterThan(0);
+    });
+
+    it('should display user email when authenticated', () => {
+        renderWithRouter(
+            <Layout>
+                <div>Test Content</div>
+            </Layout>
+        );
+
+        // User email should appear in the drawer
+        const userEmails = screen.getAllByText('test@example.com');
+        expect(userEmails.length).toBeGreaterThan(0);
+    });
+
+    it('should render sign out button', () => {
+        renderWithRouter(
+            <Layout>
+                <div>Test Content</div>
+            </Layout>
+        );
+
+        // Sign out button should be in the drawer
+        const signOutButtons = screen.getAllByText('Sign out');
+        expect(signOutButtons.length).toBeGreaterThan(0);
+    });
+
+    it('should render logout icon', () => {
+        renderWithRouter(
+            <Layout>
+                <div>Test Content</div>
+            </Layout>
+        );
+
+        // Logout icons should be present (in drawer and menu)
+        const logoutIcons = screen.getAllByTestId('logout-icon');
+        expect(logoutIcons.length).toBeGreaterThan(0);
     });
 });

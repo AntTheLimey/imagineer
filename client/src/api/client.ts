@@ -7,9 +7,12 @@
 //
 // -------------------------------------------------------------------------
 
+import { getStoredToken, clearStoredAuth } from '../contexts/AuthContext';
+
 /**
  * API client with fetch wrapper for communicating with the backend.
  * Base URL points to /api - Vite proxy handles forwarding to :8080.
+ * Includes JWT authentication and automatic 401 handling.
  */
 
 const BASE_URL = '/api';
@@ -53,6 +56,7 @@ interface RequestOptions {
     body?: unknown;
     headers?: Record<string, string>;
     params?: QueryParams;
+    skipAuth?: boolean;
 }
 
 /**
@@ -73,16 +77,41 @@ function buildUrl(path: string, params?: QueryParams): string {
 }
 
 /**
- * Make an API request with JSON content-type and error handling.
+ * Get authorization headers with JWT token if available.
+ */
+function getAuthHeaders(): Record<string, string> {
+    const token = getStoredToken();
+    if (token) {
+        return { Authorization: `Bearer ${token}` };
+    }
+    return {};
+}
+
+/**
+ * Handle 401 Unauthorized responses by clearing auth and redirecting to login.
+ */
+function handleUnauthorized(): void {
+    clearStoredAuth();
+    // Only redirect if not already on the login or auth callback pages
+    if (!window.location.pathname.startsWith('/login') &&
+        !window.location.pathname.startsWith('/auth/callback')) {
+        window.location.href = '/login';
+    }
+}
+
+/**
+ * Make an API request with JSON content-type, authentication, and error handling.
  * Throws ApiError on non-2xx responses.
+ * Automatically handles 401 responses by clearing auth and redirecting to login.
  */
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-    const { method = 'GET', body, headers = {}, params } = options;
+    const { method = 'GET', body, headers = {}, params, skipAuth = false } = options;
 
     const url = buildUrl(path, params);
 
     const requestHeaders: Record<string, string> = {
         'Content-Type': 'application/json',
+        ...(skipAuth ? {} : getAuthHeaders()),
         ...headers,
     };
 
@@ -96,6 +125,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     }
 
     const response = await fetch(url, fetchOptions);
+
+    // Handle 401 Unauthorized
+    if (response.status === 401) {
+        handleUnauthorized();
+        throw new ApiError('Unauthorized', 401);
+    }
 
     // Handle non-2xx responses
     if (!response.ok) {
@@ -128,6 +163,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
 /**
  * API client with typed methods for each HTTP verb.
+ * All requests include JWT authentication when available.
  */
 export const apiClient = {
     /**
@@ -167,6 +203,7 @@ export const apiClient = {
 
     /**
      * Upload a file using multipart/form-data.
+     * Includes JWT authentication.
      */
     async upload<T>(path: string, file: File, additionalData?: Record<string, string>): Promise<T> {
         const formData = new FormData();
@@ -181,8 +218,15 @@ export const apiClient = {
         const response = await fetch(`${BASE_URL}${path}`, {
             method: 'POST',
             body: formData,
+            headers: getAuthHeaders(),
             // Note: Do not set Content-Type header - browser will set it with boundary
         });
+
+        // Handle 401 Unauthorized
+        if (response.status === 401) {
+            handleUnauthorized();
+            throw new ApiError('Unauthorized', 401);
+        }
 
         if (!response.ok) {
             let errorBody: unknown;

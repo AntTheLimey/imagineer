@@ -20,6 +20,7 @@ imagineer-cli
 coverage.txt
 coverage.html
 *.coverprofile
+client/coverage/
 
 # Go workspace file
 go.work

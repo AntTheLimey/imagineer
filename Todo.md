@@ -38,35 +38,14 @@ storage. Every MVP feature includes its AI component.
 
 Priority features for initial release, ordered by dependency.
 
-### Multi-User Foundation & Authentication
-
-This is foundational - enables multiple GMs (and later, players) to use the
-system with isolated data.
-
-#### Database Changes
-
-- [ ] `[MVP-1]` Create users table
-  - id (UUID), google_id, email, name, avatar_url, created_at, updated_at
-- [ ] `[MVP-1]` Add owner_id to campaigns table (FK to users)
-- [ ] `[MVP-1]` Migration to add user support to existing schema
-
-#### Authentication Flow
-
-- [ ] `[MVP-1]` Google OAuth integration (sign in / sign up)
-- [ ] `[MVP-1]` JWT token generation after successful OAuth
-- [ ] `[MVP-1]` Token refresh mechanism
-- [ ] `[MVP-1]` Auth middleware - extract user from JWT, attach to request context
-
-#### Data Isolation
-
-- [ ] `[MVP-1]` Campaign queries scoped to owner (you only see your campaigns)
-- [ ] `[MVP-1]` All child data (entities, sessions, etc.) inherits campaign scope
+### Multi-User Foundation & Authentication (Post-MVP Backlog)
 
 #### Future (Post-MVP)
 
 - [ ] Role-based access control (User, Admin roles)
 - [ ] Admin user management
 - [ ] Additional OAuth providers (Apple, GitHub) if needed
+- [ ] Full token refresh endpoint (basic implementation complete)
 
 ### Campaign Permissions & Sharing
 
@@ -348,6 +327,24 @@ Features planned for after initial release.
 
 ## Completed
 
+- [x] Multi-User Foundation & Authentication
+  - [x] Create users table (id, google_id, email, name, avatar_url,
+    created_at, updated_at)
+  - [x] Add owner_id to campaigns table (FK to users)
+  - [x] Migration `003_add_users.sql` to add user support
+  - [x] Google OAuth integration (sign in / sign up)
+  - [x] JWT token generation after successful OAuth
+  - [x] Token refresh mechanism (basic implementation; full refresh endpoint
+    deferred)
+  - [x] Auth middleware extracts user from JWT and attaches to request
+    context
+  - [x] Campaign queries scoped to owner (users only see their own campaigns)
+  - [x] All child data (entities, sessions, etc.) inherits campaign scope
+  - [x] React AuthContext for client-side auth state
+  - [x] Login page with Google sign-in
+  - [x] OAuth callback handling
+  - [x] Protected routes in React app
+  - [x] User display in navigation (avatar, name, logout)
 - [x] First agent: consistency-checker
   - Agent interface with Result, Suggestion, Source structs
   - Five checks: orphaned entities, duplicate names, timeline conflicts,
