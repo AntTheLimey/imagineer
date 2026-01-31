@@ -27,9 +27,6 @@ storage. Every MVP feature includes its AI component.
 
 ### Security (from CodeRabbit review)
 
-- [ ] GM notes filtering - requires auth system first
-  - API: Filter gm_notes field from responses for non-GM users
-  - Client: Wrap GM notes UI in GM authorization check
 - [ ] `[MVP-3]` Import validation with duplicate detection
   - Pre-create: Levenshtein name similarity check for NPCs
   - Post-create: Run consistency checks on imported batch
@@ -378,3 +375,8 @@ Features planned for after initial release.
 - [x] Add campaign scoping to relationship/timeline handlers (CodeRabbit)
 - [x] Update PostgreSQL from 17 to 18 (pgedge-postgres:18-spock5-standard)
 - [x] Configure PostgreSQL extensions (vector, vectorizer, pg_cron, etc.)
+- [x] GM notes filtering (API filters gm_notes for non-owners, client hides UI)
+- [x] Rename keeper_notes to gm_notes (CoC-specific to generic terminology)
+- [x] Add RPG terminology knowledge base for TTRPG expert agent
+- [x] Fix entity API URL routes (get/update/delete use /entities/{id})
+- [x] Fix Tags input UX (autoSelect and onBlur for better capture)
