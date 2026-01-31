@@ -256,7 +256,9 @@ export default function Timeline() {
     const entityMap = useMemo(() => {
         const map = new Map<string, Entity>();
         if (entities) {
-            entities.forEach((entity) => map.set(entity.id, entity));
+            for (const entity of entities) {
+                map.set(entity.id, entity);
+            }
         }
         return map;
     }, [entities]);
@@ -683,9 +685,9 @@ export default function Timeline() {
                                                 </Typography>
 
                                                 {/* Linked Entities */}
-                                                {event.entityIds.length > 0 && (
+                                                {(event.entityIds ?? []).length > 0 && (
                                                     <Box sx={{ mt: 1, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                                                        {event.entityIds.slice(0, 5).map((entityId) => {
+                                                        {(event.entityIds ?? []).slice(0, 5).map((entityId) => {
                                                             const entity = entityMap.get(entityId);
                                                             return (
                                                                 <Chip
@@ -696,9 +698,9 @@ export default function Timeline() {
                                                                 />
                                                             );
                                                         })}
-                                                        {event.entityIds.length > 5 && (
+                                                        {(event.entityIds ?? []).length > 5 && (
                                                             <Chip
-                                                                label={`+${event.entityIds.length - 5} more`}
+                                                                label={`+${(event.entityIds ?? []).length - 5} more`}
                                                                 size="small"
                                                                 variant="outlined"
                                                             />
@@ -953,13 +955,13 @@ export default function Timeline() {
                                 </Typography>
                             </Box>
 
-                            {selectedEvent.entityIds.length > 0 && (
+                            {(selectedEvent.entityIds ?? []).length > 0 && (
                                 <Box sx={{ mb: 2 }}>
                                     <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                                         Linked Entities
                                     </Typography>
                                     <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                                        {selectedEvent.entityIds.map((entityId) => {
+                                        {(selectedEvent.entityIds ?? []).map((entityId) => {
                                             const entity = entityMap.get(entityId);
                                             return (
                                                 <Chip

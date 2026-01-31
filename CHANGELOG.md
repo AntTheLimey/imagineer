@@ -43,6 +43,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Vite proxy now correctly targets port 3001
 - Entity creation bug caused by pgx/pq library incompatibility - removed
   pq.Array() calls and use pgx native array handling
+- Timeline page crash when event.entityIds is undefined (CodeRabbit)
+- Timeline page forEach lint error from implicit return (CodeRabbit)
+- Campaign scoping security issue in relationship and timeline handlers -
+  now verify resources belong to the campaign specified in URL (CodeRabbit)
 
 ### Changed
 
@@ -55,6 +59,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Added documentation synchronization requirements
 - Added database test requirement ("Do not skip database tests")
 - Added copyright notice requirement for source files
+- Upgraded PostgreSQL from 17 to 18 (pgedge-postgres:18-spock5-standard)
+- CI workflow now tests against PostgreSQL 17 and 18 (was 16 and 17)
 
 ### Added
 

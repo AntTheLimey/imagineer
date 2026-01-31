@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: ghcr.io/pgedge/pgedge-postgres:17-spock5-standard
+    image: ghcr.io/pgedge/pgedge-postgres:18-spock5-standard
     container_name: imagineer-postgres
     environment:
       - POSTGRES_USER=imagineer

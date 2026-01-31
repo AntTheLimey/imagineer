@@ -25,7 +25,7 @@ jobs:
         strategy:
             matrix:
                 go-version: ['1.23', '1.24']
-                postgres-version: ['16', '17']
+                postgres-version: ['17', '18']
             fail-fast: false
 
         services:
@@ -61,19 +61,19 @@ jobs:
               run: go mod download
 
             - name: Install golangci-lint
-              if: matrix.go-version == '1.24' && matrix.postgres-version == '17'
+              if: matrix.go-version == '1.24' && matrix.postgres-version == '18'
               run: |
                   go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
             - name: Lint code
-              if: matrix.go-version == '1.24' && matrix.postgres-version == '17'
+              if: matrix.go-version == '1.24' && matrix.postgres-version == '18'
               run: golangci-lint run ./...
 
             - name: Run go vet
               run: go vet ./...
 
             - name: Check formatting
-              if: matrix.go-version == '1.24' && matrix.postgres-version == '17'
+              if: matrix.go-version == '1.24' && matrix.postgres-version == '18'
               run: |
                   gofmt -l . > /tmp/gofmt.out
                   if [ -s /tmp/gofmt.out ]; then
@@ -111,11 +111,11 @@ jobs:
               run: go test -v -race -coverprofile=coverage.out ./...
 
             - name: Generate coverage report
-              if: matrix.go-version == '1.24' && matrix.postgres-version == '17'
+              if: matrix.go-version == '1.24' && matrix.postgres-version == '18'
               run: go tool cover -func=coverage.out
 
             - name: Upload coverage artifact
-              if: matrix.go-version == '1.24' && matrix.postgres-version == '17'
+              if: matrix.go-version == '1.24' && matrix.postgres-version == '18'
               uses: actions/upload-artifact@v4
               with:
                   name: server-coverage

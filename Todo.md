@@ -4,6 +4,15 @@
 
 - [ ] First agent: consistency-checker
 
+### Security (from CodeRabbit review)
+
+- [ ] Keeper notes GM filtering - requires auth system first
+  - API: Filter keeper_notes field from responses for non-GM users
+  - Client: Wrap keeper notes UI in GM authorization check
+- [ ] Import validation with duplicate detection
+  - Pre-create: Levenshtein name similarity check for NPCs
+  - Post-create: Run consistency checks on imported batch
+
 ## Backlog
 
 ### Entity Editor Improvements
@@ -59,3 +68,7 @@
 - [x] Connect Import.tsx handlers to API hooks
 - [x] Fix port configuration (server on 3001, avoid MCP conflict)
 - [x] Fix pgx/pq array compatibility issue (entity creation was failing)
+- [x] Fix Timeline.tsx entityIds undefined crash (CodeRabbit)
+- [x] Fix Timeline.tsx forEach lint error (CodeRabbit)
+- [x] Add campaign scoping to relationship/timeline handlers (CodeRabbit)
+- [x] Update PostgreSQL from 17 to 18 (pgedge-postgres:18-spock5-standard)
