@@ -1,0 +1,6 @@
+client/node_modules/
+data/
+.git/
+coverage/
+dist/
+build/
