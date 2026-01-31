@@ -24,12 +24,6 @@ import (
 	"github.com/antonypegg/imagineer/internal/database"
 )
 
-const (
-	defaultPort       = "8080"
-	defaultConfigPath = "config/db/db.json"
-	shutdownTimeout   = 30 * time.Second
-)
-
 func main() {
 	fmt.Println("Imagineer - TTRPG Campaign Intelligence Platform")
 	fmt.Println("Version: 0.1.0-dev")
@@ -37,12 +31,12 @@ func main() {
 	// Get configuration from environment or defaults
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = defaultPort
+		port = DefaultPort
 	}
 
 	configPath := os.Getenv("DB_CONFIG")
 	if configPath == "" {
-		configPath = defaultConfigPath
+		configPath = DefaultConfigPath
 	}
 
 	// Load database configuration
@@ -89,7 +83,7 @@ func main() {
 	log.Println("Shutting down server...")
 
 	// Create shutdown context with timeout
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), ShutdownTimeout)
 	defer cancel()
 
 	// Attempt graceful shutdown
