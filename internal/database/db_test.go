@@ -253,7 +253,7 @@ func TestLoadConfig_PermissionDenied(t *testing.T) {
 	// Remove read permissions
 	err = os.Chmod(configPath, 0000)
 	require.NoError(t, err)
-	defer os.Chmod(configPath, 0644) // Restore permissions for cleanup
+	defer func() { _ = os.Chmod(configPath, 0644) }() // Restore permissions for cleanup
 
 	// Test LoadConfig
 	config, err := LoadConfig(configPath)

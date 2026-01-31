@@ -8,7 +8,7 @@ Before you begin, ensure you have the following installed:
 
 | Tool | Minimum Version | Notes |
 |------|-----------------|-------|
-| Go | 1.23+ | [Download](https://go.dev/dl/) |
+| Go | 1.24+ | [Download](https://go.dev/dl/) |
 | Node.js | 20+ | [Download](https://nodejs.org/) or use nvm |
 | PostgreSQL | 16+ | Local install or Docker |
 | Docker | Latest | [Download](https://www.docker.com/products/docker-desktop/) |
@@ -18,7 +18,7 @@ Before you begin, ensure you have the following installed:
 Verify your installations:
 
 ```bash
-go version          # go1.23.x or later
+go version          # go1.24.x or later
 node --version      # v20.x.x or later
 docker --version    # Docker version 24.x or later
 make --version      # GNU Make 3.x or later

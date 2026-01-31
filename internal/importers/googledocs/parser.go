@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	"github.com/antonypegg/imagineer/internal/importers/common"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // Importer implements the common.Importer interface for Google Docs.
@@ -386,11 +388,12 @@ func (i *Importer) extractEvents(text string) []common.ExtractedEvent {
 // toCamelCase converts a string to camelCase.
 func toCamelCase(s string) string {
 	words := strings.Fields(s)
+	caser := cases.Title(language.English)
 	for i, word := range words {
 		if i == 0 {
 			words[i] = strings.ToLower(word)
 		} else {
-			words[i] = strings.Title(strings.ToLower(word))
+			words[i] = caser.String(strings.ToLower(word))
 		}
 	}
 	return strings.Join(words, "")
