@@ -1,0 +1,229 @@
+/*-------------------------------------------------------------------------
+ *
+ * Imagineer - TTRPG Campaign Intelligence Platform
+ *
+ * Copyright (c) 2025 - 2026
+ * This software is released under The MIT License
+ *
+ *-------------------------------------------------------------------------
+ */
+
+package database
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+
+	"github.com/antonypegg/imagineer/internal/models"
+	"github.com/google/uuid"
+)
+
+// ListCampaigns retrieves all campaigns.
+func (db *DB) ListCampaigns(ctx context.Context) ([]models.Campaign, error) {
+	query := `
+        SELECT c.id, c.name, c.system_id, c.description, c.settings,
+               c.created_at, c.updated_at,
+               gs.id, gs.name, gs.code
+        FROM campaigns c
+        LEFT JOIN game_systems gs ON c.system_id = gs.id
+        ORDER BY c.updated_at DESC`
+
+	rows, err := db.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query campaigns: %w", err)
+	}
+	defer rows.Close()
+
+	var campaigns []models.Campaign
+	for rows.Next() {
+		var c models.Campaign
+		var gsID *uuid.UUID
+		var gsName, gsCode *string
+
+		err := rows.Scan(
+			&c.ID, &c.Name, &c.SystemID, &c.Description, &c.Settings,
+			&c.CreatedAt, &c.UpdatedAt,
+			&gsID, &gsName, &gsCode,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan campaign: %w", err)
+		}
+
+		if gsID != nil {
+			c.System = &models.GameSystem{
+				ID:   *gsID,
+				Name: *gsName,
+				Code: *gsCode,
+			}
+		}
+
+		campaigns = append(campaigns, c)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating campaigns: %w", err)
+	}
+
+	return campaigns, nil
+}
+
+// GetCampaign retrieves a campaign by ID.
+func (db *DB) GetCampaign(ctx context.Context, id uuid.UUID) (*models.Campaign, error) {
+	query := `
+        SELECT c.id, c.name, c.system_id, c.description, c.settings,
+               c.created_at, c.updated_at,
+               gs.id, gs.name, gs.code, gs.attribute_schema, gs.skill_schema,
+               gs.character_sheet_template, gs.dice_conventions, gs.created_at
+        FROM campaigns c
+        LEFT JOIN game_systems gs ON c.system_id = gs.id
+        WHERE c.id = $1`
+
+	var c models.Campaign
+	var gsID *uuid.UUID
+	var gsName, gsCode *string
+	var gsAttrSchema, gsSkillSchema, gsCharSheet, gsDice []byte
+	var gsCreatedAt *interface{}
+
+	err := db.QueryRow(ctx, query, id).Scan(
+		&c.ID, &c.Name, &c.SystemID, &c.Description, &c.Settings,
+		&c.CreatedAt, &c.UpdatedAt,
+		&gsID, &gsName, &gsCode, &gsAttrSchema, &gsSkillSchema,
+		&gsCharSheet, &gsDice, &gsCreatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get campaign: %w", err)
+	}
+
+	if gsID != nil {
+		c.System = &models.GameSystem{
+			ID:                     *gsID,
+			Name:                   *gsName,
+			Code:                   *gsCode,
+			AttributeSchema:        gsAttrSchema,
+			SkillSchema:            gsSkillSchema,
+			CharacterSheetTemplate: gsCharSheet,
+			DiceConventions:        gsDice,
+		}
+	}
+
+	return &c, nil
+}
+
+// CreateCampaign creates a new campaign.
+func (db *DB) CreateCampaign(ctx context.Context, req models.CreateCampaignRequest) (*models.Campaign, error) {
+	id := uuid.New()
+
+	settings := req.Settings
+	if settings == nil {
+		settings = json.RawMessage("{}")
+	}
+
+	query := `
+        INSERT INTO campaigns (id, name, system_id, description, settings)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id, name, system_id, description, settings, created_at, updated_at`
+
+	var c models.Campaign
+	err := db.QueryRow(ctx, query, id, req.Name, req.SystemID, req.Description, settings).Scan(
+		&c.ID, &c.Name, &c.SystemID, &c.Description, &c.Settings,
+		&c.CreatedAt, &c.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create campaign: %w", err)
+	}
+
+	return &c, nil
+}
+
+// UpdateCampaign updates an existing campaign.
+func (db *DB) UpdateCampaign(ctx context.Context, id uuid.UUID, req models.UpdateCampaignRequest) (*models.Campaign, error) {
+	// First get the existing campaign
+	existing, err := db.GetCampaign(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Apply updates
+	name := existing.Name
+	if req.Name != nil {
+		name = *req.Name
+	}
+
+	systemID := existing.SystemID
+	if req.SystemID != nil {
+		systemID = req.SystemID
+	}
+
+	description := existing.Description
+	if req.Description != nil {
+		description = req.Description
+	}
+
+	settings := existing.Settings
+	if req.Settings != nil {
+		settings = req.Settings
+	}
+
+	query := `
+        UPDATE campaigns
+        SET name = $2, system_id = $3, description = $4, settings = $5
+        WHERE id = $1
+        RETURNING id, name, system_id, description, settings, created_at, updated_at`
+
+	var c models.Campaign
+	err = db.QueryRow(ctx, query, id, name, systemID, description, settings).Scan(
+		&c.ID, &c.Name, &c.SystemID, &c.Description, &c.Settings,
+		&c.CreatedAt, &c.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update campaign: %w", err)
+	}
+
+	return &c, nil
+}
+
+// DeleteCampaign deletes a campaign by ID.
+func (db *DB) DeleteCampaign(ctx context.Context, id uuid.UUID) error {
+	query := `DELETE FROM campaigns WHERE id = $1`
+	result, err := db.Pool.Exec(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete campaign: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("campaign not found")
+	}
+
+	return nil
+}
+
+// GetRecentCampaigns retrieves the most recently updated campaigns.
+func (db *DB) GetRecentCampaigns(ctx context.Context, limit int) ([]models.Campaign, error) {
+	query := `
+        SELECT id, name, system_id, description, settings, created_at, updated_at
+        FROM campaigns
+        ORDER BY updated_at DESC
+        LIMIT $1`
+
+	rows, err := db.Query(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query recent campaigns: %w", err)
+	}
+	defer rows.Close()
+
+	var campaigns []models.Campaign
+	for rows.Next() {
+		var c models.Campaign
+		err := rows.Scan(
+			&c.ID, &c.Name, &c.SystemID, &c.Description, &c.Settings,
+			&c.CreatedAt, &c.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan campaign: %w", err)
+		}
+		campaigns = append(campaigns, c)
+	}
+
+	return campaigns, nil
+}

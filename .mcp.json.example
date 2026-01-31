@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "imagineer-db": {
+      "command": "../pgedge-postgres-mcp/bin/pgedge-postgres-mcp",
+      "env": {
+        "PGHOST": "localhost",
+        "PGPORT": "5432",
+        "PGDATABASE": "imagineer",
+        "PGUSER": "imagineer",
+        "PGPASSWORD": "your_password_here"
+      }
+    }
+  }
+}

@@ -1,0 +1,314 @@
+# Call of Cthulhu 7th Edition Schema
+system:
+  name: "Call of Cthulhu 7th Edition"
+  code: "coc-7e"
+  publisher: "Chaosium"
+
+dice_conventions:
+  primary: "d100"
+  damage: ["d3", "d4", "d6", "d8", "d10"]
+  bonus_penalty: "d10"  # Bonus/Penalty dice
+
+characteristics:
+  # All characteristics are percentile-based (pure percentile, not x5)
+  # Derived from 3d6*5 or 2d6+6*5 during creation
+  STR:
+    name: "Strength"
+    type: "percentile"
+    range: [15, 90]
+    default: 50
+  CON:
+    name: "Constitution"
+    type: "percentile"
+    range: [15, 90]
+    default: 50
+  SIZ:
+    name: "Size"
+    type: "percentile"
+    range: [40, 90]  # 2d6+6 * 5
+    default: 65
+  DEX:
+    name: "Dexterity"
+    type: "percentile"
+    range: [15, 90]
+    default: 50
+  APP:
+    name: "Appearance"
+    type: "percentile"
+    range: [15, 90]
+    default: 50
+  INT:
+    name: "Intelligence"
+    type: "percentile"
+    range: [40, 90]  # 2d6+6 * 5
+    default: 65
+  POW:
+    name: "Power"
+    type: "percentile"
+    range: [15, 90]
+    default: 50
+  EDU:
+    name: "Education"
+    type: "percentile"
+    range: [40, 90]  # 2d6+6 * 5
+    default: 65
+
+derived_attributes:
+  HP:
+    name: "Hit Points"
+    formula: "(CON + SIZ) / 10"
+    round: "down"
+  MP:
+    name: "Magic Points"
+    formula: "POW / 5"
+    round: "down"
+  SAN:
+    name: "Sanity"
+    formula: "POW"  # Starting sanity equals POW
+    max_formula: "99 - Cthulhu_Mythos"
+  Luck:
+    name: "Luck"
+    formula: "3d6 * 5"  # Rolled separately
+  MOV:
+    name: "Movement Rate"
+    formula: "varies"  # Based on STR/DEX/SIZ comparison and age
+  Build:
+    name: "Build"
+    lookup_table: "str_siz_build"
+  Damage_Bonus:
+    name: "Damage Bonus"
+    lookup_table: "str_siz_damage_bonus"
+
+skill_categories:
+  - "Combat"
+  - "Communication"
+  - "Investigation"
+  - "Knowledge"
+  - "Physical"
+  - "Technical"
+  - "Unusual"
+
+sample_skills:
+  # Format: skill_name: {base_value, category, specializations}
+  Accounting:
+    base: 5
+    category: "Knowledge"
+  Anthropology:
+    base: 1
+    category: "Knowledge"
+  Appraise:
+    base: 5
+    category: "Investigation"
+  Archaeology:
+    base: 1
+    category: "Knowledge"
+  Art_Craft:
+    base: 5
+    category: "Technical"
+    specializations: true  # e.g., Art/Craft (Painting)
+  Charm:
+    base: 15
+    category: "Communication"
+  Climb:
+    base: 20
+    category: "Physical"
+  Credit_Rating:
+    base: 0
+    category: "Communication"
+    special: true  # Affects social standing
+  Cthulhu_Mythos:
+    base: 0
+    category: "Unusual"
+    special: true  # Cannot be raised by experience
+  Disguise:
+    base: 5
+    category: "Communication"
+  Dodge:
+    base: "DEX/2"
+    category: "Combat"
+  Drive_Auto:
+    base: 20
+    category: "Technical"
+  Elec_Repair:
+    base: 10
+    category: "Technical"
+  Fast_Talk:
+    base: 5
+    category: "Communication"
+  Fighting_Brawl:
+    base: 25
+    category: "Combat"
+  Firearms_Handgun:
+    base: 20
+    category: "Combat"
+  Firearms_Rifle_Shotgun:
+    base: 25
+    category: "Combat"
+  First_Aid:
+    base: 30
+    category: "Technical"
+  History:
+    base: 5
+    category: "Knowledge"
+  Intimidate:
+    base: 15
+    category: "Communication"
+  Jump:
+    base: 20
+    category: "Physical"
+  Language_Other:
+    base: 1
+    category: "Knowledge"
+    specializations: true
+  Language_Own:
+    base: "EDU"
+    category: "Knowledge"
+  Law:
+    base: 5
+    category: "Knowledge"
+  Library_Use:
+    base: 20
+    category: "Investigation"
+  Listen:
+    base: 20
+    category: "Investigation"
+  Locksmith:
+    base: 1
+    category: "Technical"
+  Mech_Repair:
+    base: 10
+    category: "Technical"
+  Medicine:
+    base: 1
+    category: "Knowledge"
+  Natural_World:
+    base: 10
+    category: "Knowledge"
+  Navigate:
+    base: 10
+    category: "Physical"
+  Occult:
+    base: 5
+    category: "Knowledge"
+  Op_Hv_Machine:
+    base: 1
+    category: "Technical"
+  Persuade:
+    base: 10
+    category: "Communication"
+  Pilot:
+    base: 1
+    category: "Technical"
+    specializations: true
+  Psychoanalysis:
+    base: 1
+    category: "Knowledge"
+  Psychology:
+    base: 10
+    category: "Investigation"
+  Ride:
+    base: 5
+    category: "Physical"
+  Science:
+    base: 1
+    category: "Knowledge"
+    specializations: true
+  Sleight_of_Hand:
+    base: 10
+    category: "Physical"
+  Spot_Hidden:
+    base: 25
+    category: "Investigation"
+  Stealth:
+    base: 20
+    category: "Physical"
+  Survival:
+    base: 10
+    category: "Physical"
+    specializations: true
+  Swim:
+    base: 20
+    category: "Physical"
+  Throw:
+    base: 20
+    category: "Combat"
+  Track:
+    base: 10
+    category: "Investigation"
+
+roll_mechanics:
+  success_levels:
+    - name: "Critical Success"
+      threshold: "01"
+    - name: "Extreme Success"
+      threshold: "skill/5"
+    - name: "Hard Success"
+      threshold: "skill/2"
+    - name: "Regular Success"
+      threshold: "skill"
+    - name: "Failure"
+      threshold: ">skill"
+    - name: "Fumble"
+      threshold: "96-100 (or 100 if skill >= 50)"
+
+  opposed_rolls:
+    description: "Compare success levels; ties go to higher skill"
+
+  bonus_penalty_dice:
+    description: "Roll extra d10 for tens digit, take best/worst"
+
+sanity_mechanics:
+  loss_format: "XdY/ZdW"  # e.g., "1d6/1d20" = 1d6 on success, 1d20 on failure
+  indefinite_insanity_threshold: 5  # Lose 5+ SAN in one roll
+  bout_of_madness:
+    duration_real_time: "1d10 rounds"
+    duration_summary_time: "1d10 hours"
+
+npc_templates:
+  cultist:
+    typical_stats:
+      STR: 50
+      CON: 50
+      SIZ: 65
+      DEX: 50
+      INT: 65
+      POW: 50
+      skills:
+        Cthulhu_Mythos: 15
+        Occult: 40
+
+  investigator_npc:
+    note: "Use full character creation for important NPCs"
+
+entity_attributes:
+  npc:
+    required:
+      - name
+      - occupation
+    optional:
+      - age
+      - gender
+      - nationality
+      - residence
+      - characteristics  # Full stat block
+      - skills
+      - credit_rating
+      - backstory
+      - traits
+      - ideology_beliefs
+      - significant_people
+      - meaningful_locations
+      - treasured_possessions
+      - injuries_scars
+
+  creature:
+    required:
+      - name
+      - characteristics
+    optional:
+      - armor
+      - attacks
+      - abilities
+      - sanity_loss
+      - habitat
+      - description

@@ -1,0 +1,74 @@
+# Claude
+.claude/settings.local.json
+
+# Build output
+bin/
+dist/
+
+# Go binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+imagineer-server
+imagineer-cli
+
+# Test binaries and coverage
+*.test
+*.out
+coverage.txt
+coverage.html
+*.coverprofile
+
+# Go workspace file
+go.work
+
+# Node modules (React client)
+client/node_modules/
+node_modules/
+
+# Configuration files with sensitive data
+*.password
+password.txt
+.env
+.env.local
+.env.*.local
+
+# MCP configuration (contains credentials)
+.mcp.json
+
+# Database config (contains credentials)
+config/db/db.json
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
+*.save
+
+# Temporary files
+*.log
+*.tmp
+tmp/
+temp/
+
+# Docker data volumes
+data/postgres/
+
+# Local development files
+CLAUDE.local.md
+WORK_TODO.md
+imagineer-instructions.md
+
+# TypeScript build info
+*.tsbuildinfo

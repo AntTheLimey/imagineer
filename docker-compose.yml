@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: ghcr.io/pgedge/pgedge-postgres:17-spock5-standard
+    container_name: imagineer-postgres
+    environment:
+      - POSTGRES_USER=imagineer
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=imagineer
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U imagineer -d imagineer"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - imagineer-network
+
+  mcp-server:
+    build:
+      context: ../pgedge-postgres-mcp
+      dockerfile: Dockerfile.server
+    container_name: imagineer-mcp
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - PGHOST=postgres
+      - PGPORT=5432
+      - PGDATABASE=imagineer
+      - PGUSER=imagineer
+      - PGPASSWORD=${POSTGRES_PASSWORD}
+      - PGEDGE_LLM_PROVIDER=${LLM_PROVIDER:-anthropic}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    volumes:
+      - ./config/mcp:/app/config:ro
+    ports:
+      - "8080:8080"
+    command: ["-http", "-addr", ":8080"]
+    restart: unless-stopped
+    networks:
+      - imagineer-network
+
+networks:
+  imagineer-network:
+    driver: bridge

@@ -1,0 +1,256 @@
+# GURPS 4th Edition Schema
+system:
+  name: "GURPS 4th Edition"
+  code: "gurps-4e"
+  publisher: "Steve Jackson Games"
+
+dice_conventions:
+  primary: "3d6"
+  damage: "Xd+Y"  # Variable dice plus adds
+  skill_check: "3d6 <= target"
+
+point_costs:
+  starting_points:
+    heroic: 150
+    cinematic: 250
+    superheroic: 500
+  disadvantage_limit: -75  # Typical campaign limit
+
+primary_attributes:
+  ST:
+    name: "Strength"
+    base: 10
+    cost_per_level: 10
+    description: "Physical power and bulk"
+  DX:
+    name: "Dexterity"
+    base: 10
+    cost_per_level: 20
+    description: "Agility, coordination, fine motor skills"
+  IQ:
+    name: "Intelligence"
+    base: 10
+    cost_per_level: 20
+    description: "Brainpower, creativity, reasoning"
+  HT:
+    name: "Health"
+    base: 10
+    cost_per_level: 10
+    description: "Energy, vitality, resistance"
+
+secondary_characteristics:
+  HP:
+    name: "Hit Points"
+    base_formula: "ST"
+    cost_per_level: 2
+  Will:
+    name: "Will"
+    base_formula: "IQ"
+    cost_per_level: 5
+  Per:
+    name: "Perception"
+    base_formula: "IQ"
+    cost_per_level: 5
+  FP:
+    name: "Fatigue Points"
+    base_formula: "HT"
+    cost_per_level: 3
+  Basic_Speed:
+    name: "Basic Speed"
+    formula: "(HT + DX) / 4"
+    cost_per_quarter: 5
+  Basic_Move:
+    name: "Basic Move"
+    formula: "floor(Basic_Speed)"
+    cost_per_level: 5
+  Dodge:
+    name: "Dodge"
+    formula: "floor(Basic_Speed) + 3"
+  SM:
+    name: "Size Modifier"
+    default: 0
+    description: "0 for average human"
+
+damage_calculation:
+  thrust:
+    lookup: "ST_thrust_table"
+    format: "Xd+Y"
+  swing:
+    lookup: "ST_swing_table"
+    format: "Xd+Y"
+
+skill_difficulty:
+  - code: "E"
+    name: "Easy"
+    base: "Attribute"
+    cost_progression: [1, 2, 4, 8]  # Points for +0, +1, +2, +3
+  - code: "A"
+    name: "Average"
+    base: "Attribute - 1"
+    cost_progression: [1, 2, 4, 8]
+  - code: "H"
+    name: "Hard"
+    base: "Attribute - 2"
+    cost_progression: [1, 2, 4, 8]
+  - code: "VH"
+    name: "Very Hard"
+    base: "Attribute - 3"
+    cost_progression: [1, 2, 4, 8]
+
+skill_categories:
+  - "Animal"
+  - "Artistic"
+  - "Athletic"
+  - "Business"
+  - "Combat/Weapon"
+  - "Craft"
+  - "Criminal/Street"
+  - "Esoteric"
+  - "Everyman"
+  - "Knowledge"
+  - "Medical"
+  - "Military"
+  - "Outdoor"
+  - "Plant"
+  - "Police"
+  - "Scholar"
+  - "Science"
+  - "Social"
+  - "Spy"
+  - "Technical"
+  - "Thief/Spy"
+  - "Vehicle"
+
+sample_skills:
+  Acting:
+    attribute: "IQ"
+    difficulty: "A"
+    defaults: ["IQ-5", "Performance-2"]
+  Brawling:
+    attribute: "DX"
+    difficulty: "E"
+    defaults: []
+  Diplomacy:
+    attribute: "IQ"
+    difficulty: "H"
+    defaults: ["IQ-6", "Politics-6"]
+  Fast_Draw:
+    attribute: "DX"
+    difficulty: "E"
+    defaults: []
+    specializations: ["Pistol", "Rifle", "Knife", "Sword"]
+  First_Aid:
+    attribute: "IQ"
+    difficulty: "E"
+    defaults: ["IQ-4", "Physician-4"]
+  Guns:
+    attribute: "DX"
+    difficulty: "E"
+    defaults: ["DX-4"]
+    specializations: ["Pistol", "Rifle", "Shotgun", "SMG", "Light_Auto", "LAW", "Beam"]
+  Karate:
+    attribute: "DX"
+    difficulty: "H"
+    defaults: []
+  Lockpicking:
+    attribute: "IQ"
+    difficulty: "A"
+    defaults: ["IQ-5"]
+  Occultism:
+    attribute: "IQ"
+    difficulty: "A"
+    defaults: ["IQ-5"]
+  Research:
+    attribute: "IQ"
+    difficulty: "A"
+    defaults: ["IQ-5", "Writing-3"]
+  Stealth:
+    attribute: "DX"
+    difficulty: "A"
+    defaults: ["DX-5", "IQ-5"]
+
+advantage_categories:
+  - "Physical"
+  - "Mental"
+  - "Social"
+  - "Exotic"
+  - "Supernatural"
+
+sample_advantages:
+  Combat_Reflexes:
+    cost: 15
+    description: "+1 to active defenses, +6 to recover from surprise"
+  Danger_Sense:
+    cost: 15
+    description: "GM rolls Per to warn of danger"
+  High_Pain_Threshold:
+    cost: 10
+    description: "Never suffer shock penalties"
+  Language_Talent:
+    cost: 10
+    description: "+1 to all language skills"
+  Luck:
+    cost: 15
+    description: "Reroll any roll 3x per session"
+
+disadvantage_categories:
+  - "Physical"
+  - "Mental"
+  - "Social"
+
+sample_disadvantages:
+  Bad_Temper:
+    cost: -10
+    self_control: true
+    description: "Make self-control roll or attack"
+  Curious:
+    cost: -5
+    self_control: true
+    description: "Investigate anything unknown"
+  Duty:
+    cost: "variable"
+    description: "Obligation to an organization"
+  Enemy:
+    cost: "variable"
+    description: "Someone hunting you"
+
+roll_mechanics:
+  success_roll:
+    description: "Roll 3d6 <= effective skill"
+  margin_of_success: "skill - roll"
+  margin_of_failure: "roll - skill"
+  critical_success:
+    - "3-4 always"
+    - "5 if skill >= 15"
+    - "6 if skill >= 16"
+  critical_failure:
+    - "18 always"
+    - "17 if skill <= 15"
+    - "10+ over skill"
+
+  contests:
+    quick_contest: "Compare margins of success"
+    regular_contest: "Alternate rolls until one succeeds and other fails"
+
+entity_attributes:
+  npc:
+    required:
+      - name
+    optional:
+      - point_total
+      - primary_attributes
+      - secondary_characteristics
+      - advantages
+      - disadvantages
+      - quirks
+      - skills
+      - equipment
+      - notes
+
+  template:
+    description: "Predefined package of traits"
+    components:
+      - attribute_modifiers
+      - advantages
+      - disadvantages
+      - skills

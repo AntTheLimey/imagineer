@@ -1,0 +1,18 @@
+{
+  "cluster": "imagineer",
+  "database": "imagineer",
+  "nodes": [
+    {
+      "name": "imagineer",
+      "hostname": "localhost",
+      "port": 5432
+    }
+  ],
+  "users": [
+    {
+      "username": "imagineer",
+      "password": "your_password_here",
+      "superuser": true
+    }
+  ]
+}

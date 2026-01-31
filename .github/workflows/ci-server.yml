@@ -1,0 +1,126 @@
+name: CI - Server
+
+on:
+    push:
+        branches: [ main, master ]
+        paths:
+            - 'cmd/**'
+            - 'internal/**'
+            - 'go.mod'
+            - 'go.sum'
+            - '.github/workflows/ci-server.yml'
+    pull_request:
+        branches: [ main, master ]
+        paths:
+            - 'cmd/**'
+            - 'internal/**'
+            - 'go.mod'
+            - 'go.sum'
+            - '.github/workflows/ci-server.yml'
+
+jobs:
+    server:
+        name: Server (Go ${{ matrix.go-version }}, PG ${{ matrix.postgres-version }})
+        runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                go-version: ['1.23', '1.24']
+                postgres-version: ['16', '17']
+            fail-fast: false
+
+        services:
+            postgres:
+                image: postgres:${{ matrix.postgres-version }}
+                env:
+                    POSTGRES_PASSWORD: postgres
+                    POSTGRES_DB: imagineer_test
+                    POSTGRES_USER: imagineer
+                options: >-
+                    --health-cmd pg_isready
+                    --health-interval 10s
+                    --health-timeout 5s
+                    --health-retries 5
+                ports:
+                    - 5432:5432
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Set up Go ${{ matrix.go-version }}
+              uses: actions/setup-go@v5
+              with:
+                  go-version: ${{ matrix.go-version }}
+                  cache: true
+                  cache-dependency-path: go.sum
+
+            - name: Verify dependencies
+              run: go mod verify
+
+            - name: Download dependencies
+              run: go mod download
+
+            - name: Install golangci-lint
+              if: matrix.go-version == '1.24' && matrix.postgres-version == '17'
+              run: |
+                  go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+            - name: Lint code
+              if: matrix.go-version == '1.24' && matrix.postgres-version == '17'
+              run: golangci-lint run ./...
+
+            - name: Run go vet
+              run: go vet ./...
+
+            - name: Check formatting
+              if: matrix.go-version == '1.24' && matrix.postgres-version == '17'
+              run: |
+                  gofmt -l . > /tmp/gofmt.out
+                  if [ -s /tmp/gofmt.out ]; then
+                    echo "The following files are not formatted:"
+                    cat /tmp/gofmt.out
+                    exit 1
+                  fi
+
+            - name: Build server
+              run: go build -o bin/imagineer ./cmd/server
+
+            - name: Build CLI
+              run: go build -o bin/imagineer-cli ./cmd/cli
+
+            - name: Wait for PostgreSQL
+              run: |
+                  until pg_isready -h localhost -p 5432 -U imagineer; do
+                    echo "Waiting for PostgreSQL..."
+                    sleep 2
+                  done
+
+            - name: Run migrations
+              env:
+                  PGHOST: localhost
+                  PGPORT: 5432
+                  PGDATABASE: imagineer_test
+                  PGUSER: imagineer
+                  PGPASSWORD: postgres
+              run: |
+                  for f in migrations/*.sql; do
+                    echo "Applying $f..."
+                    psql -f "$f"
+                  done
+
+            - name: Run tests with coverage
+              env:
+                  TEST_DATABASE_URL: postgres://imagineer:postgres@localhost:5432/imagineer_test
+              run: go test -v -race -coverprofile=coverage.out ./...
+
+            - name: Generate coverage report
+              if: matrix.go-version == '1.24' && matrix.postgres-version == '17'
+              run: go tool cover -func=coverage.out
+
+            - name: Upload coverage artifact
+              if: matrix.go-version == '1.24' && matrix.postgres-version == '17'
+              uses: actions/upload-artifact@v4
+              with:
+                  name: server-coverage
+                  path: coverage.out
+                  retention-days: 7
