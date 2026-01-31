@@ -15,6 +15,7 @@ import (
 	"fmt"
 
 	"github.com/antonypegg/imagineer/internal/models"
+	"github.com/google/uuid"
 )
 
 // GetDashboardStats retrieves statistics for the dashboard.
@@ -104,6 +105,64 @@ func (db *DB) GetFrontendDashboardStats(ctx context.Context) (*models.FrontendDa
 	err = db.QueryRow(ctx, "SELECT COUNT(*) FROM entities").Scan(&stats.TotalEntityCount)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count total entities: %w", err)
+	}
+
+	return stats, nil
+}
+
+// GetCampaignStats retrieves statistics for a specific campaign.
+func (db *DB) GetCampaignStats(ctx context.Context, campaignID uuid.UUID) (*models.CampaignStats, error) {
+	stats := &models.CampaignStats{
+		EntityCounts: make(map[string]int),
+	}
+
+	// Count entities by type for this campaign
+	entityQuery := `
+        SELECT entity_type, COUNT(*)
+        FROM entities
+        WHERE campaign_id = $1
+        GROUP BY entity_type`
+
+	rows, err := db.Query(ctx, entityQuery, campaignID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count entities by type: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var entityType string
+		var count int
+		if err := rows.Scan(&entityType, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan entity count: %w", err)
+		}
+		stats.EntityCounts[entityType] = count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating entity counts: %w", err)
+	}
+
+	// Count relationships for this campaign
+	err = db.QueryRow(ctx, "SELECT COUNT(*) FROM relationships WHERE campaign_id = $1", campaignID).Scan(&stats.RelationshipCount)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count relationships: %w", err)
+	}
+
+	// Count timeline events for this campaign
+	err = db.QueryRow(ctx, "SELECT COUNT(*) FROM timeline_events WHERE campaign_id = $1", campaignID).Scan(&stats.TimelineEventCount)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count timeline events: %w", err)
+	}
+
+	// Count sessions for this campaign
+	err = db.QueryRow(ctx, "SELECT COUNT(*) FROM sessions WHERE campaign_id = $1", campaignID).Scan(&stats.SessionCount)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count sessions: %w", err)
+	}
+
+	// Count canon conflicts for this campaign
+	err = db.QueryRow(ctx, "SELECT COUNT(*) FROM canon_conflicts WHERE campaign_id = $1", campaignID).Scan(&stats.ConflictCount)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count canon conflicts: %w", err)
 	}
 
 	return stats, nil

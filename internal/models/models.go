@@ -173,6 +173,15 @@ type CreateRelationshipRequest struct {
 	Strength         *int              `json:"strength,omitempty"`
 }
 
+// UpdateRelationshipRequest represents the request body for updating a relationship.
+type UpdateRelationshipRequest struct {
+	RelationshipType *string           `json:"relationshipType,omitempty"`
+	Tone             *RelationshipTone `json:"tone,omitempty"`
+	Description      *string           `json:"description,omitempty"`
+	Bidirectional    *bool             `json:"bidirectional,omitempty"`
+	Strength         *int              `json:"strength,omitempty"`
+}
+
 // SessionStatus represents the status of a game session.
 type SessionStatus string
 
@@ -239,6 +248,18 @@ type CreateTimelineEventRequest struct {
 	SourceDocument *string       `json:"sourceDocument,omitempty"`
 }
 
+// UpdateTimelineEventRequest represents the request body for updating a timeline event.
+type UpdateTimelineEventRequest struct {
+	EventDate      *time.Time     `json:"eventDate,omitempty"`
+	EventTime      *string        `json:"eventTime,omitempty"`
+	DatePrecision  *DatePrecision `json:"datePrecision,omitempty"`
+	Description    *string        `json:"description,omitempty"`
+	EntityIDs      []uuid.UUID    `json:"entityIds,omitempty"`
+	SessionID      *uuid.UUID     `json:"sessionId,omitempty"`
+	IsPlayerKnown  *bool          `json:"isPlayerKnown,omitempty"`
+	SourceDocument *string        `json:"sourceDocument,omitempty"`
+}
+
 // ConflictStatus represents the status of a canon conflict.
 type ConflictStatus string
 
@@ -280,6 +301,15 @@ type FrontendDashboardStats struct {
 	ItemCount          int `json:"itemCount"`
 	FactionCount       int `json:"factionCount"`
 	TotalEntityCount   int `json:"totalEntityCount"`
+}
+
+// CampaignStats represents statistics for a specific campaign.
+type CampaignStats struct {
+	EntityCounts       map[string]int `json:"entityCounts"`
+	RelationshipCount  int            `json:"relationshipCount"`
+	TimelineEventCount int            `json:"timelineEventCount"`
+	SessionCount       int            `json:"sessionCount"`
+	ConflictCount      int            `json:"conflictCount"`
 }
 
 // APIError represents an error response from the API.
