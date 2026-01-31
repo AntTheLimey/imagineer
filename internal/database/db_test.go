@@ -151,10 +151,10 @@ func TestLoadConfig(t *testing.T) {
 			errContains: "failed to parse config file",
 		},
 		{
-			name:        "empty JSON object",
-			configData:  `{}`,
-			wantConfig:  &Config{},
-			wantErr:     false,
+			name:       "empty JSON object",
+			configData: `{}`,
+			wantConfig: &Config{},
+			wantErr:    false,
 		},
 	}
 
