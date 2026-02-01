@@ -8,6 +8,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- UX Foundation (Phase 1)
+  - Three-panel layout component (`ThreePanelLayout.tsx`) with responsive
+    behavior: desktop (all 3 panels), tablet (drawer for left), mobile (bottom
+    navigation tabs).
+  - Full-screen editor layout (`FullScreenLayout.tsx`) with back navigation,
+    breadcrumbs, dirty state indicator, and action buttons.
+  - App shell (`AppShell.tsx`) with header, campaign dropdown, and user menu.
+  - Campaign context (`CampaignContext.tsx`) tracks current campaign with
+    localStorage persistence.
+  - Draft context (`DraftContext.tsx`) manages localStorage drafts for data
+    loss prevention.
+  - `useDraft` hook for localStorage draft storage with server version tracking.
+  - `useAutosave` hook saves drafts every 30 seconds automatically.
+  - `useUnsavedChanges` hook tracks dirty state and blocks navigation with
+    confirmation dialog.
+  - Full-screen entity editor (`EntityEditor.tsx`) with draft recovery,
+    autosave, and duplicate detection.
+  - Route structure updated to support full-screen editor views outside the
+    main app shell.
+- RPG terminology knowledge base (`.claude/ttrpg-expert/rpg-terminology.md`)
+  for TTRPG expert agent with comprehensive terminology reference covering GM
+  titles across systems.
 - Multi-User Foundation & Authentication
   - Database migration `003_add_users.sql` adds users table and owner_id
     foreign key on campaigns table.
@@ -71,6 +93,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Entity API URL routes for get/update/delete now correctly use
+  `/entities/{id}` instead of `/campaigns/{campaignId}/entities/{id}`.
+- Tags input in entity forms now captures typed text on blur (added
+  `autoSelect` and `onBlur` handler to MUI Autocomplete).
 - Import routes now use RESTful pattern `/api/campaigns/{id}/import/*`
   instead of `/api/import/*` with campaignId in body
 - Server default port changed from 8080 to 3001 to avoid conflict with
@@ -85,6 +111,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Renamed `keeper_notes` column to `gm_notes` throughout codebase (migration
+  004) from Call of Cthulhu-specific to generic RPG terminology.
+- GM notes filtered at API level; non-campaign-owners receive empty `gmNotes`
+  field in entity responses.
+- Client-side GM notes UI hidden for non-owners using `useCampaignOwnership`
+  hook.
 - CLAUDE.md Task Workflow now includes step 6 "Document" for automatic
   CHANGELOG.md and Todo.md updates after completing user-facing changes
 - Added "Tracking Files" subsection to Documentation guidelines
