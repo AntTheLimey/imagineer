@@ -41,7 +41,10 @@ interface AppShellProps {
 }
 
 /**
- * Get initials from a user name for avatar fallback.
+ * Derives up to two uppercase initials from a person's name for use as an avatar fallback.
+ *
+ * @param name - The full name string to derive initials from.
+ * @returns `?` if `name` is empty or only whitespace; otherwise two uppercase characters: the first letters of the first two name parts when there are two or more parts, or the first two characters of the trimmed name.
  */
 function getInitials(name: string): string {
     if (!name || name.length === 0) {
@@ -59,15 +62,13 @@ function getInitials(name: string): string {
 }
 
 /**
- * AppShell component providing the outer application structure.
+ * Render the application's outer shell with a fixed header and main content area.
  *
- * Features:
- * - Minimal fixed header with logo, campaign selector, and user menu
- * - Campaign dropdown for quick switching between campaigns
- * - User avatar with dropdown menu for sign out
+ * The header includes a clickable brand logo, a campaign selector, and a user avatar menu
+ * with sign out. Loading states for campaigns are indicated with skeletons and a progress spinner.
  *
- * @param children - The main content to render within the shell
- * @returns The application shell wrapping the provided children
+ * @param children - The main content to render inside the shell
+ * @returns The AppShell element wrapping the provided children
  */
 export default function AppShell({ children }: AppShellProps) {
     const navigate = useNavigate();

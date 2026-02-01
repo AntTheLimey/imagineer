@@ -55,17 +55,22 @@ interface DraftProviderProps {
 }
 
 /**
- * Builds the full localStorage key for a draft.
+ * Construct the full localStorage key for a draft by prepending the draft prefix.
+ *
+ * @param key - The draft identifier (without the prefix)
+ * @returns The storage key formed by concatenating the draft prefix and `key`
  */
 function getDraftKey(key: string): string {
     return `${DRAFT_PREFIX}${key}`;
 }
 
 /**
- * Provides draft management functionality to descendant components.
+ * Provides draft management via React context to descendant components.
  *
- * Drafts are persisted to localStorage with metadata including save time
- * and optional server version for conflict detection.
+ * Drafts are persisted to localStorage under a namespaced key and include metadata:
+ * an ISO `savedAt` timestamp and an optional `serverVersion` for conflict detection.
+ *
+ * @returns The provider element that exposes draft management APIs to descendants via context.
  */
 export function DraftProvider({ children }: DraftProviderProps) {
     /**
@@ -185,10 +190,10 @@ export function DraftProvider({ children }: DraftProviderProps) {
 }
 
 /**
- * Accesses the draft management context.
+ * Retrieve the draft management API from the nearest DraftProvider.
  *
- * @returns The DraftContextValue containing draft management functions.
- * @throws Error if called outside of a DraftProvider.
+ * @returns The DraftContextValue providing draft operations (save, get, delete, etc.).
+ * @throws Error if the hook is called outside of a DraftProvider.
  */
 export function useDraftContext(): DraftContextValue {
     const context = useContext(DraftContext);

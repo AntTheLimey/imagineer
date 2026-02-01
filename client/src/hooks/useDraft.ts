@@ -32,7 +32,10 @@ export interface DraftData<T> {
 }
 
 /**
- * Builds the full localStorage key for a draft.
+ * Builds the namespaced localStorage key for a draft.
+ *
+ * @param key - The draft's identifier to append to the draft key prefix
+ * @returns The full localStorage key used to store the draft
  */
 function getDraftKey(key: string): string {
     return `${DRAFT_PREFIX}${key}`;

@@ -146,6 +146,13 @@ function formatDate(dateString: string): string {
     });
 }
 
+/**
+ * Render the Entities management UI for a campaign, providing listing, filtering, and CRUD interactions for campaign entities.
+ *
+ * Creation and editing navigate to the full-screen entity editor routes; viewing and deletion are handled via in-page dialogs. Access to GM-only fields is gated by campaign ownership.
+ *
+ * @returns The rendered Entities page as a JSX element
+ */
 export default function Entities() {
     const { id: campaignId } = useParams<{ id: string }>();
     const navigate = useNavigate();

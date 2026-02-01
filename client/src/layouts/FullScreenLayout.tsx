@@ -71,28 +71,22 @@ interface FullScreenLayoutProps {
 }
 
 /**
- * FullScreenLayout component for editing views.
+ * Layout for full-screen editing pages with a fixed header, optional breadcrumbs,
+ * a title area with an optional subtitle and "Unsaved" indicator, configurable
+ * save actions, and a scrollable main content region.
  *
- * Features:
- * - Fixed header with back button, breadcrumbs, and title
- * - Save and Save & Close action buttons
- * - Dirty state indicator showing unsaved changes
- * - Full-height content area that scrolls
- * - Clean, focused editing experience
- *
- * @param title - The page title
- * @param subtitle - Optional subtitle text
- * @param breadcrumbs - Array of breadcrumb items for navigation
- * @param children - The main editor content
- * @param isDirty - Whether there are unsaved changes
- * @param isSaving - Whether save is in progress
- * @param onSave - Handler for Save button
- * @param onSaveAndClose - Handler for Save & Close button
- * @param onBack - Handler for Back button
- * @param backPath - Alternative path for back navigation
- * @param actions - Custom action buttons
- * @param showSaveButtons - Whether to show save buttons
- * @returns A full-screen editing layout
+ * @param title - Page title shown in the header
+ * @param subtitle - Optional subtitle displayed next to the title
+ * @param breadcrumbs - Optional breadcrumb items for header navigation
+ * @param children - Main editable content rendered in the scrollable area
+ * @param isDirty - When true, shows an "Unsaved" indicator and enables the Save button
+ * @param isSaving - When true, shows loading state on save buttons and disables them
+ * @param onSave - Handler invoked by the "Save" button
+ * @param onSaveAndClose - Handler invoked by the "Save & Close" button
+ * @param onBack - Optional handler for the Back button; if omitted, navigation falls back to `backPath` or history.back()
+ * @param backPath - Optional path to navigate to when Back is triggered and `onBack` is not provided
+ * @param actions - Optional custom action nodes rendered in the header
+ * @param showSaveButtons - Controls visibility of the save action buttons (defaults to true)
  */
 export default function FullScreenLayout({
     title,
