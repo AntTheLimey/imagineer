@@ -352,6 +352,13 @@ func (h *ImportHandler) GetEvernoteLocalStatus(w http.ResponseWriter, r *http.Re
 // ListEvernoteLocalNotebooks handles GET /api/import/evernote/notebooks
 // Lists all notebooks from the local Evernote application.
 func (h *ImportHandler) ListEvernoteLocalNotebooks(w http.ResponseWriter, r *http.Request) {
+	// Verify authentication
+	_, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
 	notebooks, err := h.evernoteLocalImporter.ListNotebooks(r.Context())
 	if err != nil {
 		log.Printf("Error listing Evernote notebooks: %v", err)
@@ -369,6 +376,13 @@ func (h *ImportHandler) ListEvernoteLocalNotebooks(w http.ResponseWriter, r *htt
 // ListEvernoteLocalNotes handles GET /api/import/evernote/notebooks/{name}/notes
 // Lists all notes in a specific notebook.
 func (h *ImportHandler) ListEvernoteLocalNotes(w http.ResponseWriter, r *http.Request) {
+	// Verify authentication
+	_, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
 	notebookName := chi.URLParam(r, "name")
 	if notebookName == "" {
 		respondError(w, http.StatusBadRequest, "Notebook name is required")

@@ -42,16 +42,15 @@ export interface NotesListProps {
  * Formats an ISO date string to a readable format.
  */
 function formatDate(dateString: string): string {
-    try {
-        const date = new Date(dateString);
-        return date.toLocaleDateString(undefined, {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-        });
-    } catch {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
         return dateString;
     }
+    return date.toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+    });
 }
 
 /**

@@ -36,14 +36,25 @@ const (
 	GetNoteContentTimeout = 30 * time.Second
 
 	// Field separator used in AppleScript output.
-	fieldSeparator = "||"
+	// Using ASCII Unit Separator (0x1F) to avoid collision with user content.
+	fieldSeparator = "\x1F"
 
 	// Record separator used in AppleScript output.
-	recordSeparator = "|||RECORD|||"
+	// Using ASCII Record Separator (0x1E) to avoid collision with user content.
+	recordSeparator = "\x1E"
 
 	// Content separator used in AppleScript output.
-	contentSeparator = "|||SEPARATOR|||"
+	// Using ASCII Group Separator (0x1D) to avoid collision with user content.
+	contentSeparator = "\x1D"
 )
+
+// escapeForAppleScript escapes a string for safe use in AppleScript string literals.
+// Backslashes must be escaped first, then double quotes.
+func escapeForAppleScript(s string) string {
+	result := strings.ReplaceAll(s, "\\", "\\\\")
+	result = strings.ReplaceAll(result, "\"", "\\\"")
+	return result
+}
 
 // AppleScriptExecutor handles AppleScript execution for Evernote.
 type AppleScriptExecutor struct {
@@ -151,7 +162,7 @@ tell application "Evernote"
 		set nbCount to count of notes of nb
 		set end of nbList to (nbName & "||" & nbCount)
 	end repeat
-	set AppleScript's text item delimiters to "|||RECORD|||"
+	set AppleScript's text item delimiters to (ASCII character 30)
 	return nbList as string
 end tell
 `
@@ -194,8 +205,8 @@ end tell
 
 // ListNotesInNotebook retrieves all notes from a specific notebook.
 func (e *AppleScriptExecutor) ListNotesInNotebook(ctx context.Context, notebookName string) ([]NoteSummary, error) {
-	// Escape quotes in notebook name for AppleScript
-	escapedName := strings.ReplaceAll(notebookName, "\"", "\\\"")
+	// Escape for safe AppleScript string literal
+	escapedName := escapeForAppleScript(notebookName)
 
 	script := fmt.Sprintf(`
 tell application "Evernote"
@@ -212,10 +223,10 @@ tell application "Evernote"
 		end repeat
 		set AppleScript's text item delimiters to ","
 		set tagStr to tagList as string
-		set noteInfo to noteLink & "||" & noteTitle & "||" & creationDate & "||" & modDate & "||" & tagStr
+		set noteInfo to noteLink & (ASCII character 31) & noteTitle & (ASCII character 31) & creationDate & (ASCII character 31) & modDate & (ASCII character 31) & tagStr
 		set end of noteList to noteInfo
 	end repeat
-	set AppleScript's text item delimiters to "|||RECORD|||"
+	set AppleScript's text item delimiters to (ASCII character 30)
 	return noteList as string
 end tell
 `, escapedName)
@@ -272,8 +283,8 @@ end tell
 
 // GetNoteContent retrieves the full content of a note by its note link.
 func (e *AppleScriptExecutor) GetNoteContent(ctx context.Context, noteLink string) (*NoteContent, error) {
-	// Escape quotes in note link for AppleScript
-	escapedLink := strings.ReplaceAll(noteLink, "\"", "\\\"")
+	// Escape for safe AppleScript string literal
+	escapedLink := escapeForAppleScript(noteLink)
 
 	script := fmt.Sprintf(`
 tell application "Evernote"
@@ -288,7 +299,7 @@ tell application "Evernote"
 	end repeat
 	set AppleScript's text item delimiters to ","
 	set tagStr to tagList as string
-	return noteTitle & "|||SEPARATOR|||" & creationDate & "|||SEPARATOR|||" & modDate & "|||SEPARATOR|||" & tagStr & "|||SEPARATOR|||" & htmlContent
+	return noteTitle & (ASCII character 29) & creationDate & (ASCII character 29) & modDate & (ASCII character 29) & tagStr & (ASCII character 29) & htmlContent
 end tell
 `, escapedLink)
 

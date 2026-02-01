@@ -62,38 +62,14 @@ func (db *DB) GetUserSettings(ctx context.Context, userID uuid.UUID) (*models.Us
 	return &s, nil
 }
 
-// UpdateUserSettings updates or creates user settings using UPSERT.
-// Returns the updated settings.
+// UpdateUserSettings updates or creates user settings using UPSERT with COALESCE.
+// Uses database-side COALESCE to atomically merge updates, preventing race conditions.
+// NULL values in the request preserve existing values in the database.
 func (db *DB) UpdateUserSettings(ctx context.Context, userID uuid.UUID, req models.UpdateUserSettingsRequest) (*models.UserSettings, error) {
-	// First get existing settings to merge with updates
-	existing, err := db.GetUserSettings(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Prepare values, merging with existing if they exist
+	// Convert request LLMService pointers to strings for database
 	var contentGenService, embeddingService, imageGenService *string
 	var contentGenAPIKey, embeddingAPIKey, imageGenAPIKey *string
 
-	if existing != nil {
-		if existing.ContentGenService != nil {
-			s := string(*existing.ContentGenService)
-			contentGenService = &s
-		}
-		contentGenAPIKey = existing.ContentGenAPIKey
-		if existing.EmbeddingService != nil {
-			s := string(*existing.EmbeddingService)
-			embeddingService = &s
-		}
-		embeddingAPIKey = existing.EmbeddingAPIKey
-		if existing.ImageGenService != nil {
-			s := string(*existing.ImageGenService)
-			imageGenService = &s
-		}
-		imageGenAPIKey = existing.ImageGenAPIKey
-	}
-
-	// Apply updates from request
 	if req.ContentGenService != nil {
 		s := string(*req.ContentGenService)
 		contentGenService = &s
@@ -116,6 +92,7 @@ func (db *DB) UpdateUserSettings(ctx context.Context, userID uuid.UUID, req mode
 		imageGenAPIKey = req.ImageGenAPIKey
 	}
 
+	// Use COALESCE to atomically merge: NULL in request preserves existing value
 	query := `
         INSERT INTO user_settings (
             user_id, content_gen_service, content_gen_api_key,
@@ -124,12 +101,12 @@ func (db *DB) UpdateUserSettings(ctx context.Context, userID uuid.UUID, req mode
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7)
         ON CONFLICT (user_id) DO UPDATE SET
-            content_gen_service = EXCLUDED.content_gen_service,
-            content_gen_api_key = EXCLUDED.content_gen_api_key,
-            embedding_service = EXCLUDED.embedding_service,
-            embedding_api_key = EXCLUDED.embedding_api_key,
-            image_gen_service = EXCLUDED.image_gen_service,
-            image_gen_api_key = EXCLUDED.image_gen_api_key,
+            content_gen_service = COALESCE(EXCLUDED.content_gen_service, user_settings.content_gen_service),
+            content_gen_api_key = COALESCE(EXCLUDED.content_gen_api_key, user_settings.content_gen_api_key),
+            embedding_service = COALESCE(EXCLUDED.embedding_service, user_settings.embedding_service),
+            embedding_api_key = COALESCE(EXCLUDED.embedding_api_key, user_settings.embedding_api_key),
+            image_gen_service = COALESCE(EXCLUDED.image_gen_service, user_settings.image_gen_service),
+            image_gen_api_key = COALESCE(EXCLUDED.image_gen_api_key, user_settings.image_gen_api_key),
             updated_at = NOW()
         RETURNING user_id, content_gen_service, content_gen_api_key,
                   embedding_service, embedding_api_key,
@@ -138,7 +115,7 @@ func (db *DB) UpdateUserSettings(ctx context.Context, userID uuid.UUID, req mode
 
 	var s models.UserSettings
 	var retContentGenService, retEmbeddingService, retImageGenService *string
-	err = db.QueryRow(ctx, query,
+	err := db.QueryRow(ctx, query,
 		userID, contentGenService, contentGenAPIKey,
 		embeddingService, embeddingAPIKey,
 		imageGenService, imageGenAPIKey,

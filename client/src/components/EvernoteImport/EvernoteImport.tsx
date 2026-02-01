@@ -100,6 +100,7 @@ export default function EvernoteImport({ campaignId }: EvernoteImportProps) {
 
     // Handle back to notebooks
     const handleBackToNotebooks = () => {
+        importMutation.reset();
         setSelectedNotebook(null);
         setStep('notebooks');
     };

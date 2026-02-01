@@ -1217,12 +1217,29 @@ func (h *Handler) GetUserSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Mask API keys before returning
-	settings.ContentGenAPIKey = maskAPIKey(settings.ContentGenAPIKey)
-	settings.EmbeddingAPIKey = maskAPIKey(settings.EmbeddingAPIKey)
-	settings.ImageGenAPIKey = maskAPIKey(settings.ImageGenAPIKey)
+	// Build response with masked API keys
+	response := models.UserSettingsResponse{
+		UserID:            settings.UserID,
+		ContentGenService: settings.ContentGenService,
+		ContentGenAPIKey:  maskAPIKey(settings.ContentGenAPIKey),
+		EmbeddingService:  settings.EmbeddingService,
+		EmbeddingAPIKey:   maskAPIKey(settings.EmbeddingAPIKey),
+		ImageGenService:   settings.ImageGenService,
+		ImageGenAPIKey:    maskAPIKey(settings.ImageGenAPIKey),
+		CreatedAt:         settings.CreatedAt,
+		UpdatedAt:         settings.UpdatedAt,
+	}
 
-	respondJSON(w, http.StatusOK, settings)
+	respondJSON(w, http.StatusOK, response)
+}
+
+// isMaskedAPIKey checks if a value appears to be a masked API key.
+func isMaskedAPIKey(key *string) bool {
+	if key == nil {
+		return false
+	}
+	k := *key
+	return len(k) >= 4 && k[:4] == "****"
 }
 
 // UpdateUserSettings handles PUT /api/user/settings
@@ -1240,6 +1257,17 @@ func (h *Handler) UpdateUserSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Clear masked API keys from request to prevent overwriting with masked values
+	if isMaskedAPIKey(req.ContentGenAPIKey) {
+		req.ContentGenAPIKey = nil
+	}
+	if isMaskedAPIKey(req.EmbeddingAPIKey) {
+		req.EmbeddingAPIKey = nil
+	}
+	if isMaskedAPIKey(req.ImageGenAPIKey) {
+		req.ImageGenAPIKey = nil
+	}
+
 	settings, err := h.db.UpdateUserSettings(r.Context(), userID, req)
 	if err != nil {
 		log.Printf("Error updating user settings: %v", err)
@@ -1247,12 +1275,20 @@ func (h *Handler) UpdateUserSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Mask API keys before returning
-	settings.ContentGenAPIKey = maskAPIKey(settings.ContentGenAPIKey)
-	settings.EmbeddingAPIKey = maskAPIKey(settings.EmbeddingAPIKey)
-	settings.ImageGenAPIKey = maskAPIKey(settings.ImageGenAPIKey)
+	// Build response with masked API keys
+	response := models.UserSettingsResponse{
+		UserID:            settings.UserID,
+		ContentGenService: settings.ContentGenService,
+		ContentGenAPIKey:  maskAPIKey(settings.ContentGenAPIKey),
+		EmbeddingService:  settings.EmbeddingService,
+		EmbeddingAPIKey:   maskAPIKey(settings.EmbeddingAPIKey),
+		ImageGenService:   settings.ImageGenService,
+		ImageGenAPIKey:    maskAPIKey(settings.ImageGenAPIKey),
+		CreatedAt:         settings.CreatedAt,
+		UpdatedAt:         settings.UpdatedAt,
+	}
 
-	respondJSON(w, http.StatusOK, settings)
+	respondJSON(w, http.StatusOK, response)
 }
 
 // ListPlayerCharacters handles GET /api/campaigns/{id}/player-characters

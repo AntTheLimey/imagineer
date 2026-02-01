@@ -72,8 +72,9 @@ export function useEvernoteNotes(
         queryKey: evernoteImportKeys.notes(notebookName),
         queryFn: () => evernoteImportApi.listNotes(notebookName),
         staleTime: 60 * 1000, // 1 minute
-        enabled: !!notebookName,
         ...options,
+        // Combine notebookName guard with any external enabled option
+        enabled: !!notebookName && (options?.enabled ?? true),
     });
 }
 

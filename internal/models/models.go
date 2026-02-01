@@ -373,7 +373,22 @@ const (
 )
 
 // UserSettings stores a user's API keys and service preferences.
+// API key fields are excluded from JSON serialization to prevent secret exposure.
+// Use UserSettingsResponse for API responses with masked keys.
 type UserSettings struct {
+	UserID            uuid.UUID   `json:"userId"`
+	ContentGenService *LLMService `json:"contentGenService,omitempty"`
+	ContentGenAPIKey  *string     `json:"-"`
+	EmbeddingService  *LLMService `json:"embeddingService,omitempty"`
+	EmbeddingAPIKey   *string     `json:"-"`
+	ImageGenService   *LLMService `json:"imageGenService,omitempty"`
+	ImageGenAPIKey    *string     `json:"-"`
+	CreatedAt         time.Time   `json:"createdAt"`
+	UpdatedAt         time.Time   `json:"updatedAt"`
+}
+
+// UserSettingsResponse is the API response with masked API keys.
+type UserSettingsResponse struct {
 	UserID            uuid.UUID   `json:"userId"`
 	ContentGenService *LLMService `json:"contentGenService,omitempty"`
 	ContentGenAPIKey  *string     `json:"contentGenApiKey,omitempty"`
@@ -399,26 +414,26 @@ type UpdateUserSettingsRequest struct {
 type CampaignGenre string
 
 const (
-	GenreAnimeManga        CampaignGenre = "anime_manga"
-	GenreCyberpunk         CampaignGenre = "cyberpunk"
-	GenreEspionage         CampaignGenre = "espionage"
-	GenreFantasy           CampaignGenre = "fantasy"
-	GenreGothic            CampaignGenre = "gothic"
-	GenreHistorical        CampaignGenre = "historical"
-	GenreHorror            CampaignGenre = "horror"
-	GenreLovecraftian      CampaignGenre = "lovecraftian"
-	GenreMilitary          CampaignGenre = "military"
-	GenreModernUrbanFantsy CampaignGenre = "modern_urban_fantasy"
-	GenreMystery           CampaignGenre = "mystery"
-	GenrePostApocalyptic   CampaignGenre = "post_apocalyptic"
-	GenrePulpAdventure     CampaignGenre = "pulp_adventure"
-	GenreScienceFiction    CampaignGenre = "science_fiction"
-	GenreSpaceOpera        CampaignGenre = "space_opera"
-	GenreSteampunk         CampaignGenre = "steampunk"
-	GenreSuperhero         CampaignGenre = "superhero"
-	GenreTimeTravel        CampaignGenre = "time_travel"
-	GenreWestern           CampaignGenre = "western"
-	GenreOther             CampaignGenre = "other"
+	GenreAnimeManga         CampaignGenre = "anime_manga"
+	GenreCyberpunk          CampaignGenre = "cyberpunk"
+	GenreEspionage          CampaignGenre = "espionage"
+	GenreFantasy            CampaignGenre = "fantasy"
+	GenreGothic             CampaignGenre = "gothic"
+	GenreHistorical         CampaignGenre = "historical"
+	GenreHorror             CampaignGenre = "horror"
+	GenreLovecraftian       CampaignGenre = "lovecraftian"
+	GenreMilitary           CampaignGenre = "military"
+	GenreModernUrbanFantasy CampaignGenre = "modern_urban_fantasy"
+	GenreMystery            CampaignGenre = "mystery"
+	GenrePostApocalyptic    CampaignGenre = "post_apocalyptic"
+	GenrePulpAdventure      CampaignGenre = "pulp_adventure"
+	GenreScienceFiction     CampaignGenre = "science_fiction"
+	GenreSpaceOpera         CampaignGenre = "space_opera"
+	GenreSteampunk          CampaignGenre = "steampunk"
+	GenreSuperhero          CampaignGenre = "superhero"
+	GenreTimeTravel         CampaignGenre = "time_travel"
+	GenreWestern            CampaignGenre = "western"
+	GenreOther              CampaignGenre = "other"
 )
 
 // PlayerCharacter represents a player character in a campaign.

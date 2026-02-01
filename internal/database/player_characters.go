@@ -12,6 +12,7 @@ package database
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/antonypegg/imagineer/internal/models"
@@ -86,56 +87,32 @@ func (db *DB) CreatePlayerCharacter(ctx context.Context, campaignID uuid.UUID, r
 	return &pc, nil
 }
 
-// UpdatePlayerCharacter updates an existing player character.
+// UpdatePlayerCharacter updates an existing player character using COALESCE.
+// Uses database-side COALESCE to atomically merge updates, preventing race conditions.
+// NULL values in the request preserve existing values in the database.
 func (db *DB) UpdatePlayerCharacter(ctx context.Context, id uuid.UUID, req models.UpdatePlayerCharacterRequest) (*models.PlayerCharacter, error) {
-	// First get the existing player character
-	existing, err := db.GetPlayerCharacter(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	// Apply updates
-	entityID := existing.EntityID
-	if req.EntityID != nil {
-		entityID = req.EntityID
-	}
-
-	characterName := existing.CharacterName
-	if req.CharacterName != nil {
-		characterName = *req.CharacterName
-	}
-
-	playerName := existing.PlayerName
-	if req.PlayerName != nil {
-		playerName = *req.PlayerName
-	}
-
-	description := existing.Description
-	if req.Description != nil {
-		description = req.Description
-	}
-
-	background := existing.Background
-	if req.Background != nil {
-		background = req.Background
-	}
-
 	query := `
         UPDATE player_characters
-        SET entity_id = $2, character_name = $3, player_name = $4,
-            description = $5, background = $6
+        SET entity_id = COALESCE($2, entity_id),
+            character_name = COALESCE($3, character_name),
+            player_name = COALESCE($4, player_name),
+            description = COALESCE($5, description),
+            background = COALESCE($6, background)
         WHERE id = $1
         RETURNING id, campaign_id, entity_id, character_name, player_name,
                   description, background, created_at, updated_at`
 
 	var pc models.PlayerCharacter
-	err = db.QueryRow(ctx, query,
-		id, entityID, characterName, playerName, description, background,
+	err := db.QueryRow(ctx, query,
+		id, req.EntityID, req.CharacterName, req.PlayerName, req.Description, req.Background,
 	).Scan(
 		&pc.ID, &pc.CampaignID, &pc.EntityID, &pc.CharacterName, &pc.PlayerName,
 		&pc.Description, &pc.Background, &pc.CreatedAt, &pc.UpdatedAt,
 	)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("player character not found")
+		}
 		return nil, fmt.Errorf("failed to update player character: %w", err)
 	}
 

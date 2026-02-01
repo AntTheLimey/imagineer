@@ -82,6 +82,7 @@ export default function Layout({ children }: LayoutProps) {
 
     const handleSettings = () => {
         handleUserMenuClose();
+        setMobileOpen(false);
         navigate('/settings');
     };
 

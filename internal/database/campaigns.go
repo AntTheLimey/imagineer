@@ -508,7 +508,7 @@ func (db *DB) VerifyCampaignOwnership(ctx context.Context, campaignID uuid.UUID,
 // GetRecentCampaigns retrieves the most recently updated campaigns.
 func (db *DB) GetRecentCampaigns(ctx context.Context, limit int) ([]models.Campaign, error) {
 	query := `
-        SELECT id, name, system_id, description, settings, genre, image_style_prompt, created_at, updated_at
+        SELECT id, name, system_id, owner_id, description, settings, genre, image_style_prompt, created_at, updated_at
         FROM campaigns
         ORDER BY updated_at DESC
         LIMIT $1`
@@ -524,7 +524,7 @@ func (db *DB) GetRecentCampaigns(ctx context.Context, limit int) ([]models.Campa
 		var c models.Campaign
 		var genre *string
 		err := rows.Scan(
-			&c.ID, &c.Name, &c.SystemID, &c.Description, &c.Settings,
+			&c.ID, &c.Name, &c.SystemID, &c.OwnerID, &c.Description, &c.Settings,
 			&genre, &c.ImageStylePrompt, &c.CreatedAt, &c.UpdatedAt,
 		)
 		if err != nil {

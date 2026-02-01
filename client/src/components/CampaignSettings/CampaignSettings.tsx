@@ -15,7 +15,7 @@
  * tracking for save functionality.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     Alert,
     Box,
@@ -163,14 +163,20 @@ export default function CampaignSettings({
         }
     }, [campaign, externalFormData]);
 
+    // Store latest onChange in ref to avoid effect re-runs
+    const onChangeRef = useRef(onChange);
+    useEffect(() => {
+        onChangeRef.current = onChange;
+    }, [onChange]);
+
     // Notify parent of changes when using internal state
     useEffect(() => {
         if (!externalFormData) {
             const isDirty =
                 JSON.stringify(internalFormData) !== JSON.stringify(initialFormData);
-            onChange(internalFormData, isDirty);
+            onChangeRef.current(internalFormData, isDirty);
         }
-    }, [internalFormData, initialFormData, onChange, externalFormData]);
+    }, [internalFormData, initialFormData, externalFormData]);
 
     /**
      * Update a form field.

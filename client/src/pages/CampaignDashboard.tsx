@@ -15,7 +15,7 @@
  * Uses the FullScreenLayout for consistent header and save actions.
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     Alert,
@@ -107,14 +107,14 @@ export default function CampaignDashboard() {
     });
 
     // Initialize form data when campaign loads
-    useMemo(() => {
+    useEffect(() => {
         if (campaign && !formData) {
             setFormData(campaignToFormData(campaign));
         }
     }, [campaign, formData]);
 
     // Sync dirty state
-    useMemo(() => {
+    useEffect(() => {
         setIsDirty(isFormDirty);
     }, [isFormDirty, setIsDirty]);
 
@@ -145,6 +145,8 @@ export default function CampaignDashboard() {
         }
 
         if (!formData.name.trim()) {
+            // TODO: Show validation error to user
+            console.warn('Campaign name is required');
             return false;
         }
 
