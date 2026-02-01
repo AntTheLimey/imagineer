@@ -200,6 +200,7 @@ export default function ThreePanelLayout({
                             <IconButton
                                 onClick={() => setLeftDrawerOpen(true)}
                                 size="small"
+                                aria-label="Open left drawer"
                             >
                                 <MenuIcon />
                             </IconButton>
@@ -273,6 +274,8 @@ export default function ThreePanelLayout({
                         onClick={handleLeftToggle}
                         size="small"
                         sx={{ borderRadius: 0, height: '100%', width: 24 }}
+                        aria-label={leftCollapsed ? 'Expand left panel' : 'Collapse left panel'}
+                        aria-expanded={!leftCollapsed}
                     >
                         {leftCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
                     </IconButton>
@@ -308,6 +311,8 @@ export default function ThreePanelLayout({
                         onClick={handleRightToggle}
                         size="small"
                         sx={{ borderRadius: 0, height: '100%', width: 24 }}
+                        aria-label={rightCollapsed ? 'Expand right panel' : 'Collapse right panel'}
+                        aria-expanded={!rightCollapsed}
                     >
                         {rightCollapsed ? <ChevronLeftIcon /> : <ChevronRightIcon />}
                     </IconButton>

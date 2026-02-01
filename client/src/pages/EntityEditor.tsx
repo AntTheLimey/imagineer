@@ -14,7 +14,7 @@
  * with autosave, draft recovery, and unsaved changes protection.
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     Alert,
@@ -192,6 +192,9 @@ export default function EntityEditor() {
                 'You have unsaved changes to this entity. Are you sure you want to leave?',
         });
 
+    // Track the last hydrated entity ID to detect route changes
+    const lastHydratedEntityIdRef = useRef<string | undefined>(undefined);
+
     // Autosave
     const { lastSaved } = useAutosave({
         data: formData,
@@ -216,10 +219,19 @@ export default function EntityEditor() {
     // Initialize form data from existing entity or check for draft
     useEffect(() => {
         if (!isNewEntity && existingEntity) {
-            // Skip hydration if user has in-progress edits
-            if (isDirty) {
+            // Check if this is a different entity than what we last hydrated
+            const isNewEntityRoute = existingEntity.id !== lastHydratedEntityIdRef.current;
+
+            // Skip hydration only if same entity AND user has in-progress edits
+            if (!isNewEntityRoute && isDirty) {
                 return;
             }
+
+            // If navigating to a different entity, clear dirty state
+            if (isNewEntityRoute && isDirty) {
+                clearDirty();
+            }
+
             setFormData({
                 name: existingEntity.name,
                 entityType: existingEntity.entityType,
@@ -229,14 +241,19 @@ export default function EntityEditor() {
                 gmNotes: existingEntity.gmNotes ?? '',
                 sourceConfidence: existingEntity.sourceConfidence,
             });
+
+            // Update the ref to track this entity
+            lastHydratedEntityIdRef.current = existingEntity.id;
         } else if (isNewEntity) {
+            // Reset the ref for new entity routes
+            lastHydratedEntityIdRef.current = undefined;
             // Check for existing draft
             const draft = getDraft<EntityFormData>(draftKey);
             if (draft) {
                 setShowDraftRecovery(true);
             }
         }
-    }, [existingEntity, isNewEntity, getDraft, draftKey, isDirty]);
+    }, [existingEntity, isNewEntity, getDraft, draftKey, isDirty, clearDirty]);
 
     /**
      * Recover draft data.

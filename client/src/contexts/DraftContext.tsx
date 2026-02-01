@@ -110,44 +110,62 @@ export function DraftProvider({ children }: DraftProviderProps) {
      * Delete a draft from localStorage.
      */
     const deleteDraft = useCallback((key: string) => {
-        localStorage.removeItem(getDraftKey(key));
+        try {
+            localStorage.removeItem(getDraftKey(key));
+        } catch (error) {
+            console.error('Failed to delete draft:', error);
+        }
     }, []);
 
     /**
      * Check if a draft exists.
      */
     const hasDraft = useCallback((key: string): boolean => {
-        return localStorage.getItem(getDraftKey(key)) !== null;
+        try {
+            return localStorage.getItem(getDraftKey(key)) !== null;
+        } catch (error) {
+            console.error('Failed to check draft:', error);
+            return false;
+        }
     }, []);
 
     /**
      * List all draft keys (without the prefix).
      */
     const listDrafts = useCallback((): string[] => {
-        const drafts: string[] = [];
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && key.startsWith(DRAFT_PREFIX)) {
-                drafts.push(key.slice(DRAFT_PREFIX.length));
+        try {
+            const drafts: string[] = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith(DRAFT_PREFIX)) {
+                    drafts.push(key.slice(DRAFT_PREFIX.length));
+                }
             }
+            return drafts;
+        } catch (error) {
+            console.error('Failed to list drafts:', error);
+            return [];
         }
-        return drafts;
     }, []);
 
     /**
      * Clear all drafts from localStorage.
      */
     const clearAllDrafts = useCallback(() => {
-        const keysToRemove: string[] = [];
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && key.startsWith(DRAFT_PREFIX)) {
-                keysToRemove.push(key);
+        try {
+            const keysToRemove: string[] = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith(DRAFT_PREFIX)) {
+                    keysToRemove.push(key);
+                }
             }
+            keysToRemove.forEach((key) => {
+                localStorage.removeItem(key);
+            });
+        } catch (error) {
+            console.error('Failed to clear drafts:', error);
         }
-        keysToRemove.forEach((key) => {
-            localStorage.removeItem(key);
-        });
     }, []);
 
     const value: DraftContextValue = {
