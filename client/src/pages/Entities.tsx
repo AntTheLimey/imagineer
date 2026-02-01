@@ -45,6 +45,9 @@ import {
     Edit as EditIcon,
     Visibility as ViewIcon,
 } from '@mui/icons-material';
+import { ThreePanelLayout } from '../layouts';
+import { EntityListLeftPanel } from '../components/EntityListLeftPanel';
+import { EntityPreviewPanel } from '../components/EntityPreviewPanel';
 import {
     useEntities,
     useEntity,
@@ -164,8 +167,11 @@ export default function Entities() {
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
 
-    // Filter state
-    const [typeFilter, setTypeFilter] = useState<EntityType | ''>('');
+    // Filter state - now using 'all' instead of empty string
+    const [typeFilter, setTypeFilter] = useState<EntityType | 'all'>('all');
+
+    // Selected entity for preview
+    const [selectedEntity, setSelectedEntity] = useState<Entity | null>(null);
 
     // Dialog states
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -173,7 +179,7 @@ export default function Entities() {
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-    // Selected entity for view/edit/delete
+    // Selected entity for view/edit/delete dialogs
     const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
 
     // Form state
@@ -189,13 +195,13 @@ export default function Entities() {
         campaignId: campaignId ?? '',
         page: page + 1,
         pageSize: rowsPerPage,
-        entityType: typeFilter || undefined,
+        entityType: typeFilter === 'all' ? undefined : typeFilter,
     });
 
     // Fetch single entity for view/edit
     const {
-        data: selectedEntity,
-        isLoading: selectedEntityLoading,
+        data: dialogEntity,
+        isLoading: dialogEntityLoading,
     } = useEntity(
         campaignId ?? '',
         selectedEntityId ?? '',
@@ -296,6 +302,10 @@ export default function Entities() {
             });
             setDeleteDialogOpen(false);
             setSelectedEntityId(null);
+            // Clear preview if deleted entity was selected
+            if (selectedEntity?.id === selectedEntityId) {
+                setSelectedEntity(null);
+            }
         } catch (error) {
             console.error('Failed to delete entity:', error);
         }
@@ -313,7 +323,21 @@ export default function Entities() {
         setDeleteDialogOpen(true);
     };
 
-    // Open create dialog (legacy) or navigate to full-screen editor
+    // Handle preview panel delete
+    const handlePreviewDelete = () => {
+        if (selectedEntity) {
+            openDeleteDialog(selectedEntity);
+        }
+    };
+
+    // Handle preview panel edit
+    const handlePreviewEdit = () => {
+        if (selectedEntity && campaignId) {
+            navigate(`/campaigns/${campaignId}/entities/${selectedEntity.id}/edit`);
+        }
+    };
+
+    // Navigate to full-screen entity editor for creating
     const openCreateDialog = () => {
         if (!campaignId) {
             return;
@@ -341,52 +365,91 @@ export default function Entities() {
         setPage(0);
     };
 
+    // Handle row click - select for preview
+    const handleRowClick = (entity: Entity) => {
+        setSelectedEntity(entity);
+    };
+
+    // Handle type filter change from left panel
+    const handleTypeFilterChange = (type: EntityType | 'all') => {
+        setTypeFilter(type);
+        setPage(0);
+        // Clear selection when filter changes
+        setSelectedEntity(null);
+    };
+
     // Loading state
     if (entitiesLoading && !entities) {
         return (
-            <Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                    <Typography variant="h4" sx={{ fontFamily: 'Cinzel' }}>
-                        Entities
-                    </Typography>
-                    <Skeleton variant="rectangular" width={130} height={36} />
-                </Box>
-                <Paper sx={{ p: 2, mb: 2 }}>
-                    <Skeleton variant="rectangular" width={200} height={56} />
-                </Paper>
-                <TableContainer component={Paper}>
-                    <Table>
-                        <TableHead>
-                            <TableRow>
-                                <TableCell><Skeleton width={80} /></TableCell>
-                                <TableCell><Skeleton width={60} /></TableCell>
-                                <TableCell><Skeleton width={200} /></TableCell>
-                                <TableCell><Skeleton width={100} /></TableCell>
-                                <TableCell><Skeleton width={80} /></TableCell>
-                                <TableCell><Skeleton width={100} /></TableCell>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {[1, 2, 3, 4, 5].map((i) => (
-                                <TableRow key={i}>
-                                    <TableCell><Skeleton /></TableCell>
-                                    <TableCell><Skeleton width={60} /></TableCell>
-                                    <TableCell><Skeleton /></TableCell>
-                                    <TableCell><Skeleton /></TableCell>
-                                    <TableCell><Skeleton width={80} /></TableCell>
-                                    <TableCell><Skeleton width={100} /></TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
-            </Box>
+            <ThreePanelLayout
+                leftPanel={
+                    <Box>
+                        <Skeleton variant="text" width="80%" height={32} sx={{ mb: 2 }} />
+                        {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+                            <Skeleton key={i} variant="rectangular" height={40} sx={{ mb: 1 }} />
+                        ))}
+                    </Box>
+                }
+                centerPanel={
+                    <Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                            <Typography variant="h4" sx={{ fontFamily: 'Cinzel' }}>
+                                Entities
+                            </Typography>
+                            <Skeleton variant="rectangular" width={130} height={36} />
+                        </Box>
+                        <TableContainer component={Paper}>
+                            <Table>
+                                <TableHead>
+                                    <TableRow>
+                                        <TableCell><Skeleton width={80} /></TableCell>
+                                        <TableCell><Skeleton width={60} /></TableCell>
+                                        <TableCell><Skeleton width={200} /></TableCell>
+                                        <TableCell><Skeleton width={100} /></TableCell>
+                                        <TableCell><Skeleton width={80} /></TableCell>
+                                        <TableCell><Skeleton width={100} /></TableCell>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {[1, 2, 3, 4, 5].map((i) => (
+                                        <TableRow key={i}>
+                                            <TableCell><Skeleton /></TableCell>
+                                            <TableCell><Skeleton width={60} /></TableCell>
+                                            <TableCell><Skeleton /></TableCell>
+                                            <TableCell><Skeleton /></TableCell>
+                                            <TableCell><Skeleton width={80} /></TableCell>
+                                            <TableCell><Skeleton width={100} /></TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </TableContainer>
+                    </Box>
+                }
+                rightPanel={
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                        <Typography variant="body1" color="text.secondary">
+                            Select an entity to preview
+                        </Typography>
+                    </Box>
+                }
+            />
         );
     }
 
     const entityList = entities ?? [];
 
-    return (
+    // Left panel content
+    const leftPanelContent = campaignId ? (
+        <EntityListLeftPanel
+            campaignId={campaignId}
+            selectedType={typeFilter}
+            onTypeChange={handleTypeFilterChange}
+        />
+    ) : null;
+
+    // Center panel content - the entity table
+    const centerPanelContent = (
         <Box>
             {/* Header */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -427,28 +490,6 @@ export default function Entities() {
                 </Alert>
             )}
 
-            {/* Filters */}
-            <Paper sx={{ p: 2, mb: 2 }}>
-                <FormControl sx={{ minWidth: 200 }}>
-                    <InputLabel>Filter by Type</InputLabel>
-                    <Select
-                        value={typeFilter}
-                        label="Filter by Type"
-                        onChange={(e) => {
-                            setTypeFilter(e.target.value as EntityType | '');
-                            setPage(0);
-                        }}
-                    >
-                        <MenuItem value="">All Types</MenuItem>
-                        {ENTITY_TYPES.map((type) => (
-                            <MenuItem key={type} value={type}>
-                                {ENTITY_TYPE_LABELS[type]}
-                            </MenuItem>
-                        ))}
-                    </Select>
-                </FormControl>
-            </Paper>
-
             {/* Entity Table */}
             {entityList.length === 0 ? (
                 <Paper sx={{ p: 4, textAlign: 'center' }}>
@@ -456,7 +497,7 @@ export default function Entities() {
                         No entities found
                     </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        {typeFilter
+                        {typeFilter !== 'all'
                             ? `No ${ENTITY_TYPE_LABELS[typeFilter]} entities in this campaign.`
                             : 'Create your first entity to get started.'}
                     </Typography>
@@ -483,8 +524,17 @@ export default function Entities() {
                                     <TableRow
                                         key={entity.id}
                                         hover
-                                        sx={{ cursor: 'pointer' }}
-                                        onClick={() => openViewDialog(entity)}
+                                        selected={selectedEntity?.id === entity.id}
+                                        sx={{
+                                            cursor: 'pointer',
+                                            '&.Mui-selected': {
+                                                backgroundColor: 'action.selected',
+                                            },
+                                            '&.Mui-selected:hover': {
+                                                backgroundColor: 'action.selected',
+                                            },
+                                        }}
+                                        onClick={() => handleRowClick(entity)}
                                     >
                                         <TableCell>
                                             <Typography variant="body2" fontWeight="medium">
@@ -584,6 +634,26 @@ export default function Entities() {
                     />
                 </Paper>
             )}
+        </Box>
+    );
+
+    // Right panel content - entity preview
+    const rightPanelContent = campaignId ? (
+        <EntityPreviewPanel
+            entity={selectedEntity}
+            campaignId={campaignId}
+            onEdit={handlePreviewEdit}
+            onDelete={handlePreviewDelete}
+        />
+    ) : null;
+
+    return (
+        <>
+            <ThreePanelLayout
+                leftPanel={leftPanelContent}
+                centerPanel={centerPanelContent}
+                rightPanel={rightPanelContent}
+            />
 
             {/* Create Entity Dialog */}
             <Dialog
@@ -752,79 +822,79 @@ export default function Entities() {
                 fullWidth
             >
                 <DialogTitle>
-                    {selectedEntityLoading ? (
+                    {dialogEntityLoading ? (
                         <Skeleton width={200} />
                     ) : (
-                        selectedEntity?.name ?? 'Entity Details'
+                        dialogEntity?.name ?? 'Entity Details'
                     )}
                 </DialogTitle>
                 <DialogContent>
-                    {selectedEntityLoading ? (
+                    {dialogEntityLoading ? (
                         <Box>
                             <Skeleton height={40} />
                             <Skeleton height={100} />
                             <Skeleton height={40} />
                             <Skeleton height={40} />
                         </Box>
-                    ) : selectedEntity ? (
+                    ) : dialogEntity ? (
                         <Box sx={{ mt: 1 }}>
                             <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
                                 <Chip
-                                    label={ENTITY_TYPE_LABELS[selectedEntity.entityType]}
+                                    label={ENTITY_TYPE_LABELS[dialogEntity.entityType]}
                                     color="primary"
                                 />
                                 <Chip
-                                    label={selectedEntity.sourceConfidence}
+                                    label={dialogEntity.sourceConfidence}
                                     variant="outlined"
                                     color={
-                                        selectedEntity.sourceConfidence === 'AUTHORITATIVE'
+                                        dialogEntity.sourceConfidence === 'AUTHORITATIVE'
                                             ? 'success'
-                                            : selectedEntity.sourceConfidence === 'DRAFT'
+                                            : dialogEntity.sourceConfidence === 'DRAFT'
                                                 ? 'warning'
                                                 : 'default'
                                     }
                                 />
                             </Box>
 
-                            {selectedEntity.description && (
+                            {dialogEntity.description && (
                                 <Box sx={{ mb: 2 }}>
                                     <Typography variant="subtitle2" color="text.secondary">
                                         Description
                                     </Typography>
                                     <Typography variant="body1">
-                                        {selectedEntity.description}
+                                        {dialogEntity.description}
                                     </Typography>
                                 </Box>
                             )}
 
-                            {selectedEntity.tags && selectedEntity.tags.length > 0 && (
+                            {dialogEntity.tags && dialogEntity.tags.length > 0 && (
                                 <Box sx={{ mb: 2 }}>
                                     <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                                         Tags
                                     </Typography>
                                     <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                                        {selectedEntity.tags.map((tag) => (
+                                        {dialogEntity.tags.map((tag) => (
                                             <Chip key={tag} label={tag} size="small" />
                                         ))}
                                     </Box>
                                 </Box>
                             )}
 
-                            {selectedEntity.attributes &&
-                                Object.keys(selectedEntity.attributes).length > 0 && (
+                            {dialogEntity.attributes &&
+                                Object.keys(dialogEntity.attributes).length > 0 && (
                                     <Box sx={{ mb: 2 }}>
                                         <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                                             Attributes
                                         </Typography>
                                         <Paper variant="outlined" sx={{ p: 2 }}>
                                             <pre style={{ margin: 0, fontSize: '0.875rem', overflow: 'auto' }}>
-                                                {JSON.stringify(selectedEntity.attributes, null, 2)}
+                                                {JSON.stringify(dialogEntity.attributes, null, 2)}
                                             </pre>
                                         </Paper>
                                     </Box>
                                 )}
 
-                            {isGM && selectedEntity.gmNotes && (
+                            {isGM && dialogEntity.gmNotes && (
                                 <Box sx={{ mb: 2 }}>
                                     <Typography variant="subtitle2" color="text.secondary">
                                         GM Notes
@@ -834,7 +904,7 @@ export default function Entities() {
                                         sx={{ p: 2, bgcolor: 'warning.light', color: 'warning.contrastText' }}
                                     >
                                         <Typography variant="body2">
-                                            {selectedEntity.gmNotes}
+                                            {dialogEntity.gmNotes}
                                         </Typography>
                                     </Paper>
                                 </Box>
@@ -846,7 +916,7 @@ export default function Entities() {
                                         Created
                                     </Typography>
                                     <Typography variant="body2">
-                                        {formatDate(selectedEntity.createdAt)}
+                                        {formatDate(dialogEntity.createdAt)}
                                     </Typography>
                                 </Box>
                                 <Box>
@@ -854,7 +924,7 @@ export default function Entities() {
                                         Updated
                                     </Typography>
                                     <Typography variant="body2">
-                                        {formatDate(selectedEntity.updatedAt)}
+                                        {formatDate(dialogEntity.updatedAt)}
                                     </Typography>
                                 </Box>
                                 <Box>
@@ -862,7 +932,7 @@ export default function Entities() {
                                         Version
                                     </Typography>
                                     <Typography variant="body2">
-                                        {selectedEntity.version}
+                                        {dialogEntity.version}
                                     </Typography>
                                 </Box>
                             </Box>
@@ -878,12 +948,12 @@ export default function Entities() {
                     >
                         Close
                     </Button>
-                    {selectedEntity && (
+                    {dialogEntity && (
                         <Button
                             variant="contained"
                             onClick={() => {
                                 setViewDialogOpen(false);
-                                navigateToEditor(selectedEntity.id);
+                                navigateToEditor(dialogEntity.id);
                             }}
                         >
                             Edit
@@ -1073,6 +1143,6 @@ export default function Entities() {
                     </Button>
                 </DialogActions>
             </Dialog>
-        </Box>
+        </>
     );
 }
