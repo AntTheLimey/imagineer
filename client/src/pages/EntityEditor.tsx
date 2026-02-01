@@ -31,6 +31,7 @@ import {
     Typography,
 } from '@mui/material';
 import { FullScreenLayout } from '../layouts';
+import { RichTextEditor } from '../components/RichTextEditor';
 import {
     useEntity,
     useCreateEntity,
@@ -554,15 +555,16 @@ export default function EntityEditor() {
                         </FormControl>
                     </Box>
 
-                    <TextField
-                        label="Description"
-                        fullWidth
-                        multiline
-                        rows={4}
-                        value={formData.description}
-                        onChange={(e) => updateField('description', e.target.value)}
-                        sx={{ mb: 3 }}
-                    />
+                    <Box sx={{ mb: 3 }}>
+                        <RichTextEditor
+                            label="Description"
+                            value={formData.description}
+                            onChange={(html) => updateField('description', html)}
+                            placeholder="Describe this entity..."
+                            error={!!formErrors.description}
+                            helperText={formErrors.description}
+                        />
+                    </Box>
 
                     <Autocomplete
                         multiple
