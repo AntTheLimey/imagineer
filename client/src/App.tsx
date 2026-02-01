@@ -23,12 +23,14 @@ import Layout from './components/Layout';
 // Pages
 import Dashboard from './pages/Dashboard';
 import Campaigns from './pages/Campaigns';
+import CampaignDashboard from './pages/CampaignDashboard';
 import Entities from './pages/Entities';
 import EntityEditor from './pages/EntityEditor';
 import Timeline from './pages/Timeline';
 import Import from './pages/Import';
 import Login from './pages/Login';
 import AuthCallback from './pages/AuthCallback';
+import AccountSettings from './pages/AccountSettings';
 
 /**
  * Guards access to child routes based on authentication state.
@@ -149,7 +151,8 @@ function FullScreenWrapper() {
  * - Public routes: /login, /auth/callback
  * - Protected routes with legacy Layout: /, /campaigns, /import
  * - Protected routes with AppShell: /campaigns/:id/entities, /campaigns/:id/timeline
- * - Full-screen editor routes: /campaigns/:id/entities/new, /campaigns/:id/entities/:entityId/edit
+ * - Full-screen routes: /campaigns/:id/dashboard, /campaigns/:id/entities/new,
+ *   /campaigns/:id/entities/:entityId/edit
  */
 function AppRoutes() {
     return (
@@ -190,6 +193,16 @@ function AppRoutes() {
                 }
             />
 
+            {/* Account Settings - Full-screen layout without sidebar */}
+            <Route
+                path="/settings"
+                element={
+                    <ProtectedRoute>
+                        <AccountSettings />
+                    </ProtectedRoute>
+                }
+            />
+
             {/* Protected routes with new AppShell layout */}
             <Route element={<ProtectedOutlet />}>
                 <Route element={<AppShellWrapper />}>
@@ -207,6 +220,11 @@ function AppRoutes() {
 
                 {/* Full-screen editor routes (outside AppShell) */}
                 <Route element={<FullScreenWrapper />}>
+                    {/* Campaign dashboard - main hub for campaign management */}
+                    <Route
+                        path="/campaigns/:id/dashboard"
+                        element={<CampaignDashboard />}
+                    />
                     {/* New entity editor */}
                     <Route
                         path="/campaigns/:campaignId/entities/new"

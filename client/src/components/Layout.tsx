@@ -31,6 +31,7 @@ import {
     Folder as CampaignIcon,
     Upload as ImportIcon,
     Logout as LogoutIcon,
+    Settings as SettingsIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -77,6 +78,11 @@ export default function Layout({ children }: LayoutProps) {
         handleUserMenuClose();
         logout();
         navigate('/login');
+    };
+
+    const handleSettings = () => {
+        handleUserMenuClose();
+        navigate('/settings');
     };
 
     /**
@@ -173,8 +179,20 @@ export default function Layout({ children }: LayoutProps) {
                             </Box>
                         </Box>
                         <ListItemButton
-                            onClick={handleLogout}
+                            onClick={handleSettings}
                             sx={{ mt: 1, borderRadius: 1 }}
+                        >
+                            <ListItemIcon sx={{ minWidth: 36 }}>
+                                <SettingsIcon fontSize="small" />
+                            </ListItemIcon>
+                            <ListItemText
+                                primary="Account Settings"
+                                primaryTypographyProps={{ variant: 'body2' }}
+                            />
+                        </ListItemButton>
+                        <ListItemButton
+                            onClick={handleLogout}
+                            sx={{ borderRadius: 1 }}
                         >
                             <ListItemIcon sx={{ minWidth: 36 }}>
                                 <LogoutIcon fontSize="small" />
@@ -263,6 +281,12 @@ export default function Layout({ children }: LayoutProps) {
                                     </Box>
                                 </MenuItem>
                                 <Divider />
+                                <MenuItem onClick={handleSettings}>
+                                    <ListItemIcon>
+                                        <SettingsIcon fontSize="small" />
+                                    </ListItemIcon>
+                                    Account Settings
+                                </MenuItem>
                                 <MenuItem onClick={handleLogout}>
                                     <ListItemIcon>
                                         <LogoutIcon fontSize="small" />

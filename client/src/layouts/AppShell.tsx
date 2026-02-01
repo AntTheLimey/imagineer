@@ -30,7 +30,10 @@ import {
     Toolbar,
     Typography,
 } from '@mui/material';
-import { Logout as LogoutIcon } from '@mui/icons-material';
+import {
+    Logout as LogoutIcon,
+    Settings as SettingsIcon,
+} from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useCampaignContext } from '../contexts/CampaignContext';
@@ -94,6 +97,11 @@ export default function AppShell({ children }: AppShellProps) {
         handleUserMenuClose();
         logout();
         navigate('/login');
+    };
+
+    const handleSettings = () => {
+        handleUserMenuClose();
+        navigate('/settings');
     };
 
     const handleCampaignChange = (event: SelectChangeEvent<string>) => {
@@ -225,6 +233,12 @@ export default function AppShell({ children }: AppShellProps) {
                                     </Box>
                                 </MenuItem>
                                 <Divider />
+                                <MenuItem onClick={handleSettings}>
+                                    <ListItemIcon>
+                                        <SettingsIcon fontSize="small" />
+                                    </ListItemIcon>
+                                    Account Settings
+                                </MenuItem>
                                 <MenuItem onClick={handleLogout}>
                                     <ListItemIcon>
                                         <LogoutIcon fontSize="small" />

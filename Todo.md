@@ -25,6 +25,40 @@ storage. Every MVP feature includes its AI component.
 
 ## In Progress
 
+### Account Settings
+
+- [ ] `[MVP-1]` Account settings page accessible from user menu
+- [ ] `[MVP-1]` LLM API key configuration with service selector:
+  - Content generation: Anthropic, OpenAI, or Gemini
+  - Embedding generation: Anthropic Voyage, OpenAI, or Gemini
+  - Image generation: OpenAI DALL-E, Stability AI, or other
+- [ ] `[MVP-1]` Secure storage of API keys (encrypted in database)
+- [ ] `[MVP-1]` API key validation on save
+
+### Campaign Dashboard & Settings
+
+- [ ] `[MVP-1]` Campaign dashboard with left navigation menu:
+  - Manage Entities
+  - Manage Sessions
+  - Import Campaign Notes
+  - Import Knowledge
+- [ ] `[MVP-1]` Campaign settings on main screen:
+  - Campaign name and description (rich text)
+  - RPG system selector (from game_systems table)
+  - Genre selector (dropdown with predefined genres)
+  - Default image generation style prompt
+- [ ] `[MVP-1]` Player Characters management:
+  - List view of all player characters
+  - Create/edit PC: character name, player name, description, background
+  - Link PCs to entity records
+
+### Evernote Import (Priority)
+
+- [ ] `[MVP-1]` Fix and verify Evernote ENEX file import
+- [ ] `[MVP-1]` Import preview before committing
+- [ ] `[MVP-1]` Progress indicator during import
+- [ ] `[MVP-2]` AI entity extraction from imported notes (post-import)
+
 ### Security (from CodeRabbit review)
 
 - [ ] `[MVP-3]` Import validation with duplicate detection

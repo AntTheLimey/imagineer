@@ -1178,3 +1178,274 @@ func (h *Handler) DeleteRelationshipType(w http.ResponseWriter, r *http.Request)
 
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// maskAPIKey masks an API key, showing only the last 4 characters.
+// Returns nil if the input is nil.
+func maskAPIKey(key *string) *string {
+	if key == nil || *key == "" {
+		return nil
+	}
+	k := *key
+	if len(k) <= 4 {
+		masked := "****"
+		return &masked
+	}
+	masked := "****" + k[len(k)-4:]
+	return &masked
+}
+
+// GetUserSettings handles GET /api/user/settings
+// Returns the current user's settings with masked API keys.
+func (h *Handler) GetUserSettings(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	settings, err := h.db.GetUserSettings(r.Context(), userID)
+	if err != nil {
+		log.Printf("Error getting user settings: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to get user settings")
+		return
+	}
+
+	// If no settings exist, return an empty settings object
+	if settings == nil {
+		settings = &models.UserSettings{
+			UserID: userID,
+		}
+	}
+
+	// Mask API keys before returning
+	settings.ContentGenAPIKey = maskAPIKey(settings.ContentGenAPIKey)
+	settings.EmbeddingAPIKey = maskAPIKey(settings.EmbeddingAPIKey)
+	settings.ImageGenAPIKey = maskAPIKey(settings.ImageGenAPIKey)
+
+	respondJSON(w, http.StatusOK, settings)
+}
+
+// UpdateUserSettings handles PUT /api/user/settings
+// Updates the current user's settings.
+func (h *Handler) UpdateUserSettings(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	var req models.UpdateUserSettingsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	settings, err := h.db.UpdateUserSettings(r.Context(), userID, req)
+	if err != nil {
+		log.Printf("Error updating user settings: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to update user settings")
+		return
+	}
+
+	// Mask API keys before returning
+	settings.ContentGenAPIKey = maskAPIKey(settings.ContentGenAPIKey)
+	settings.EmbeddingAPIKey = maskAPIKey(settings.EmbeddingAPIKey)
+	settings.ImageGenAPIKey = maskAPIKey(settings.ImageGenAPIKey)
+
+	respondJSON(w, http.StatusOK, settings)
+}
+
+// ListPlayerCharacters handles GET /api/campaigns/{id}/player-characters
+// Returns all player characters for a campaign.
+func (h *Handler) ListPlayerCharacters(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+		return
+	}
+
+	characters, err := h.db.ListPlayerCharacters(r.Context(), campaignID)
+	if err != nil {
+		log.Printf("Error listing player characters: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to list player characters")
+		return
+	}
+
+	if characters == nil {
+		characters = []models.PlayerCharacter{}
+	}
+
+	respondJSON(w, http.StatusOK, characters)
+}
+
+// CreatePlayerCharacter handles POST /api/campaigns/{id}/player-characters
+// Creates a new player character in a campaign.
+func (h *Handler) CreatePlayerCharacter(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+		return
+	}
+
+	var req models.CreatePlayerCharacterRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if req.CharacterName == "" {
+		respondError(w, http.StatusBadRequest, "Character name is required")
+		return
+	}
+
+	if req.PlayerName == "" {
+		respondError(w, http.StatusBadRequest, "Player name is required")
+		return
+	}
+
+	character, err := h.db.CreatePlayerCharacter(r.Context(), campaignID, req)
+	if err != nil {
+		log.Printf("Error creating player character: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to create player character")
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, character)
+}
+
+// GetPlayerCharacter handles GET /api/campaigns/{id}/player-characters/{pcId}
+// Returns a specific player character.
+func (h *Handler) GetPlayerCharacter(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+		return
+	}
+
+	pcID, err := parseUUID(r, "pcId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid player character ID")
+		return
+	}
+
+	character, err := h.db.GetPlayerCharacter(r.Context(), pcID)
+	if err != nil {
+		log.Printf("Error getting player character: %v", err)
+		respondError(w, http.StatusNotFound, "Player character not found")
+		return
+	}
+
+	// Verify the character belongs to the specified campaign
+	if character.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Player character not found")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, character)
+}
+
+// UpdatePlayerCharacter handles PUT /api/campaigns/{id}/player-characters/{pcId}
+// Updates a player character.
+func (h *Handler) UpdatePlayerCharacter(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+		return
+	}
+
+	pcID, err := parseUUID(r, "pcId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid player character ID")
+		return
+	}
+
+	// Verify the character exists and belongs to the specified campaign
+	existing, err := h.db.GetPlayerCharacter(r.Context(), pcID)
+	if err != nil {
+		log.Printf("Error getting player character: %v", err)
+		respondError(w, http.StatusNotFound, "Player character not found")
+		return
+	}
+
+	if existing.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Player character not found")
+		return
+	}
+
+	var req models.UpdatePlayerCharacterRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	character, err := h.db.UpdatePlayerCharacter(r.Context(), pcID, req)
+	if err != nil {
+		log.Printf("Error updating player character: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to update player character")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, character)
+}
+
+// DeletePlayerCharacter handles DELETE /api/campaigns/{id}/player-characters/{pcId}
+// Deletes a player character.
+func (h *Handler) DeletePlayerCharacter(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+		return
+	}
+
+	pcID, err := parseUUID(r, "pcId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid player character ID")
+		return
+	}
+
+	// Verify the character exists and belongs to the specified campaign
+	existing, err := h.db.GetPlayerCharacter(r.Context(), pcID)
+	if err != nil {
+		log.Printf("Error getting player character: %v", err)
+		respondError(w, http.StatusNotFound, "Player character not found")
+		return
+	}
+
+	if existing.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Player character not found")
+		return
+	}
+
+	if err := h.db.DeletePlayerCharacter(r.Context(), pcID); err != nil {
+		log.Printf("Error deleting player character: %v", err)
+		respondError(w, http.StatusNotFound, "Player character not found")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}

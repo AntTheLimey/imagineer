@@ -51,3 +51,20 @@ export { importApi } from './import';
 export type { GoogleDocsImportInput, FileUploadImportInput } from './import';
 
 export { relationshipTypesApi } from './relationshipTypes';
+
+export { userSettingsApi } from './userSettings';
+export type {
+    ContentGenService,
+    EmbeddingService,
+    ImageGenService,
+    UserSettingsResponse,
+    UserSettingsUpdateRequest,
+} from './userSettings';
+
+export { evernoteImportApi } from './evernoteImport';
+export type {
+    EvernoteStatus,
+    Notebook,
+    NoteSummary,
+    EvernoteLocalImportRequest,
+} from './evernoteImport';

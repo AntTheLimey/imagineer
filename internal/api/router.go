@@ -85,6 +85,12 @@ func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string)
 			// Apply authentication middleware (jwtSecret is validated at router creation)
 			r.Use(auth.AuthMiddleware(jwtSecret))
 
+			// User settings
+			r.Route("/user/settings", func(r chi.Router) {
+				r.Get("/", h.GetUserSettings)
+				r.Put("/", h.UpdateUserSettings)
+			})
+
 			// Campaigns
 			r.Route("/campaigns", func(r chi.Router) {
 				r.Get("/", h.ListCampaigns)
@@ -123,6 +129,15 @@ func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string)
 					r.Post("/relationship-types", h.CreateRelationshipType)
 					r.Delete("/relationship-types/{typeId}", h.DeleteRelationshipType)
 
+					// Player characters
+					r.Get("/player-characters", h.ListPlayerCharacters)
+					r.Post("/player-characters", h.CreatePlayerCharacter)
+					r.Route("/player-characters/{pcId}", func(r chi.Router) {
+						r.Get("/", h.GetPlayerCharacter)
+						r.Put("/", h.UpdatePlayerCharacter)
+						r.Delete("/", h.DeletePlayerCharacter)
+					})
+
 					// Campaign timeline
 					r.Get("/timeline", h.ListTimelineEvents)
 					r.Post("/timeline", h.CreateTimelineEvent)
@@ -158,6 +173,14 @@ func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string)
 			// Statistics
 			r.Get("/stats", h.GetStats)
 			r.Get("/stats/dashboard", h.GetDashboardStats)
+
+			// Evernote local import endpoints (macOS only)
+			r.Route("/import/evernote", func(r chi.Router) {
+				r.Get("/status", importHandler.GetEvernoteLocalStatus)
+				r.Get("/notebooks", importHandler.ListEvernoteLocalNotebooks)
+				r.Get("/notebooks/{name}/notes", importHandler.ListEvernoteLocalNotes)
+				r.Post("/import", importHandler.ImportEvernoteLocal)
+			})
 		})
 	})
 

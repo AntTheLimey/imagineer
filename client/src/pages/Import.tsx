@@ -35,6 +35,7 @@ import {
     CheckCircle as SuccessIcon,
     CloudUpload as UploadIcon,
     Description as EvernoteIcon,
+    DesktopMac as LocalIcon,
     Article as GoogleDocsIcon,
     Error as ErrorIcon,
     Warning as WarningIcon,
@@ -46,6 +47,7 @@ import {
     useImportFiles,
 } from '../hooks';
 import type { ImportResult } from '../types';
+import { EvernoteImport } from '../components/EvernoteImport';
 
 interface TabPanelProps {
     children?: React.ReactNode;
@@ -275,12 +277,14 @@ export default function Import() {
                 )}
             </Paper>
 
-            {/* Import Result Display */}
-            <Collapse in={!!importResult}>
-                {importResult && (
-                    <ImportResultSummary result={importResult} onDismiss={dismissResult} />
-                )}
-            </Collapse>
+            {/* Import Result Display (for non-Evernote Local tabs) */}
+            {tab !== 0 && (
+                <Collapse in={!!importResult}>
+                    {importResult && (
+                        <ImportResultSummary result={importResult} onDismiss={dismissResult} />
+                    )}
+                </Collapse>
+            )}
 
             {/* Error Alerts */}
             {importEvernote.error && (
@@ -302,20 +306,33 @@ export default function Import() {
             <Card>
                 <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
                     <Tabs value={tab} onChange={(_, v) => setTab(v)}>
-                        <Tab icon={<EvernoteIcon />} label="Evernote" />
+                        <Tab icon={<LocalIcon />} label="Evernote (Local)" />
+                        <Tab icon={<EvernoteIcon />} label="Evernote File" />
                         <Tab icon={<GoogleDocsIcon />} label="Google Docs" />
                         <Tab icon={<UploadIcon />} label="File Upload" />
                     </Tabs>
                 </Box>
 
                 <CardContent>
-                    {/* Evernote Tab */}
+                    {/* Evernote Local Tab */}
                     <TabPanel value={tab} index={0}>
+                        {noCampaignSelected ? (
+                            <Alert severity="info">
+                                Please select a campaign above to import from Evernote.
+                            </Alert>
+                        ) : (
+                            <EvernoteImport campaignId={selectedCampaignId} />
+                        )}
+                    </TabPanel>
+
+                    {/* Evernote File Tab */}
+                    <TabPanel value={tab} index={1}>
                         <Typography variant="h6" gutterBottom>
-                            Import from Evernote
+                            Import from Evernote File
                         </Typography>
                         <Typography variant="body2" color="text.secondary" paragraph>
                             Export your notes from Evernote as .enex files and upload them here.
+                            This option works on all platforms.
                         </Typography>
                         <Grid container spacing={2} alignItems="center">
                             <Grid item>
@@ -355,7 +372,7 @@ export default function Import() {
                     </TabPanel>
 
                     {/* Google Docs Tab */}
-                    <TabPanel value={tab} index={1}>
+                    <TabPanel value={tab} index={2}>
                         <Typography variant="h6" gutterBottom>
                             Import from Google Docs
                         </Typography>
@@ -388,7 +405,7 @@ export default function Import() {
                     </TabPanel>
 
                     {/* File Upload Tab */}
-                    <TabPanel value={tab} index={2}>
+                    <TabPanel value={tab} index={3}>
                         <Typography variant="h6" gutterBottom>
                             Upload Files
                         </Typography>
