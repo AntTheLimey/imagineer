@@ -146,7 +146,7 @@ function FullScreenWrapper() {
  * - Public routes: /login, /auth/callback
  * - Protected routes with legacy Layout: /, /campaigns, /import
  * - Protected routes with AppShell: /campaigns/:id/entities, /campaigns/:id/timeline
- * - Full-screen editor routes: /campaigns/:id/entities/new, /campaigns/:id/entities/:entityId
+ * - Full-screen editor routes: /campaigns/:id/entities/new, /campaigns/:id/entities/:entityId/edit
  */
 function AppRoutes() {
     return (

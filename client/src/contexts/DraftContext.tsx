@@ -145,7 +145,9 @@ export function DraftProvider({ children }: DraftProviderProps) {
                 keysToRemove.push(key);
             }
         }
-        keysToRemove.forEach((key) => localStorage.removeItem(key));
+        keysToRemove.forEach((key) => {
+            localStorage.removeItem(key);
+        });
     }, []);
 
     const value: DraftContextValue = {

@@ -216,6 +216,10 @@ export default function EntityEditor() {
     // Initialize form data from existing entity or check for draft
     useEffect(() => {
         if (!isNewEntity && existingEntity) {
+            // Skip hydration if user has in-progress edits
+            if (isDirty) {
+                return;
+            }
             setFormData({
                 name: existingEntity.name,
                 entityType: existingEntity.entityType,
@@ -232,7 +236,7 @@ export default function EntityEditor() {
                 setShowDraftRecovery(true);
             }
         }
-    }, [existingEntity, isNewEntity, getDraft, draftKey]);
+    }, [existingEntity, isNewEntity, getDraft, draftKey, isDirty]);
 
     /**
      * Recover draft data.
@@ -315,7 +319,7 @@ export default function EntityEditor() {
                 clearDirty();
 
                 // Navigate to edit the newly created entity
-                navigate(`/campaigns/${campaignId}/entities/${newEntity.id}`, {
+                navigate(`/campaigns/${campaignId}/entities/${newEntity.id}/edit`, {
                     replace: true,
                 });
             } else if (entityId) {

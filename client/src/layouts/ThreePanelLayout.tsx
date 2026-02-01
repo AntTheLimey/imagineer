@@ -96,7 +96,7 @@ export default function ThreePanelLayout({
     const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
 
     // Mobile navigation state
-    const [mobileTab, setMobileTab] = useState(1); // 0=left, 1=center, 2=right
+    const [mobileTab, setMobileTab] = useState<'left' | 'center' | 'right'>('center');
 
     const handleLeftToggle = () => {
         const newState = !leftCollapsed;
@@ -116,9 +116,9 @@ export default function ThreePanelLayout({
             <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 {/* Content area */}
                 <Box sx={{ flexGrow: 1, overflow: 'auto', p: 2 }}>
-                    {mobileTab === 0 && leftPanel}
-                    {mobileTab === 1 && centerPanel}
-                    {mobileTab === 2 && rightPanel}
+                    {mobileTab === 'left' && leftPanel}
+                    {mobileTab === 'center' && centerPanel}
+                    {mobileTab === 'right' && rightPanel}
                 </Box>
 
                 {/* Bottom navigation */}
@@ -128,21 +128,24 @@ export default function ThreePanelLayout({
                 >
                     <BottomNavigation
                         value={mobileTab}
-                        onChange={(_, newValue) => setMobileTab(newValue)}
+                        onChange={(_, newValue: 'left' | 'center' | 'right') => setMobileTab(newValue)}
                         showLabels
                     >
                         {leftPanel && (
                             <BottomNavigationAction
+                                value="left"
                                 label="Menu"
                                 icon={<LeftPanelIcon />}
                             />
                         )}
                         <BottomNavigationAction
+                            value="center"
                             label="Main"
                             icon={<CenterIcon />}
                         />
                         {rightPanel && (
                             <BottomNavigationAction
+                                value="right"
                                 label="Details"
                                 icon={<RightPanelIcon />}
                             />

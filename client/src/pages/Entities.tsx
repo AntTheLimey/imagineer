@@ -308,12 +308,18 @@ export default function Entities() {
 
     // Open create dialog (legacy) or navigate to full-screen editor
     const openCreateDialog = () => {
+        if (!campaignId) {
+            return;
+        }
         // Navigate to full-screen entity editor
         navigate(`/campaigns/${campaignId}/entities/new`);
     };
 
     // Navigate to full-screen entity editor for editing
     const navigateToEditor = (entityId: string) => {
+        if (!campaignId) {
+            return;
+        }
         navigate(`/campaigns/${campaignId}/entities/${entityId}/edit`);
     };
 

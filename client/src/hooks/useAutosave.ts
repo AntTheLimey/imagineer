@@ -15,7 +15,7 @@
  * be enabled/disabled dynamically.
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, MutableRefObject } from 'react';
 import { useDraft } from './useDraft';
 
 const DEFAULT_INTERVAL = 30000; // 30 seconds
@@ -87,6 +87,10 @@ export function useAutosave<T>({
     const serverVersionRef = useRef(serverVersion);
     const onSaveRef = useRef(onSave);
 
+    // Refs for enabled and key to allow unmount-only effect
+    const enabledRef: MutableRefObject<boolean> = useRef(enabled);
+    const keyRef: MutableRefObject<string> = useRef(key);
+
     // Keep refs updated
     useEffect(() => {
         dataRef.current = data;
@@ -99,6 +103,14 @@ export function useAutosave<T>({
     useEffect(() => {
         onSaveRef.current = onSave;
     }, [onSave]);
+
+    useEffect(() => {
+        enabledRef.current = enabled;
+    }, [enabled]);
+
+    useEffect(() => {
+        keyRef.current = key;
+    }, [key]);
 
     /**
      * Perform the save operation.
@@ -134,16 +146,16 @@ export function useAutosave<T>({
         };
     }, [enabled, interval, performSave]);
 
-    // Save on unmount if enabled
+    // Save on unmount if enabled (uses refs to ensure this only runs on actual unmount)
     useEffect(() => {
         return () => {
-            if (enabled) {
+            if (enabledRef.current) {
                 // Note: We use the refs here since the cleanup runs with
                 // potentially stale closure values
-                saveDraft(key, dataRef.current, serverVersionRef.current);
+                saveDraft(keyRef.current, dataRef.current, serverVersionRef.current);
             }
         };
-    }, [enabled, key, saveDraft]);
+    }, [saveDraft]);
 
     return {
         lastSaved,
