@@ -112,7 +112,9 @@ const DEFAULT_FORM_DATA: EntityFormData = {
 };
 
 /**
- * Validates JSON string.
+ * Determine whether a string is parseable as JSON.
+ *
+ * @returns `true` if `str` contains valid JSON, `false` otherwise.
  */
 function isValidJson(str: string): boolean {
     try {
@@ -124,7 +126,10 @@ function isValidJson(str: string): boolean {
 }
 
 /**
- * Format a relative time string from an ISO date.
+ * Produce a human-friendly label for how long ago an ISO timestamp occurred.
+ *
+ * @param isoString - An ISO 8601 timestamp string (e.g., "2026-02-01T12:34:56Z")
+ * @returns `just now` for times less than 1 minute ago, `N minutes ago` for times less than 1 hour, `N hours ago` for times less than 24 hours, or the locale-formatted date for older timestamps
  */
 function formatRelativeTime(isoString: string): string {
     const date = new Date(isoString);
@@ -146,6 +151,13 @@ function formatRelativeTime(isoString: string): string {
     return date.toLocaleDateString();
 }
 
+/**
+ * Full-screen page for creating and editing campaign entities with autosave, draft recovery, validation, and unsaved-change protection.
+ *
+ * Renders a form for entity fields (name, type, description, tags, JSON attributes, GM notes, source confidence), shows draft-recovery and similar-entity warnings when applicable, handles create/update mutations, and protects navigation when there are unsaved changes.
+ *
+ * @returns The React element for the Entity Editor page used to create or edit campaign entities.
+ */
 export default function EntityEditor() {
     const { campaignId, entityId } = useParams<{
         campaignId: string;

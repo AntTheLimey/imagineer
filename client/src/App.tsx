@@ -68,8 +68,9 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 }
 
 /**
- * Protected route wrapper that uses Outlet for nested routes.
- * This allows us to wrap multiple routes with the same protection.
+ * Guards nested routes using authentication state and renders the appropriate UI.
+ *
+ * @returns The protected nested routes via `<Outlet />` when authenticated, a centered loading indicator while authentication is in progress, or a redirect to `/login` when not authenticated.
  */
 function ProtectedOutlet() {
     const { isAuthenticated, isLoading } = useAuth();
@@ -98,8 +99,9 @@ function ProtectedOutlet() {
 }
 
 /**
- * Layout wrapper for routes that use the old sidebar Layout.
- * This maintains backward compatibility with existing pages.
+ * Wraps content with the legacy sidebar Layout to preserve backward-compatible pages.
+ *
+ * @param children - React nodes to render inside the legacy Layout
  */
 function LegacyLayoutWrapper({ children }: { children: ReactNode }) {
     return (
@@ -126,8 +128,9 @@ function AppShellWrapper() {
 }
 
 /**
- * Wrapper for full-screen editor routes that don't use AppShell.
- * These routes still need the providers but not the shell.
+ * Provides Campaign and Draft contexts to full-screen editor routes without applying the AppShell.
+ *
+ * Renders an Outlet so nested routes receive the necessary providers while remaining outside the AppShell layout.
  */
 function FullScreenWrapper() {
     return (

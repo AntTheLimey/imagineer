@@ -49,27 +49,16 @@ interface UseAutosaveReturn {
 }
 
 /**
- * Hook for automatic draft saving at regular intervals.
+ * Automatically persists the provided draft data to local storage at a configurable interval and exposes a manual save trigger.
  *
- * @param options - Configuration options for autosave behavior
- * @returns Object containing last save timestamp and manual save function
- *
- * @example
- * ```typescript
- * const { lastSaved, saveNow } = useAutosave({
- *   data: formData,
- *   key: `entity-${entityId}`,
- *   interval: 30000,
- *   enabled: isDirty,
- *   serverVersion: entity.version,
- * });
- *
- * // Display last save time to user
- * {lastSaved && <span>Saved {formatRelativeTime(lastSaved)}</span>}
- *
- * // Manual save on blur
- * onBlur={() => saveNow()}
- * ```
+ * @param options - Configuration for autosave behavior:
+ *   - data: The draft data to persist.
+ *   - key: localStorage key used for the draft.
+ *   - interval: Autosave interval in milliseconds (defaults to 30000).
+ *   - enabled: Whether autosave is active (defaults to true).
+ *   - serverVersion: Optional server-side version number used for conflict detection.
+ *   - onSave: Optional callback invoked after a successful save.
+ * @returns An object with `lastSaved` — the ISO timestamp of the last autosave or `null` if never saved, and `saveNow` — a function to trigger an immediate save.
  */
 export function useAutosave<T>({
     data,
