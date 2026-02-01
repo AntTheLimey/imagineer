@@ -1045,3 +1045,136 @@ func (h *Handler) GetCampaignStats(w http.ResponseWriter, r *http.Request) {
 
 	respondJSON(w, http.StatusOK, stats)
 }
+
+// ListRelationshipTypes handles GET /api/campaigns/{id}/relationship-types
+// Returns all relationship types available for a campaign (system defaults + custom).
+func (h *Handler) ListRelationshipTypes(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+		return
+	}
+
+	types, err := h.db.ListRelationshipTypes(r.Context(), campaignID)
+	if err != nil {
+		log.Printf("Error listing relationship types: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to list relationship types")
+		return
+	}
+
+	if types == nil {
+		types = []models.RelationshipType{}
+	}
+
+	respondJSON(w, http.StatusOK, types)
+}
+
+// CreateRelationshipType handles POST /api/campaigns/{id}/relationship-types
+// Creates a custom relationship type for a campaign.
+func (h *Handler) CreateRelationshipType(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+		return
+	}
+
+	var req models.CreateRelationshipTypeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if req.Name == "" {
+		respondError(w, http.StatusBadRequest, "Name is required")
+		return
+	}
+
+	if req.InverseName == "" {
+		respondError(w, http.StatusBadRequest, "Inverse name is required")
+		return
+	}
+
+	if req.DisplayLabel == "" {
+		respondError(w, http.StatusBadRequest, "Display label is required")
+		return
+	}
+
+	if req.InverseDisplayLabel == "" {
+		respondError(w, http.StatusBadRequest, "Inverse display label is required")
+		return
+	}
+
+	// Validate symmetric constraint: symmetric types must have matching names
+	if req.IsSymmetric && req.Name != req.InverseName {
+		respondError(w, http.StatusBadRequest, "Symmetric relationship types must have matching name and inverse name")
+		return
+	}
+
+	relType, err := h.db.CreateRelationshipType(r.Context(), campaignID, req)
+	if err != nil {
+		log.Printf("Error creating relationship type: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to create relationship type")
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, relType)
+}
+
+// DeleteRelationshipType handles DELETE /api/campaigns/{campaignId}/relationship-types/{id}
+// Deletes a custom relationship type. System defaults cannot be deleted.
+func (h *Handler) DeleteRelationshipType(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+		return
+	}
+
+	typeID, err := parseUUID(r, "typeId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid relationship type ID")
+		return
+	}
+
+	// Verify the relationship type exists and belongs to this campaign
+	relType, err := h.db.GetRelationshipType(r.Context(), typeID)
+	if err != nil {
+		log.Printf("Error getting relationship type: %v", err)
+		respondError(w, http.StatusNotFound, "Relationship type not found")
+		return
+	}
+
+	// Check if it's a system default (campaign_id is nil)
+	if relType.CampaignID == nil {
+		respondError(w, http.StatusForbidden, "Cannot delete system default relationship types")
+		return
+	}
+
+	// Check if the type belongs to the specified campaign
+	if *relType.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Relationship type not found")
+		return
+	}
+
+	if err := h.db.DeleteRelationshipType(r.Context(), typeID); err != nil {
+		log.Printf("Error deleting relationship type: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to delete relationship type")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}

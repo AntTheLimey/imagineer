@@ -184,6 +184,30 @@ type UpdateRelationshipRequest struct {
 	Strength         *int              `json:"strength,omitempty"`
 }
 
+// RelationshipType defines a relationship type with its inverse mapping.
+type RelationshipType struct {
+	ID                  uuid.UUID  `json:"id"`
+	CampaignID          *uuid.UUID `json:"campaignId,omitempty"` // nil = system default
+	Name                string     `json:"name"`
+	InverseName         string     `json:"inverseName"`
+	IsSymmetric         bool       `json:"isSymmetric"`
+	DisplayLabel        string     `json:"displayLabel"`
+	InverseDisplayLabel string     `json:"inverseDisplayLabel"`
+	Description         *string    `json:"description,omitempty"`
+	CreatedAt           time.Time  `json:"createdAt"`
+	UpdatedAt           time.Time  `json:"updatedAt"`
+}
+
+// CreateRelationshipTypeRequest is the request body for creating a relationship type.
+type CreateRelationshipTypeRequest struct {
+	Name                string  `json:"name"`
+	InverseName         string  `json:"inverseName"`
+	IsSymmetric         bool    `json:"isSymmetric"`
+	DisplayLabel        string  `json:"displayLabel"`
+	InverseDisplayLabel string  `json:"inverseDisplayLabel"`
+	Description         *string `json:"description,omitempty"`
+}
+
 // SessionStatus represents the status of a game session.
 type SessionStatus string
 

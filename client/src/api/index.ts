@@ -49,3 +49,5 @@ export type { DashboardStats, CampaignStats } from './stats';
 
 export { importApi } from './import';
 export type { GoogleDocsImportInput, FileUploadImportInput } from './import';
+
+export { relationshipTypesApi } from './relationshipTypes';

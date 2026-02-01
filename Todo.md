@@ -180,6 +180,7 @@ Features planned for after initial release.
 
 ### World Elements (New Entity Types)
 
+- [ ] Custom entity type creation UI (allow users to define new types)
 - [ ] Professions/careers as separate entity type
 - [ ] Races and sexes as configurable entities
 - [ ] Languages with mastery levels (None, Semi, Proficient, Native)

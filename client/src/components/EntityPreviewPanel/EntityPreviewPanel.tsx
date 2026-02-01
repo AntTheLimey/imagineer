@@ -20,6 +20,7 @@ import {
     Link as RelationshipIcon,
 } from '@mui/icons-material';
 import { useEntityRelationships } from '../../hooks';
+import { sanitizeHtml } from '../../utils';
 import type { Entity, EntityType } from '../../types';
 
 /**
@@ -69,11 +70,6 @@ const ENTITY_TYPE_COLORS: Record<EntityType, 'default' | 'primary' | 'secondary'
 };
 
 /**
- * Maximum length for the description preview.
- */
-const DESCRIPTION_PREVIEW_LENGTH = 200;
-
-/**
  * Formats a date string for display.
  */
 function formatDate(dateString: string): string {
@@ -82,14 +78,6 @@ function formatDate(dateString: string): string {
         month: 'short',
         day: 'numeric',
     });
-}
-
-/**
- * Truncates a string to a maximum length, adding ellipsis if truncated.
- */
-function truncateText(text: string, maxLength: number): string {
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength).trim() + '...';
 }
 
 /**
@@ -205,11 +193,25 @@ export default function EntityPreviewPanel({
                 >
                     Description
                 </Typography>
-                <Typography variant="body2">
-                    {entity.description
-                        ? truncateText(entity.description, DESCRIPTION_PREVIEW_LENGTH)
-                        : 'No description'}
-                </Typography>
+                {entity.description ? (
+                    <Box
+                        component="div"
+                        sx={{
+                            fontSize: '0.875rem',
+                            '& p': { mt: 0, mb: 1 },
+                            '& p:last-child': { mb: 0 },
+                            display: '-webkit-box',
+                            WebkitLineClamp: 6,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                        }}
+                        dangerouslySetInnerHTML={{
+                            __html: sanitizeHtml(entity.description),
+                        }}
+                    />
+                ) : (
+                    <Typography variant="body2">No description</Typography>
+                )}
             </Box>
 
             <Divider sx={{ my: 1 }} />

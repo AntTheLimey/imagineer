@@ -7,7 +7,7 @@
 //
 // -------------------------------------------------------------------------
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import {
     Alert,
     Box,
@@ -22,9 +22,10 @@ import {
     useDeleteRelationship,
 } from '../../hooks/useRelationships';
 import { useEntity } from '../../hooks/useEntities';
+import { useRelationshipTypes } from '../../hooks/useRelationshipTypes';
 import RelationshipRow from './RelationshipRow';
 import AddRelationshipDialog from './AddRelationshipDialog';
-import type { Relationship } from '../../types';
+import type { Relationship, RelationshipType } from '../../types';
 
 /**
  * Represents a relationship that has not yet been saved to the database.
@@ -36,10 +37,14 @@ export interface PendingRelationship {
     targetEntityName: string;
     /** The type of relationship (e.g., "knows", "works_for"). */
     relationshipType: string;
+    /** The ID of the relationship type definition. */
+    relationshipTypeId?: string;
     /** Optional description of the relationship. */
     description?: string;
     /** If true, the relationship applies in both directions. */
     bidirectional: boolean;
+    /** If true, the direction is reversed (target -> source). */
+    isReversed?: boolean;
 }
 
 /**
@@ -50,6 +55,8 @@ export interface RelationshipEditorProps {
     campaignId: string;
     /** The entity ID (undefined for new entities). */
     entityId?: string;
+    /** The entity name (for display in relationship previews). */
+    entityName?: string;
     /** Callback fired when pending relationships change (for new entities). */
     onPendingRelationshipsChange?: (pending: PendingRelationship[]) => void;
     /** If true, the editor is in read-only mode. */
@@ -72,11 +79,13 @@ export interface RelationshipEditorProps {
  * <RelationshipEditor
  *     campaignId={campaignId}
  *     entityId={entityId}
+ *     entityName={entityName}
  * />
  *
  * // For a new entity:
  * <RelationshipEditor
  *     campaignId={campaignId}
+ *     entityName={entityName}
  *     onPendingRelationshipsChange={setPendingRelationships}
  * />
  * ```
@@ -84,6 +93,7 @@ export interface RelationshipEditorProps {
 export default function RelationshipEditor({
     campaignId,
     entityId,
+    entityName = 'This entity',
     onPendingRelationshipsChange,
     readOnly = false,
 }: RelationshipEditorProps) {
@@ -103,6 +113,23 @@ export default function RelationshipEditor({
     } = useEntityRelationships(campaignId, entityId ?? '', {
         enabled: !isNewEntity && !!entityId,
     });
+
+    // Fetch relationship types for display labels
+    const { data: relationshipTypes } = useRelationshipTypes(campaignId);
+
+    // Create a lookup map for relationship types
+    const relationshipTypeMap = useMemo(() => {
+        const map = new Map<string, RelationshipType>();
+        relationshipTypes?.forEach((type) => {
+            map.set(type.id, type);
+            // Also map by name for legacy relationships
+            map.set(type.name, type);
+            if (type.inverseName !== type.name) {
+                map.set(type.inverseName, type);
+            }
+        });
+        return map;
+    }, [relationshipTypes]);
 
     const deleteRelationshipMutation = useDeleteRelationship();
 
@@ -263,6 +290,9 @@ export default function RelationshipEditor({
                             key={rel.id}
                             relationship={rel}
                             campaignId={campaignId}
+                            currentEntityId={entityId}
+                            currentEntityName={entityName}
+                            relationshipTypeMap={relationshipTypeMap}
                             readOnly={readOnly}
                             onDelete={() => handleDeleteExisting(rel.id)}
                         />
@@ -285,6 +315,8 @@ export default function RelationshipEditor({
                         <RelationshipRow
                             key={`pending-${index}`}
                             relationship={rel}
+                            currentEntityName={entityName}
+                            relationshipTypeMap={relationshipTypeMap}
                             isPending
                             readOnly={readOnly}
                             onEdit={() => handleEditPending(index)}
@@ -306,6 +338,7 @@ export default function RelationshipEditor({
                 onSave={handleSaveRelationship}
                 campaignId={campaignId}
                 excludeEntityIds={getExcludeIds()}
+                currentEntityName={entityName}
                 existingRelationship={
                     editingIndex !== null
                         ? pendingRelationships[editingIndex]
@@ -322,6 +355,9 @@ export default function RelationshipEditor({
 interface RelationshipRowWithNameProps {
     relationship: Relationship;
     campaignId: string;
+    currentEntityId?: string;
+    currentEntityName: string;
+    relationshipTypeMap: Map<string, RelationshipType>;
     readOnly?: boolean;
     onDelete?: () => void;
 }
@@ -332,6 +368,9 @@ interface RelationshipRowWithNameProps {
 function RelationshipRowWithName({
     relationship,
     campaignId,
+    currentEntityId,
+    currentEntityName,
+    relationshipTypeMap,
     readOnly = false,
     onDelete,
 }: RelationshipRowWithNameProps) {
@@ -340,17 +379,23 @@ function RelationshipRowWithName({
         relationship.targetEntityId
     );
 
+    // Determine if the current entity is the source or target
+    const isCurrentEntitySource = relationship.sourceEntityId === currentEntityId;
+
     const resolvedRelationship: PendingRelationship = {
         targetEntityId: relationship.targetEntityId,
         targetEntityName: targetEntity?.name ?? 'Loading...',
         relationshipType: relationship.relationshipType,
         description: relationship.description,
         bidirectional: relationship.bidirectional,
+        isReversed: !isCurrentEntitySource,
     };
 
     return (
         <RelationshipRow
             relationship={resolvedRelationship}
+            currentEntityName={currentEntityName}
+            relationshipTypeMap={relationshipTypeMap}
             isPending={false}
             readOnly={readOnly}
             onDelete={onDelete}

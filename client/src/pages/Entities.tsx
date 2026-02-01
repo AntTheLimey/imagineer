@@ -57,6 +57,7 @@ import {
     useSimilarEntities,
     useCampaignOwnership,
 } from '../hooks';
+import { sanitizeHtml, stripHtml } from '../utils';
 import type { Entity, EntityType, SourceConfidence } from '../types';
 
 /**
@@ -559,7 +560,7 @@ export default function Entities() {
                                                     whiteSpace: 'nowrap',
                                                 }}
                                             >
-                                                {entity.description ?? '-'}
+                                                {entity.description ? stripHtml(entity.description) : '-'}
                                             </Typography>
                                         </TableCell>
                                         <TableCell>
@@ -861,9 +862,16 @@ export default function Entities() {
                                     <Typography variant="subtitle2" color="text.secondary">
                                         Description
                                     </Typography>
-                                    <Typography variant="body1">
-                                        {dialogEntity.description}
-                                    </Typography>
+                                    <Box
+                                        component="div"
+                                        sx={{
+                                            '& p': { mt: 0, mb: 1 },
+                                            '& p:last-child': { mb: 0 },
+                                        }}
+                                        dangerouslySetInnerHTML={{
+                                            __html: sanitizeHtml(dialogEntity.description),
+                                        }}
+                                    />
                                 </Box>
                             )}
 

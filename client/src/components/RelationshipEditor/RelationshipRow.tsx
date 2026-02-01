@@ -7,6 +7,7 @@
 //
 // -------------------------------------------------------------------------
 
+import { useMemo } from 'react';
 import {
     Box,
     Chip,
@@ -21,7 +22,7 @@ import {
     SwapHoriz as BidirectionalIcon,
     ArrowForward as DirectionalIcon,
 } from '@mui/icons-material';
-import type { Relationship } from '../../types';
+import type { Relationship, RelationshipType } from '../../types';
 import type { PendingRelationship } from './RelationshipEditor';
 
 /**
@@ -30,6 +31,10 @@ import type { PendingRelationship } from './RelationshipEditor';
 export interface RelationshipRowProps {
     /** The relationship to display (existing or pending). */
     relationship: Relationship | PendingRelationship;
+    /** The current entity name for display in natural sentences. */
+    currentEntityName?: string;
+    /** Map of relationship type IDs/names to their definitions. */
+    relationshipTypeMap?: Map<string, RelationshipType>;
     /** If true, the relationship is pending (not yet saved). */
     isPending?: boolean;
     /** Callback fired when the edit button is clicked. */
@@ -50,7 +55,7 @@ function isPendingRelationship(
 }
 
 /**
- * Formats a relationship type for display.
+ * Formats a relationship type for display (fallback when no type definition found).
  */
 function formatRelationshipType(type: string): string {
     return type
@@ -62,9 +67,9 @@ function formatRelationshipType(type: string): string {
 /**
  * A single row displaying a relationship.
  *
- * Shows the target entity name (with chip styling), relationship type,
- * bidirectional indicator, and optional edit/delete action buttons.
- * Pending relationships are visually distinguished with a dashed border.
+ * Shows the relationship as a natural sentence using the relationship type's
+ * display labels. For example: "Billy Bob owns Thornwood Farm" or
+ * "Thornwood Farm is owned by Billy Bob".
  *
  * @param props - The component props.
  * @returns A React element containing the relationship row.
@@ -73,6 +78,8 @@ function formatRelationshipType(type: string): string {
  * ```tsx
  * <RelationshipRow
  *     relationship={relationship}
+ *     currentEntityName="Billy Bob"
+ *     relationshipTypeMap={typeMap}
  *     isPending={false}
  *     onEdit={() => handleEdit(relationship)}
  *     onDelete={() => handleDelete(relationship)}
@@ -81,6 +88,8 @@ function formatRelationshipType(type: string): string {
  */
 export default function RelationshipRow({
     relationship,
+    currentEntityName = 'This entity',
+    relationshipTypeMap,
     isPending = false,
     onEdit,
     onDelete,
@@ -88,11 +97,132 @@ export default function RelationshipRow({
 }: RelationshipRowProps) {
     const targetName = isPendingRelationship(relationship)
         ? relationship.targetEntityName
-        : relationship.targetEntityId; // For existing relationships, we'd need to fetch the name
+        : relationship.targetEntityId; // For existing relationships, this should be resolved by the parent
 
     const bidirectional = relationship.bidirectional;
     const relationshipType = relationship.relationshipType;
     const description = relationship.description;
+    const isReversed = isPendingRelationship(relationship)
+        ? relationship.isReversed ?? false
+        : false;
+
+    /**
+     * Get the display label for the relationship.
+     * Uses the relationship type definition if available, otherwise formats
+     * the raw type name.
+     */
+    const displayLabel = useMemo(() => {
+        if (!relationshipTypeMap) {
+            return formatRelationshipType(relationshipType);
+        }
+
+        // Try to find the type definition
+        const typeDef = isPendingRelationship(relationship) && relationship.relationshipTypeId
+            ? relationshipTypeMap.get(relationship.relationshipTypeId)
+            : relationshipTypeMap.get(relationshipType);
+
+        if (!typeDef) {
+            return formatRelationshipType(relationshipType);
+        }
+
+        // If the relationship is reversed (target -> source), use inverse label
+        // Otherwise use the normal display label
+        if (isReversed) {
+            return typeDef.inverseDisplayLabel;
+        }
+        return typeDef.displayLabel;
+    }, [relationshipTypeMap, relationshipType, relationship, isReversed]);
+
+    /**
+     * Build the natural sentence describing the relationship.
+     */
+    const relationshipSentence = useMemo(() => {
+        if (bidirectional) {
+            // For bidirectional relationships, show both entities connected
+            return (
+                <>
+                    <Typography
+                        component="span"
+                        variant="body2"
+                        fontWeight={500}
+                    >
+                        {currentEntityName}
+                    </Typography>
+                    <Typography
+                        component="span"
+                        variant="body2"
+                        sx={{ mx: 0.5 }}
+                    >
+                        {displayLabel}
+                    </Typography>
+                    <Typography
+                        component="span"
+                        variant="body2"
+                        fontWeight={500}
+                    >
+                        {targetName}
+                    </Typography>
+                </>
+            );
+        }
+
+        // For directional relationships, the sentence depends on direction
+        if (isReversed) {
+            // Target -> Current entity (e.g., "Thornwood Farm is owned by Billy Bob")
+            return (
+                <>
+                    <Typography
+                        component="span"
+                        variant="body2"
+                        fontWeight={500}
+                    >
+                        {targetName}
+                    </Typography>
+                    <Typography
+                        component="span"
+                        variant="body2"
+                        sx={{ mx: 0.5 }}
+                    >
+                        {displayLabel}
+                    </Typography>
+                    <Typography
+                        component="span"
+                        variant="body2"
+                        fontWeight={500}
+                    >
+                        {currentEntityName}
+                    </Typography>
+                </>
+            );
+        }
+
+        // Current entity -> Target (e.g., "Billy Bob owns Thornwood Farm")
+        return (
+            <>
+                <Typography
+                    component="span"
+                    variant="body2"
+                    fontWeight={500}
+                >
+                    {currentEntityName}
+                </Typography>
+                <Typography
+                    component="span"
+                    variant="body2"
+                    sx={{ mx: 0.5 }}
+                >
+                    {displayLabel}
+                </Typography>
+                <Typography
+                    component="span"
+                    variant="body2"
+                    fontWeight={500}
+                >
+                    {targetName}
+                </Typography>
+            </>
+        );
+    }, [bidirectional, isReversed, currentEntityName, targetName, displayLabel]);
 
     return (
         <Paper
@@ -132,42 +262,22 @@ export default function RelationshipRow({
                 </Box>
             </Tooltip>
 
-            {/* Target entity */}
-            <Chip
-                label={targetName}
-                size="small"
-                color="primary"
-                variant="outlined"
-                sx={{ minWidth: 80 }}
-            />
-
-            {/* Relationship type */}
-            <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ minWidth: 80 }}
-            >
-                {formatRelationshipType(relationshipType)}
-            </Typography>
+            {/* Relationship sentence */}
+            <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+                {relationshipSentence}
+            </Box>
 
             {/* Description (if present) */}
             {description && (
-                <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{
-                        flexGrow: 1,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                    }}
-                >
-                    {description}
-                </Typography>
+                <Tooltip title={description}>
+                    <Chip
+                        label="..."
+                        size="small"
+                        variant="outlined"
+                        sx={{ cursor: 'help' }}
+                    />
+                </Tooltip>
             )}
-
-            {/* Spacer */}
-            {!description && <Box sx={{ flexGrow: 1 }} />}
 
             {/* Pending indicator */}
             {isPending && (

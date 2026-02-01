@@ -118,6 +118,11 @@ func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string)
 						r.Delete("/", h.DeleteRelationship)
 					})
 
+					// Campaign relationship types
+					r.Get("/relationship-types", h.ListRelationshipTypes)
+					r.Post("/relationship-types", h.CreateRelationshipType)
+					r.Delete("/relationship-types/{typeId}", h.DeleteRelationshipType)
+
 					// Campaign timeline
 					r.Get("/timeline", h.ListTimelineEvents)
 					r.Post("/timeline", h.CreateTimelineEvent)

@@ -93,3 +93,11 @@ export { useAutosave } from './useAutosave';
 
 // Unsaved changes hooks
 export { useUnsavedChanges } from './useUnsavedChanges';
+
+// Relationship type hooks
+export {
+    useRelationshipTypes,
+    useCreateRelationshipType,
+    useDeleteRelationshipType,
+    relationshipTypeKeys,
+} from './useRelationshipTypes';
