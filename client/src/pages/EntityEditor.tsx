@@ -439,7 +439,7 @@ export default function EntityEditor() {
     // Build breadcrumbs
     const breadcrumbs = useMemo(
         () => [
-            { label: 'Campaigns', path: '/campaigns' },
+            { label: 'Home', path: '/' },
             {
                 label: campaign?.name ?? 'Campaign',
                 path: `/campaigns/${campaignId}/entities`,

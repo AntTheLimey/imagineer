@@ -18,16 +18,16 @@ import { DraftProvider } from './contexts/DraftContext';
 
 // Layouts
 import { AppShell } from './layouts';
-import Layout from './components/Layout';
 
 // Pages
-import Dashboard from './pages/Dashboard';
-import Campaigns from './pages/Campaigns';
-import CampaignDashboard from './pages/CampaignDashboard';
+import HomePage from './pages/HomePage';
+import CampaignOverview from './pages/CampaignOverview';
+import CreateCampaign from './pages/CreateCampaign';
 import Entities from './pages/Entities';
 import EntityEditor from './pages/EntityEditor';
+import Sessions from './pages/Sessions';
+import CampaignImport from './pages/CampaignImport';
 import Timeline from './pages/Timeline';
-import Import from './pages/Import';
 import Login from './pages/Login';
 import AuthCallback from './pages/AuthCallback';
 import AccountSettings from './pages/AccountSettings';
@@ -72,7 +72,9 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 /**
  * Guards nested routes using authentication state and renders the appropriate UI.
  *
- * @returns The protected nested routes via `<Outlet />` when authenticated, a centered loading indicator while authentication is in progress, or a redirect to `/login` when not authenticated.
+ * @returns The protected nested routes via `<Outlet />` when authenticated,
+ *          a centered loading indicator while authentication is in progress,
+ *          or a redirect to `/login` when not authenticated.
  */
 function ProtectedOutlet() {
     const { isAuthenticated, isLoading } = useAuth();
@@ -101,20 +103,7 @@ function ProtectedOutlet() {
 }
 
 /**
- * Wraps content with the legacy sidebar Layout to preserve backward-compatible pages.
- *
- * @param children - React nodes to render inside the legacy Layout
- */
-function LegacyLayoutWrapper({ children }: { children: ReactNode }) {
-    return (
-        <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-            <Layout>{children}</Layout>
-        </Box>
-    );
-}
-
-/**
- * Layout wrapper for routes that use the new AppShell.
+ * Layout wrapper for routes that use the AppShell with persistent navigation.
  * Wraps content with campaign and draft providers.
  */
 function AppShellWrapper() {
@@ -130,9 +119,11 @@ function AppShellWrapper() {
 }
 
 /**
- * Provides Campaign and Draft contexts to full-screen editor routes without applying the AppShell.
+ * Provides Campaign and Draft contexts to full-screen editor routes
+ * without applying the AppShell.
  *
- * Renders an Outlet so nested routes receive the necessary providers while remaining outside the AppShell layout.
+ * Renders an Outlet so nested routes receive the necessary providers
+ * while remaining outside the AppShell layout.
  */
 function FullScreenWrapper() {
     return (
@@ -149,10 +140,19 @@ function FullScreenWrapper() {
  *
  * Route structure:
  * - Public routes: /login, /auth/callback
- * - Protected routes with legacy Layout: /, /campaigns, /import
- * - Protected routes with AppShell: /campaigns/:id/entities, /campaigns/:id/timeline
- * - Full-screen routes: /campaigns/:id/dashboard, /campaigns/:id/entities/new,
- *   /campaigns/:id/entities/:entityId/edit
+ * - Protected routes with AppShell:
+ *   - / - Home (redirects to campaign overview or shows campaign selection)
+ *   - /campaigns - Redirects to home
+ *   - /campaigns/:id/overview - Campaign overview
+ *   - /campaigns/:id/entities - Entities list
+ *   - /campaigns/:id/sessions - Sessions (placeholder)
+ *   - /campaigns/:id/import - Import content
+ *   - /campaigns/:id/timeline - Timeline
+ * - Full-screen routes:
+ *   - /campaigns/new - Create new campaign
+ *   - /campaigns/:campaignId/entities/new - New entity editor
+ *   - /campaigns/:campaignId/entities/:entityId/edit - Edit entity
+ *   - /settings - Account settings
  */
 function AppRoutes() {
     return (
@@ -161,69 +161,35 @@ function AppRoutes() {
             <Route path="/login" element={<Login />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
 
-            {/* Protected routes with legacy Layout (backward compatibility) */}
-            <Route
-                path="/"
-                element={
-                    <ProtectedRoute>
-                        <LegacyLayoutWrapper>
-                            <Dashboard />
-                        </LegacyLayoutWrapper>
-                    </ProtectedRoute>
-                }
-            />
-            <Route
-                path="/campaigns"
-                element={
-                    <ProtectedRoute>
-                        <LegacyLayoutWrapper>
-                            <Campaigns />
-                        </LegacyLayoutWrapper>
-                    </ProtectedRoute>
-                }
-            />
-            <Route
-                path="/import"
-                element={
-                    <ProtectedRoute>
-                        <LegacyLayoutWrapper>
-                            <Import />
-                        </LegacyLayoutWrapper>
-                    </ProtectedRoute>
-                }
-            />
-
-            {/* Account Settings - Full-screen layout without sidebar */}
-            <Route
-                path="/settings"
-                element={
-                    <ProtectedRoute>
-                        <AccountSettings />
-                    </ProtectedRoute>
-                }
-            />
-
-            {/* Protected routes with new AppShell layout */}
+            {/* Protected routes with AppShell layout */}
             <Route element={<ProtectedOutlet />}>
                 <Route element={<AppShellWrapper />}>
-                    {/* Entity list view */}
+                    {/* Home - handles smart redirect to current/latest campaign */}
+                    <Route path="/" element={<HomePage />} />
+
+                    {/* Campaigns list - redirect to home */}
+                    <Route path="/campaigns" element={<Navigate to="/" replace />} />
+
+                    {/* Campaign-specific routes */}
+                    <Route path="/campaigns/:id/overview" element={<CampaignOverview />} />
+                    <Route path="/campaigns/:id/entities" element={<Entities />} />
+                    <Route path="/campaigns/:id/sessions" element={<Sessions />} />
+                    <Route path="/campaigns/:id/import" element={<CampaignImport />} />
+                    <Route path="/campaigns/:id/timeline" element={<Timeline />} />
+
+                    {/* Legacy route redirect - dashboard to overview */}
                     <Route
-                        path="/campaigns/:id/entities"
-                        element={<Entities />}
-                    />
-                    {/* Timeline view */}
-                    <Route
-                        path="/campaigns/:id/timeline"
-                        element={<Timeline />}
+                        path="/campaigns/:id/dashboard"
+                        element={<Navigate to="../overview" replace />}
                     />
                 </Route>
 
                 {/* Full-screen editor routes (outside AppShell) */}
                 <Route element={<FullScreenWrapper />}>
-                    {/* Campaign dashboard - main hub for campaign management */}
+                    {/* Create new campaign */}
                     <Route
-                        path="/campaigns/:id/dashboard"
-                        element={<CampaignDashboard />}
+                        path="/campaigns/new"
+                        element={<CreateCampaign />}
                     />
                     {/* New entity editor */}
                     <Route
@@ -238,7 +204,17 @@ function AppRoutes() {
                 </Route>
             </Route>
 
-            {/* Fallback - redirect to dashboard */}
+            {/* Account Settings - Full-screen layout without sidebar */}
+            <Route
+                path="/settings"
+                element={
+                    <ProtectedRoute>
+                        <AccountSettings />
+                    </ProtectedRoute>
+                }
+            />
+
+            {/* Fallback - redirect to home */}
             <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
     );

@@ -40,11 +40,28 @@ type NoteContent struct {
 	Tags        []string  `json:"tags,omitempty"`
 }
 
+// EvernoteVersion indicates the version of Evernote installed.
+type EvernoteVersion string
+
+const (
+	// EvernoteVersionUnknown indicates version could not be determined.
+	EvernoteVersionUnknown EvernoteVersion = "unknown"
+
+	// EvernoteVersionLegacy indicates Evernote Legacy (version 7.x) which
+	// has full AppleScript support.
+	EvernoteVersionLegacy EvernoteVersion = "legacy"
+
+	// EvernoteVersion10 indicates Evernote 10.x (Electron-based) which
+	// has very limited AppleScript support.
+	EvernoteVersion10 EvernoteVersion = "10.x"
+)
+
 // EvernoteStatus represents the status of the Evernote application.
 type EvernoteStatus struct {
-	Available bool   `json:"available"`
-	Running   bool   `json:"running"`
-	Error     string `json:"error,omitempty"`
+	Available bool            `json:"available"`
+	Running   bool            `json:"running"`
+	Version   EvernoteVersion `json:"version,omitempty"`
+	Error     string          `json:"error,omitempty"`
 }
 
 // ImportRequest represents a request to import notes from a notebook.

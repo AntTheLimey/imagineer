@@ -104,9 +104,26 @@ func (e *AppleScriptExecutor) executeScript(ctx context.Context, script string, 
 	return strings.TrimSpace(stdout.String()), nil
 }
 
+// Evernote10Error is the error message shown when Evernote 10.x is detected.
+const Evernote10Error = `Evernote 10.x detected. This version has limited AppleScript support and cannot be used for direct import.
+
+To import your Evernote notes, please use one of these alternatives:
+
+1. Export as ENEX files (recommended):
+   - In Evernote 10.x, right-click a notebook and select "Export notebook..."
+   - Choose ENEX format and save the file
+   - Use Imagineer's ENEX file import feature instead
+
+2. Install Evernote Legacy:
+   - Download Evernote Legacy from https://help.evernote.com/hc/en-us/articles/360052560314
+   - Evernote Legacy (version 7.x) has full AppleScript support
+   - Note: Evernote Legacy may no longer sync with Evernote servers`
+
 // CheckEvernoteStatus checks if Evernote is installed and running.
+// It also detects whether the installed version is Evernote Legacy (7.x)
+// or Evernote 10.x, as only Legacy supports the required AppleScript commands.
 func (e *AppleScriptExecutor) CheckEvernoteStatus(ctx context.Context) EvernoteStatus {
-	// Check if Evernote is installed
+	// Check if Evernote is installed and get its status
 	checkInstalledScript := `
 tell application "System Events"
 	set appExists to exists (application process "Evernote")
@@ -127,32 +144,128 @@ end tell
 		return EvernoteStatus{
 			Available: false,
 			Running:   false,
+			Version:   EvernoteVersionUnknown,
 			Error:     fmt.Sprintf("Failed to check Evernote status: %v", err),
 		}
 	}
 
 	switch output {
 	case "running":
-		return EvernoteStatus{
+		// Evernote is running, now check the version
+		version := e.detectEvernoteVersion(ctx)
+		status := EvernoteStatus{
 			Available: true,
 			Running:   true,
+			Version:   version,
 		}
+		if version == EvernoteVersion10 {
+			status.Error = Evernote10Error
+		}
+		return status
+
 	case "installed":
-		return EvernoteStatus{
+		// Evernote is installed but not running
+		// We can still try to detect version from the app bundle
+		version := e.detectEvernoteVersionFromBundle(ctx)
+		status := EvernoteStatus{
 			Available: true,
 			Running:   false,
-			Error:     "Evernote is installed but not running. Please start Evernote first.",
+			Version:   version,
 		}
+		if version == EvernoteVersion10 {
+			status.Error = Evernote10Error
+		} else {
+			status.Error = "Evernote is installed but not running. Please start Evernote first."
+		}
+		return status
+
 	default:
 		return EvernoteStatus{
 			Available: false,
 			Running:   false,
+			Version:   EvernoteVersionUnknown,
 			Error:     "Evernote is not installed on this system.",
 		}
 	}
 }
 
+// detectEvernoteVersion detects whether the running Evernote is Legacy or 10.x
+// by attempting to access the notebooks property, which only exists in Legacy.
+func (e *AppleScriptExecutor) detectEvernoteVersion(ctx context.Context) EvernoteVersion {
+	// Try to access the notebooks property which exists in Legacy but not in 10.x
+	// If it fails with "notebooks is not defined", we're on 10.x
+	versionScript := `
+tell application "Evernote"
+	try
+		set nbCount to count of notebooks
+		return "legacy"
+	on error errMsg
+		if errMsg contains "is not defined" or errMsg contains "doesn't understand" then
+			return "10.x"
+		else
+			return "unknown"
+		end if
+	end try
+end tell
+`
+	output, err := e.executeScript(ctx, versionScript, 10*time.Second)
+	if err != nil {
+		// If the script fails entirely, try to detect from the error
+		errStr := err.Error()
+		if strings.Contains(errStr, "is not defined") || strings.Contains(errStr, "doesn't understand") {
+			return EvernoteVersion10
+		}
+		return EvernoteVersionUnknown
+	}
+
+	switch output {
+	case "legacy":
+		return EvernoteVersionLegacy
+	case "10.x":
+		return EvernoteVersion10
+	default:
+		return EvernoteVersionUnknown
+	}
+}
+
+// detectEvernoteVersionFromBundle attempts to detect Evernote version from the
+// application bundle's Info.plist when Evernote is not running.
+func (e *AppleScriptExecutor) detectEvernoteVersionFromBundle(ctx context.Context) EvernoteVersion {
+	// Get version from the app bundle's Info.plist
+	versionScript := `
+try
+	set appPath to (POSIX path of (path to application "Evernote"))
+	set plistPath to appPath & "Contents/Info.plist"
+	set versionStr to do shell script "defaults read " & quoted form of plistPath & " CFBundleShortVersionString"
+	return versionStr
+on error
+	return "unknown"
+end try
+`
+	output, err := e.executeScript(ctx, versionScript, 10*time.Second)
+	if err != nil || output == "unknown" {
+		return EvernoteVersionUnknown
+	}
+
+	// Parse version string - Evernote Legacy is 7.x, Evernote 10 is 10.x
+	output = strings.TrimSpace(output)
+	if strings.HasPrefix(output, "7.") || strings.HasPrefix(output, "6.") {
+		return EvernoteVersionLegacy
+	}
+	if strings.HasPrefix(output, "10.") {
+		return EvernoteVersion10
+	}
+
+	return EvernoteVersionUnknown
+}
+
+// ErrEvernote10Unsupported is returned when attempting to use features that
+// require Evernote Legacy on Evernote 10.x.
+var ErrEvernote10Unsupported = fmt.Errorf("evernote 10.x does not support this operation")
+
 // ListNotebooks retrieves all notebooks from Evernote.
+// This function requires Evernote Legacy (7.x) and will return an error
+// with helpful guidance if Evernote 10.x is detected.
 func (e *AppleScriptExecutor) ListNotebooks(ctx context.Context) ([]Notebook, error) {
 	script := `
 tell application "Evernote"
@@ -168,6 +281,13 @@ end tell
 `
 	output, err := e.executeScript(ctx, script, ListNotebooksTimeout)
 	if err != nil {
+		// Check if this is an Evernote 10.x compatibility error
+		errStr := err.Error()
+		if strings.Contains(errStr, "notebooks is not defined") ||
+			strings.Contains(errStr, "variable notebooks is not defined") ||
+			strings.Contains(errStr, "doesn't understand") {
+			return nil, fmt.Errorf("%w: %s", ErrEvernote10Unsupported, Evernote10Error)
+		}
 		return nil, fmt.Errorf("failed to list notebooks: %w", err)
 	}
 

@@ -7,8 +7,8 @@
 //
 // -------------------------------------------------------------------------
 
-import { useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useCallback, useEffect } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
     Alert,
     Autocomplete,
@@ -45,8 +45,6 @@ import {
     Edit as EditIcon,
     Visibility as ViewIcon,
 } from '@mui/icons-material';
-import { ThreePanelLayout } from '../layouts';
-import { EntityListLeftPanel } from '../components/EntityListLeftPanel';
 import { EntityPreviewPanel } from '../components/EntityPreviewPanel';
 import {
     useEntities,
@@ -157,9 +155,26 @@ function formatDate(dateString: string): string {
  *
  * @returns The rendered Entities page as a JSX element
  */
+/**
+ * Valid entity types for URL parameter validation.
+ */
+const VALID_ENTITY_TYPES: Set<string> = new Set(ENTITY_TYPES);
+
+/**
+ * Parse entity type from URL search params.
+ */
+function parseTypeParam(typeParam: string | null): EntityType | 'all' {
+    if (!typeParam) return 'all';
+    if (VALID_ENTITY_TYPES.has(typeParam)) {
+        return typeParam as EntityType;
+    }
+    return 'all';
+}
+
 export default function Entities() {
     const { id: campaignId } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
 
     // Check if current user is the campaign owner (GM)
     const { isOwner: isGM } = useCampaignOwnership(campaignId ?? '');
@@ -168,8 +183,19 @@ export default function Entities() {
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
 
-    // Filter state - now using 'all' instead of empty string
-    const [typeFilter, setTypeFilter] = useState<EntityType | 'all'>('all');
+    // Get type filter from URL query params
+    const typeFromUrl = parseTypeParam(searchParams.get('type'));
+    const [typeFilter, setTypeFilter] = useState<EntityType | 'all'>(typeFromUrl);
+
+    // Sync typeFilter with URL changes
+    useEffect(() => {
+        const newType = parseTypeParam(searchParams.get('type'));
+        if (newType !== typeFilter) {
+            setTypeFilter(newType);
+            setPage(0);
+            setSelectedEntity(null);
+        }
+    }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Selected entity for preview
     const [selectedEntity, setSelectedEntity] = useState<Entity | null>(null);
@@ -371,86 +397,69 @@ export default function Entities() {
         setSelectedEntity(entity);
     };
 
-    // Handle type filter change from left panel
-    const handleTypeFilterChange = (type: EntityType | 'all') => {
-        setTypeFilter(type);
-        setPage(0);
-        // Clear selection when filter changes
-        setSelectedEntity(null);
-    };
-
     // Loading state
     if (entitiesLoading && !entities) {
         return (
-            <ThreePanelLayout
-                leftPanel={
-                    <Box>
-                        <Skeleton variant="text" width="80%" height={32} sx={{ mb: 2 }} />
-                        {[1, 2, 3, 4, 5, 6, 7].map((i) => (
-                            <Skeleton key={i} variant="rectangular" height={40} sx={{ mb: 1 }} />
-                        ))}
+            <Box sx={{ display: 'flex', gap: 3, height: '100%' }}>
+                {/* Main content area */}
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                        <Typography variant="h4" sx={{ fontFamily: 'Cinzel' }}>
+                            Entities
+                        </Typography>
+                        <Skeleton variant="rectangular" width={130} height={36} />
                     </Box>
-                }
-                centerPanel={
-                    <Box>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                            <Typography variant="h4" sx={{ fontFamily: 'Cinzel' }}>
-                                Entities
-                            </Typography>
-                            <Skeleton variant="rectangular" width={130} height={36} />
-                        </Box>
-                        <TableContainer component={Paper}>
-                            <Table>
-                                <TableHead>
-                                    <TableRow>
-                                        <TableCell><Skeleton width={80} /></TableCell>
+                    <TableContainer component={Paper}>
+                        <Table>
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell><Skeleton width={80} /></TableCell>
+                                    <TableCell><Skeleton width={60} /></TableCell>
+                                    <TableCell><Skeleton width={200} /></TableCell>
+                                    <TableCell><Skeleton width={100} /></TableCell>
+                                    <TableCell><Skeleton width={80} /></TableCell>
+                                    <TableCell><Skeleton width={100} /></TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {[1, 2, 3, 4, 5].map((i) => (
+                                    <TableRow key={i}>
+                                        <TableCell><Skeleton /></TableCell>
                                         <TableCell><Skeleton width={60} /></TableCell>
-                                        <TableCell><Skeleton width={200} /></TableCell>
-                                        <TableCell><Skeleton width={100} /></TableCell>
+                                        <TableCell><Skeleton /></TableCell>
+                                        <TableCell><Skeleton /></TableCell>
                                         <TableCell><Skeleton width={80} /></TableCell>
                                         <TableCell><Skeleton width={100} /></TableCell>
                                     </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {[1, 2, 3, 4, 5].map((i) => (
-                                        <TableRow key={i}>
-                                            <TableCell><Skeleton /></TableCell>
-                                            <TableCell><Skeleton width={60} /></TableCell>
-                                            <TableCell><Skeleton /></TableCell>
-                                            <TableCell><Skeleton /></TableCell>
-                                            <TableCell><Skeleton width={80} /></TableCell>
-                                            <TableCell><Skeleton width={100} /></TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
-                    </Box>
-                }
-                rightPanel={
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                        <Typography variant="body1" color="text.secondary">
-                            Select an entity to preview
-                        </Typography>
-                    </Box>
-                }
-            />
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                </Box>
+
+                {/* Preview panel */}
+                <Paper
+                    sx={{
+                        width: 320,
+                        flexShrink: 0,
+                        p: 2,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                    }}
+                >
+                    <Typography variant="body1" color="text.secondary">
+                        Select an entity to preview
+                    </Typography>
+                </Paper>
+            </Box>
         );
     }
 
     const entityList = entities ?? [];
 
-    // Left panel content
-    const leftPanelContent = campaignId ? (
-        <EntityListLeftPanel
-            campaignId={campaignId}
-            selectedType={typeFilter}
-            onTypeChange={handleTypeFilterChange}
-        />
-    ) : null;
-
-    // Center panel content - the entity table
-    const centerPanelContent = (
+    // Main content - the entity table
+    const mainContent = (
         <Box>
             {/* Header */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -638,8 +647,8 @@ export default function Entities() {
         </Box>
     );
 
-    // Right panel content - entity preview
-    const rightPanelContent = campaignId ? (
+    // Preview panel content
+    const previewPanel = campaignId ? (
         <EntityPreviewPanel
             entity={selectedEntity}
             campaignId={campaignId}
@@ -650,11 +659,24 @@ export default function Entities() {
 
     return (
         <>
-            <ThreePanelLayout
-                leftPanel={leftPanelContent}
-                centerPanel={centerPanelContent}
-                rightPanel={rightPanelContent}
-            />
+            <Box sx={{ display: 'flex', gap: 3, height: '100%' }}>
+                {/* Main content area */}
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                    {mainContent}
+                </Box>
+
+                {/* Preview panel */}
+                <Paper
+                    sx={{
+                        width: 320,
+                        flexShrink: 0,
+                        p: 2,
+                        overflow: 'auto',
+                    }}
+                >
+                    {previewPanel}
+                </Paper>
+            </Box>
 
             {/* Create Entity Dialog */}
             <Dialog

@@ -78,7 +78,7 @@ export default function Campaigns() {
     };
 
     const handleCampaignClick = (campaign: Campaign) => {
-        navigate(`/campaigns/${campaign.id}/dashboard`);
+        navigate(`/campaigns/${campaign.id}/overview`);
     };
 
     // Loading state

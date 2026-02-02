@@ -374,7 +374,7 @@ export default function AccountSettings() {
     // Build breadcrumbs
     const breadcrumbs = useMemo(
         () => [
-            { label: 'Dashboard', path: '/' },
+            { label: 'Home', path: '/' },
             { label: 'Account Settings' },
         ],
         []
