@@ -155,11 +155,11 @@ function formatRelativeTime(isoString: string): string {
 }
 
 /**
- * Full-screen page for creating and editing campaign entities with autosave, draft recovery, validation, and unsaved-change protection.
+ * Full-screen editor for creating and editing campaign entities with autosave, draft recovery, validation, and unsaved-change protection.
  *
- * Renders a form for entity fields (name, type, description, tags, JSON attributes, GM notes, source confidence), shows draft-recovery and similar-entity warnings when applicable, handles create/update mutations, and protects navigation when there are unsaved changes.
+ * Renders the entity form (name, type, description, tags, JSON attributes, GM notes, source confidence), manages drafts and autosave, detects similar entities for duplicates, handles create/update mutations and relationship creation, and prevents unintended navigation when there are unsaved changes.
  *
- * @returns The React element for the Entity Editor page used to create or edit campaign entities.
+ * @returns The React element for the Entity Editor page
  */
 export default function EntityEditor() {
     const { campaignId, entityId } = useParams<{

@@ -85,7 +85,17 @@ interface ChapterListItemProps {
 }
 
 /**
- * Individual chapter list item with expand/collapse and actions.
+ * Render a single chapter row with selection, expand/collapse, edit, and delete controls.
+ *
+ * @param chapter - The chapter to display.
+ * @param campaignId - Campaign ID used to fetch this chapter's sessions for the displayed session count.
+ * @param isSelected - Whether the chapter is currently selected.
+ * @param isExpanded - Whether the chapter's overview is expanded.
+ * @param onSelect - Callback invoked when the main list item is clicked.
+ * @param onToggleExpand - Callback invoked to toggle the chapter overview expansion.
+ * @param onEdit - Callback invoked when the edit action is triggered.
+ * @param onDelete - Callback invoked when the delete action is triggered.
+ * @param isDeleting - True while a delete operation for this chapter is in progress (shows a spinner).
  */
 function ChapterListItem({
     chapter,

@@ -70,11 +70,9 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 }
 
 /**
- * Guards nested routes using authentication state and renders the appropriate UI.
+ * Render nested routes only for authenticated users, showing a loading state or redirecting otherwise.
  *
- * @returns The protected nested routes via `<Outlet />` when authenticated,
- *          a centered loading indicator while authentication is in progress,
- *          or a redirect to `/login` when not authenticated.
+ * @returns The nested route UI: an `<Outlet />` when authenticated, a `<Navigate to="/login" />` redirect when not authenticated, or a centered `CircularProgress` while authentication is loading.
  */
 function ProtectedOutlet() {
     const { isAuthenticated, isLoading } = useAuth();
@@ -103,8 +101,12 @@ function ProtectedOutlet() {
 }
 
 /**
- * Layout wrapper for routes that use the AppShell with persistent navigation.
- * Wraps content with campaign and draft providers.
+ * Wraps protected routes with the AppShell layout and provides campaign and draft contexts.
+ *
+ * Renders the AppShell containing an Outlet, with CampaignProvider and DraftProvider applied
+ * so nested routes receive campaign and draft context values.
+ *
+ * @returns The React element tree composing CampaignProvider, DraftProvider, AppShell, and an Outlet for nested routes.
  */
 function AppShellWrapper() {
     return (
@@ -119,11 +121,9 @@ function AppShellWrapper() {
 }
 
 /**
- * Provides Campaign and Draft contexts to full-screen editor routes
- * without applying the AppShell.
+ * Wraps nested routes with Campaign and Draft providers for full-screen routes outside the AppShell.
  *
- * Renders an Outlet so nested routes receive the necessary providers
- * while remaining outside the AppShell layout.
+ * @returns The element that provides campaign and draft contexts and mounts an Outlet for nested routes.
  */
 function FullScreenWrapper() {
     return (
@@ -136,23 +136,16 @@ function FullScreenWrapper() {
 }
 
 /**
- * Main application component with routing and authentication.
+ * Defines the application's route tree, including public, authenticated, AppShell-wrapped, and full-screen routes.
  *
- * Route structure:
- * - Public routes: /login, /auth/callback
- * - Protected routes with AppShell:
- *   - / - Home (redirects to campaign overview or shows campaign selection)
- *   - /campaigns - Redirects to home
- *   - /campaigns/:id/overview - Campaign overview
- *   - /campaigns/:id/entities - Entities list
- *   - /campaigns/:id/sessions - Sessions (placeholder)
- *   - /campaigns/:id/import - Import content
- *   - /campaigns/:id/timeline - Timeline
- * - Full-screen routes:
- *   - /campaigns/new - Create new campaign
- *   - /campaigns/:campaignId/entities/new - New entity editor
- *   - /campaigns/:campaignId/entities/:entityId/edit - Edit entity
- *   - /settings - Account settings
+ * Routes:
+ * - Public: /login, /auth/callback
+ * - Protected (requires authentication, rendered inside the AppShell): /, /campaigns (redirects to /), /campaigns/:id/overview, /campaigns/:id/entities, /campaigns/:id/sessions, /campaigns/:id/import, /campaigns/:id/timeline, and legacy /campaigns/:id/dashboard -> ../overview
+ * - Full-screen (requires authentication, rendered outside the AppShell): /campaigns/new, /campaigns/:campaignId/entities/new, /campaigns/:campaignId/entities/:entityId/edit
+ * - Account settings (full-screen, requires authentication): /settings
+ * - Fallback: any other path redirects to /
+ *
+ * @returns The React Routes element composing public routes, authentication guards, layout wrappers, page routes, and redirects
  */
 function AppRoutes() {
     return (

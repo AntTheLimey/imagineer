@@ -32,7 +32,9 @@ export const chapterKeys = {
 };
 
 /**
- * Hook to fetch list of chapters for a campaign.
+ * Fetches the list of chapters for a given campaign.
+ *
+ * @returns The query result containing the campaign's chapters and React Query metadata (status, error, etc.).
  */
 export function useChapters(campaignId: string) {
     return useQuery({
@@ -43,7 +45,11 @@ export function useChapters(campaignId: string) {
 }
 
 /**
- * Hook to fetch a single chapter by ID.
+ * Fetches a single chapter for a campaign.
+ *
+ * @param options - Optional settings
+ * @param options.enabled - If provided, forces the query enabled state; otherwise the query is enabled when both `campaignId` and `chapterId` are truthy
+ * @returns The React Query result for the requested chapter
  */
 export function useChapter(
     campaignId: string,
@@ -58,7 +64,11 @@ export function useChapter(
 }
 
 /**
- * Hook to create a new chapter.
+ * Provides a React Query mutation to create a new chapter.
+ *
+ * The mutation expects an object with `campaignId` and `input` (CreateChapterInput). On successful creation it invalidates the chapter list cache for the affected campaign.
+ *
+ * @returns A mutation result whose mutate function accepts `{ campaignId: string; input: CreateChapterInput }`.
  */
 export function useCreateChapter() {
     const queryClient = useQueryClient();
@@ -81,7 +91,11 @@ export function useCreateChapter() {
 }
 
 /**
- * Hook to update an existing chapter.
+ * Provides a React Query mutation for updating a chapter.
+ *
+ * The mutation calls the API to update a chapter and, on success, updates the cached chapter detail for the affected campaign and invalidates the campaign's chapter list so it will be refreshed.
+ *
+ * @returns A React Query mutation result for performing chapter updates. The mutation accepts an object with `campaignId`, `chapterId`, and `input` and resolves with the updated `Chapter`.
  */
 export function useUpdateChapter() {
     const queryClient = useQueryClient();
@@ -111,7 +125,11 @@ export function useUpdateChapter() {
 }
 
 /**
- * Hook to delete a chapter.
+ * Provides a React Query mutation for deleting a chapter.
+ *
+ * On success the specific chapter detail is removed from the cache and the campaign's chapter list is invalidated.
+ *
+ * @returns A mutation object whose `mutate`/`mutateAsync` function accepts `{ campaignId: string; chapterId: string }` to delete the specified chapter.
  */
 export function useDeleteChapter() {
     const queryClient = useQueryClient();

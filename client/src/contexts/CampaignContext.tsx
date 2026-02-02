@@ -57,14 +57,13 @@ interface CampaignProviderProps {
 }
 
 /**
- * Provides campaign selection state to descendant components via React context.
+ * Provides campaign selection state and actions to descendant components via React context.
  *
- * Persists the selected campaign ID to localStorage and fetches the full
- * campaign object using React Query. The context value includes the current
- * campaign ID and object, loading state, and functions to change selection.
- *
- * On initialization, validates that the stored campaign ID is still valid
- * (exists in the user's campaign list). If not valid, clears the stored ID.
+ * Initializes the selected campaign ID from localStorage, validates it against the user's
+ * fetched campaign list (clearing it if no longer valid), persists changes back to localStorage,
+ * and fetches the full current campaign object when an ID is set. The context value exposes:
+ * `currentCampaignId`, `currentCampaign`, `isLoading`, `isInitializing`, `error`, `campaigns`,
+ * `campaignsLoading`, `setCurrentCampaignId`, `clearCurrentCampaign`, and `getLatestCampaign`.
  */
 export function CampaignProvider({ children }: CampaignProviderProps) {
     const [currentCampaignId, setCurrentCampaignIdState] = useState<

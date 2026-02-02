@@ -33,7 +33,10 @@ var ErrMissingJWTSecret = errors.New("JWT secret is required for authentication"
 // JWT authentication middleware is applied to protected routes (campaigns, entities,
 // stats, imports, agents).
 //
-// Returns an error if jwtSecret is empty, as authentication is required for security.
+// NewRouter creates and returns a configured HTTP router for the API, including middleware, CORS,
+// public routes, and authentication-protected routes for campaign, entity, user, import, agent and
+// statistics endpoints.
+// If jwtSecret is empty, NewRouter returns ErrMissingJWTSecret.
 func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string) (http.Handler, error) {
 	if jwtSecret == "" {
 		return nil, ErrMissingJWTSecret

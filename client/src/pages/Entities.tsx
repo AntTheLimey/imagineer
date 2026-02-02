@@ -161,7 +161,10 @@ function formatDate(dateString: string): string {
 const VALID_ENTITY_TYPES: Set<string> = new Set(ENTITY_TYPES);
 
 /**
- * Parse entity type from URL search params.
+ * Convert a URL "type" query parameter into a valid entity type or `'all'`.
+ *
+ * @param typeParam - The raw `type` value from the URL search parameters (may be `null`).
+ * @returns The matching `EntityType` when `typeParam` is a valid type, otherwise `'all'`.
  */
 function parseTypeParam(typeParam: string | null): EntityType | 'all' {
     if (!typeParam) return 'all';
@@ -171,6 +174,15 @@ function parseTypeParam(typeParam: string | null): EntityType | 'all' {
     return 'all';
 }
 
+/**
+ * Render the campaign entities management UI with listing, filtering by type, preview, and create/view/edit/delete flows.
+ *
+ * The component derives the campaign ID from the route, syncs its type filter with the `type` URL query parameter,
+ * and conditionally exposes GM-only fields when the current user is the campaign owner. It provides pagination,
+ * duplicate detection on create, and navigation to a full-screen editor for create/edit actions.
+ *
+ * @returns The JSX element for the entities management interface for the current campaign.
+ */
 export default function Entities() {
     const { id: campaignId } = useParams<{ id: string }>();
     const navigate = useNavigate();

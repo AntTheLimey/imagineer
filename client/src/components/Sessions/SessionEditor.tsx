@@ -78,7 +78,10 @@ const initialFormData: SessionFormData = {
 };
 
 /**
- * Formats a date string from ISO format to YYYY-MM-DD for input.
+ * Convert an ISO or full-date string to YYYY-MM-DD suitable for a date input.
+ *
+ * @param dateString - An ISO datetime or date string (e.g., "2023-05-01T12:34:56Z" or "2023-05-01"); may be undefined
+ * @returns The date portion in `YYYY-MM-DD` format, or an empty string if `dateString` is undefined or falsy
  */
 function formatDateForInput(dateString?: string): string {
     if (!dateString) return '';

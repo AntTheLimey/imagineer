@@ -84,13 +84,11 @@ const GENRE_OPTIONS = [
 type EditableField = 'name' | 'description' | 'genre' | 'imageStylePrompt';
 
 /**
- * Campaign Overview page with read-first design.
+ * Render the Campaign Overview page with a read-first layout that supports per-field inline editing and a full-page edit mode.
  *
- * Displays campaign information in a readable format by default. Each
- * field can be edited individually by clicking the edit icon, or the
- * entire form can be edited by clicking the main "Edit" button.
+ * Initializes and synchronizes local edit form state from the loaded campaign, fetches campaign stats and available game systems, and exposes controls to save individual fields or all changes via the updateCampaign mutation.
  *
- * @returns The Campaign Overview page component
+ * @returns The Campaign Overview page component ready to be mounted in the app UI
  */
 export default function CampaignOverview() {
     const { id: campaignId } = useParams<{ id: string }>();

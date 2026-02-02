@@ -48,7 +48,10 @@ export interface SessionCardProps {
 }
 
 /**
- * Formats a date string for display.
+ * Format a parseable date string into a short, locale-aware date for display (e.g., "Feb 2, 2026").
+ *
+ * @param dateString - A string accepted by the Date constructor; when omitted, returns an empty string
+ * @returns The localized date formatted with a short month, numeric day, and numeric year, or an empty string if `dateString` is falsy
  */
 function formatDate(dateString?: string): string {
     if (!dateString) return '';
@@ -62,7 +65,10 @@ function formatDate(dateString?: string): string {
 }
 
 /**
- * Gets the display title for a session.
+ * Derives a human-readable title for a session.
+ *
+ * @param session - The session object to derive the title from.
+ * @returns The session's `title` if present, otherwise `Session #<number>` when `sessionNumber` is defined, otherwise `Untitled Session`.
  */
 function getSessionTitle(session: Session): string {
     if (session.title) {

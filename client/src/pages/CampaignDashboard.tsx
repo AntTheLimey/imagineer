@@ -42,7 +42,21 @@ import { useCampaignContext } from '../contexts/CampaignContext';
 import type { Chapter, Session } from '../types';
 
 /**
- * Sessions management view with chapters and sessions.
+ * Render a two-column UI that lets the user browse and manage chapters and sessions for a campaign.
+ *
+ * The left column shows a chapter list with create/edit actions; the right column shows sessions for the selected chapter
+ * or an informational prompt when no chapter is selected.
+ *
+ * @param campaignId - The id of the campaign whose chapters and sessions are shown
+ * @param selectedChapterId - The id of the currently selected chapter, if any
+ * @param onSelectChapter - Called with a chapter id when the user selects a chapter
+ * @param selectedSessionId - The id of the currently selected session, if any
+ * @param onSelectSession - Called with a session id when the user selects a session
+ * @param onCreateChapter - Called to initiate creating a new chapter
+ * @param onEditChapter - Called with a chapter when the user chooses to edit it
+ * @param onCreateSession - Called to initiate creating a new session
+ * @param onEditSession - Called with a session when the user chooses to edit it
+ * @returns The rendered sessions management view as a React element
  */
 function SessionsView({
     campaignId,
@@ -114,18 +128,11 @@ function PlayerCharactersView() {
 }
 
 /**
- * Campaign Dashboard page serving as the main hub for campaign management.
+ * Render the campaign dashboard for managing campaign settings, sessions, and player characters.
  *
- * Features a left navigation panel for switching between views:
- * - Overview (campaign settings)
- * - Manage Entities (navigates to entities page)
- * - Manage Sessions (navigates to timeline page)
- * - Player Characters
- * - Import Campaign Notes
- * - Import Knowledge
- *
- * The settings view supports editing campaign name, description, game system,
- * genre, and image style prompt with dirty state tracking and save functionality.
+ * Provides a left navigation for switching views, editing campaign settings with dirty-state
+ * tracking and save actions, managing chapters and sessions (with editors), and a placeholder
+ * for player characters. Protects against navigation when there are unsaved changes.
  *
  * @returns The Campaign Dashboard page component
  */

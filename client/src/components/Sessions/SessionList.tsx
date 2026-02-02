@@ -78,7 +78,10 @@ interface SessionListItemProps {
 }
 
 /**
- * Formats a date string for display.
+ * Format a date string into a short month/day representation (e.g., "Feb 3").
+ *
+ * @param dateString - An optional date string parseable by `Date`. If omitted or falsy, the function returns an empty string.
+ * @returns The formatted date as "Mon D" (short month and numeric day), or an empty string when `dateString` is falsy.
  */
 function formatDate(dateString?: string): string {
     if (!dateString) return '';
@@ -91,7 +94,13 @@ function formatDate(dateString?: string): string {
 }
 
 /**
- * Gets the display title for a session.
+ * Gets a human-readable title for a session.
+ *
+ * Prefers the session's explicit `title`; if absent, uses `Session #{sessionNumber}` when
+ * `sessionNumber` is present; otherwise returns `"Untitled Session"`.
+ *
+ * @param session - The session object to derive the title from
+ * @returns The display title for the session
  */
 function getSessionTitle(session: Session): string {
     if (session.title) {
@@ -104,7 +113,15 @@ function getSessionTitle(session: Session): string {
 }
 
 /**
- * Individual session list item with actions.
+ * Renders a single session row with title, stage indicator, date, and edit/delete actions.
+ *
+ * @param session - The session to display
+ * @param isSelected - Whether the session is currently selected (affects styling)
+ * @param onSelect - Called when the item is clicked to select the session
+ * @param onEdit - Called when the edit action is triggered
+ * @param onDelete - Called when the delete action is triggered
+ * @param isDeleting - If true, disables the delete button and shows a progress indicator
+ * @returns The list item element representing the session
  */
 function SessionListItem({
     session,

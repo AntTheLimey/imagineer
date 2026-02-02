@@ -36,7 +36,11 @@ export const sessionKeys = {
 };
 
 /**
- * Hook to fetch list of sessions for a campaign with optional filtering.
+ * Fetches the list of sessions for a campaign, optionally filtered by `params`.
+ *
+ * @param campaignId - The campaign identifier to fetch sessions for
+ * @param params - Optional query parameters to filter or paginate the session list
+ * @returns The React Query result containing the list of sessions for the specified campaign
  */
 export function useSessions(campaignId: string, params?: ListSessionsParams) {
     return useQuery({
@@ -47,7 +51,11 @@ export function useSessions(campaignId: string, params?: ListSessionsParams) {
 }
 
 /**
- * Hook to fetch sessions for a specific chapter.
+ * Fetches sessions for a specific chapter within a campaign.
+ *
+ * The query is enabled only when both `campaignId` and `chapterId` are truthy.
+ *
+ * @returns The query result containing the session list for the specified chapter.
  */
 export function useSessionsByChapter(campaignId: string, chapterId: string) {
     return useQuery({
@@ -58,7 +66,13 @@ export function useSessionsByChapter(campaignId: string, chapterId: string) {
 }
 
 /**
- * Hook to fetch a single session by ID.
+ * Fetches a single session for a campaign by session ID.
+ *
+ * @param campaignId - ID of the campaign that owns the session
+ * @param sessionId - ID of the session to fetch
+ * @param options - Optional settings for the query
+ * @param options.enabled - If provided, controls whether the query is enabled; otherwise the query is enabled when both `campaignId` and `sessionId` are truthy
+ * @returns The React Query result for the session, containing the session data when available
  */
 export function useSession(
     campaignId: string,
@@ -73,8 +87,11 @@ export function useSession(
 }
 
 /**
- * Hook to create a new session.
- */
+ * Create a new session and update related session query caches on success.
+ *
+ * Invalidates cached session lists for the created session's campaign and, if the session has a chapterId, invalidates that campaign+chapter list as well.
+ *
+ * @returns The React Query mutation object for creating sessions. The mutation expects an object with `campaignId: string` and `input: CreateSessionInput`. */
 export function useCreateSession() {
     const queryClient = useQueryClient();
 
@@ -110,7 +127,14 @@ export function useCreateSession() {
 }
 
 /**
- * Hook to update an existing session.
+ * Create a React Query mutation hook that updates an existing session.
+ *
+ * Calls the sessions API to update a session. On success it replaces the session detail in the cache,
+ * invalidates session list queries for the affected campaign, and if the updated session has a `chapterId`
+ * also invalidates that chapter's session list.
+ *
+ * @returns A mutation hook that accepts an object `{ campaignId, sessionId, input }` to perform the update;
+ *          on success the hook updates the session detail cache and invalidates relevant list queries.
  */
 export function useUpdateSession() {
     const queryClient = useQueryClient();
@@ -153,7 +177,11 @@ export function useUpdateSession() {
 }
 
 /**
- * Hook to delete a session.
+ * Provides a mutation hook to delete a session and update session-related React Query cache.
+ *
+ * On success, removes the deleted session's detail from the cache and invalidates session list queries for the affected campaign.
+ *
+ * @returns The mutation result configured to delete a session by `{ campaignId, sessionId }`; on success it updates the cache as described above.
  */
 export function useDeleteSession() {
     const queryClient = useQueryClient();
