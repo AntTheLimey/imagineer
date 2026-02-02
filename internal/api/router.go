@@ -138,6 +138,25 @@ func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string)
 						r.Delete("/", h.DeletePlayerCharacter)
 					})
 
+					// Chapters
+					r.Get("/chapters", h.ListChapters)
+					r.Post("/chapters", h.CreateChapter)
+					r.Route("/chapters/{chapterId}", func(r chi.Router) {
+						r.Get("/", h.GetChapter)
+						r.Put("/", h.UpdateChapter)
+						r.Delete("/", h.DeleteChapter)
+						r.Get("/sessions", h.ListSessionsByChapter)
+					})
+
+					// Sessions
+					r.Get("/sessions", h.ListSessions)
+					r.Post("/sessions", h.CreateSession)
+					r.Route("/sessions/{sessionId}", func(r chi.Router) {
+						r.Get("/", h.GetSession)
+						r.Put("/", h.UpdateSession)
+						r.Delete("/", h.DeleteSession)
+					})
+
 					// Campaign timeline
 					r.Get("/timeline", h.ListTimelineEvents)
 					r.Post("/timeline", h.CreateTimelineEvent)
