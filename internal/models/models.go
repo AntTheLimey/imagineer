@@ -223,14 +223,26 @@ const (
 	SessionStatusSkipped   SessionStatus = "SKIPPED"
 )
 
+// SessionStage represents the workflow stage of a session.
+type SessionStage string
+
+const (
+	SessionStagePrep   SessionStage = "prep"
+	SessionStagePlay   SessionStage = "play"
+	SessionStageWrapUp SessionStage = "wrap_up"
+)
+
 // Session represents a game session within a campaign.
 type Session struct {
 	ID              uuid.UUID       `json:"id"`
 	CampaignID      uuid.UUID       `json:"campaignId"`
+	ChapterID       *uuid.UUID      `json:"chapterId,omitempty"`
+	Title           *string         `json:"title,omitempty"`
 	SessionNumber   *int            `json:"sessionNumber,omitempty"`
 	PlannedDate     *time.Time      `json:"plannedDate,omitempty"`
 	ActualDate      *time.Time      `json:"actualDate,omitempty"`
 	Status          SessionStatus   `json:"status"`
+	Stage           SessionStage    `json:"stage"`
 	PrepNotes       *string         `json:"prepNotes,omitempty"`
 	PlannedScenes   json.RawMessage `json:"plannedScenes,omitempty"`
 	ActualNotes     *string         `json:"actualNotes,omitempty"`
@@ -239,6 +251,59 @@ type Session struct {
 	Consequences    json.RawMessage `json:"consequences,omitempty"`
 	CreatedAt       time.Time       `json:"createdAt"`
 	UpdatedAt       time.Time       `json:"updatedAt"`
+}
+
+// Chapter represents a story arc or grouping of sessions within a campaign.
+type Chapter struct {
+	ID         uuid.UUID `json:"id"`
+	CampaignID uuid.UUID `json:"campaignId"`
+	Title      string    `json:"title"`
+	Overview   *string   `json:"overview,omitempty"`
+	SortOrder  int       `json:"sortOrder"`
+	CreatedAt  time.Time `json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+}
+
+// CreateChapterRequest represents the request body for creating a chapter.
+type CreateChapterRequest struct {
+	Title     string  `json:"title"`
+	Overview  *string `json:"overview,omitempty"`
+	SortOrder *int    `json:"sortOrder,omitempty"`
+}
+
+// UpdateChapterRequest represents the request body for updating a chapter.
+type UpdateChapterRequest struct {
+	Title     *string `json:"title,omitempty"`
+	Overview  *string `json:"overview,omitempty"`
+	SortOrder *int    `json:"sortOrder,omitempty"`
+}
+
+// CreateSessionRequest represents the request body for creating a session.
+type CreateSessionRequest struct {
+	ChapterID     *uuid.UUID      `json:"chapterId,omitempty"`
+	Title         *string         `json:"title,omitempty"`
+	SessionNumber *int            `json:"sessionNumber,omitempty"`
+	PlannedDate   *time.Time      `json:"plannedDate,omitempty"`
+	Stage         *SessionStage   `json:"stage,omitempty"`
+	PrepNotes     *string         `json:"prepNotes,omitempty"`
+	PlannedScenes json.RawMessage `json:"plannedScenes,omitempty"`
+}
+
+// UpdateSessionRequest represents the request body for updating a session.
+type UpdateSessionRequest struct {
+	ChapterID       *uuid.UUID      `json:"chapterId,omitempty"`
+	Title           *string         `json:"title,omitempty"`
+	SessionNumber   *int            `json:"sessionNumber,omitempty"`
+	PlannedDate     *time.Time      `json:"plannedDate,omitempty"`
+	ActualDate      *time.Time      `json:"actualDate,omitempty"`
+	Status          *SessionStatus  `json:"status,omitempty"`
+	Stage           *SessionStage   `json:"stage,omitempty"`
+	PrepNotes       *string         `json:"prepNotes,omitempty"`
+	PlannedScenes   json.RawMessage `json:"plannedScenes,omitempty"`
+	ActualNotes     *string         `json:"actualNotes,omitempty"`
+	Discoveries     json.RawMessage `json:"discoveries,omitempty"`
+	PlayerDecisions json.RawMessage `json:"playerDecisions,omitempty"`
+	Consequences    json.RawMessage `json:"consequences,omitempty"`
 }
 
 // DatePrecision represents the precision level of a date.
