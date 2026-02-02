@@ -8,6 +8,53 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Chapters and Sessions Management
+  - Database migration `007_chapters_and_sessions.sql` adds chapters table,
+    enhances sessions table with stages, and creates AI memory system tables.
+  - Chapter model and CRUD operations in Go backend (`internal/database/chapters.go`).
+  - Session model updated with ChapterID, Title, and Stage workflow fields.
+  - REST API endpoints for chapters: GET/POST `/campaigns/{id}/chapters`,
+    GET/PUT/DELETE `/campaigns/{id}/chapters/{chapterId}`.
+  - REST API endpoints for sessions: GET/POST `/campaigns/{id}/sessions`,
+    GET/PUT/DELETE `/campaigns/{id}/sessions/{sessionId}`,
+    GET `/campaigns/{id}/chapters/{chapterId}/sessions`.
+  - Session workflow stages: prep (blue), play (green), wrap_up (orange).
+  - React types, API services, and hooks for chapters and sessions.
+  - ChapterList component with expand/collapse and delete confirmation.
+  - ChapterEditor dialog for creating/editing chapters.
+  - SessionList component with stage indicators and quick actions.
+  - SessionCard with visual stage indicator and metadata display.
+  - SessionEditor dialog with stage navigation and field editing.
+  - SessionStageNav for navigating between prep/play/wrap-up stages.
+  - SessionStageIndicator showing current stage with appropriate colors.
+  - SessionsView integrated into Campaign Dashboard with chapter/session panels.
+- App Navigation Restructure
+  - HomePage (`HomePage.tsx`) with smart campaign redirect logic - redirects
+    to current or latest campaign overview, shows welcome screen if none.
+  - CampaignOverview (`CampaignOverview.tsx`) with read-first design and
+    inline field editing for name, description, genre, and image style prompt.
+  - CreateCampaign (`CreateCampaign.tsx`) full-page form with validation.
+  - NoCampaignSelected (`NoCampaignSelected.tsx`) welcome/onboarding screen
+    with feature highlights and campaign cards for existing users.
+  - Sessions placeholder page (`Sessions.tsx`) showing planned features.
+  - App.tsx routing updated to use AppShell consistently with campaign-centric
+    URL structure (`/campaigns/{id}/overview`, `/campaigns/{id}/sessions`).
+  - Legacy route redirects: `/campaigns` redirects to `/`, `/campaigns/{id}/dashboard`
+    redirects to `/campaigns/{id}/overview`.
+- Evernote Importer Improvements
+  - Evernote 10.x version detection distinguishes between Evernote Legacy (7.x)
+    with full AppleScript support and Evernote 10.x with limited support.
+  - Helpful error messages guide users to export ENEX files or install
+    Evernote Legacy when Evernote 10.x is detected.
+- GM Session Patterns Knowledge Base
+  - `.claude/ttrpg-expert/gm-session-patterns.md` documents GM preparation
+    techniques including Lazy DM's Eight Steps, Three Clue Rule, Five Room
+    Dungeon, and Fronts/Clocks systems.
+- AI Memory System Design
+  - `docs/memory-system-design.md` documents three-tier memory architecture
+    (Campaign, Chapter, Session) with token compression and entity extraction.
+- Favicon (`client/public/favicon.svg`) added for browser tab branding.
+
 - UX Foundation (Phase 1)
   - Three-panel layout component (`ThreePanelLayout.tsx`) with responsive
     behavior: desktop (all 3 panels), tablet (drawer for left), mobile (bottom
