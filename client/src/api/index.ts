@@ -68,3 +68,13 @@ export type {
     NoteSummary,
     EvernoteLocalImportRequest,
 } from './evernoteImport';
+
+export { chaptersApi } from './chapters';
+export type { CreateChapterInput, UpdateChapterInput } from './chapters';
+
+export { sessionsApi } from './sessions';
+export type {
+    ListSessionsParams,
+    CreateSessionInput,
+    UpdateSessionInput,
+} from './sessions';

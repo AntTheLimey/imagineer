@@ -78,16 +78,32 @@ export interface Relationship {
     updatedAt: string;
 }
 
+// Chapter types
+export interface Chapter {
+    id: string;
+    campaignId: string;
+    title: string;
+    overview?: string;
+    sortOrder: number;
+    createdAt: string;
+    updatedAt: string;
+}
+
 // Session types
+export type SessionStage = 'prep' | 'play' | 'wrap_up';
+
 export type SessionStatus = 'PLANNED' | 'COMPLETED' | 'SKIPPED';
 
 export interface Session {
     id: string;
     campaignId: string;
+    chapterId?: string;
+    title?: string;
     sessionNumber?: number;
     plannedDate?: string;
     actualDate?: string;
     status: SessionStatus;
+    stage: SessionStage;
     prepNotes?: string;
     plannedScenes?: unknown[];
     actualNotes?: string;
