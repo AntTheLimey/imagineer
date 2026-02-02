@@ -65,7 +65,7 @@ export default function Sessions() {
                 </Typography>
 
                 <Alert severity="info" sx={{ mt: 2, maxWidth: 600 }}>
-                    <Typography variant="body2">
+                    <Typography variant="body2" component="div">
                         <strong>Planned Features:</strong>
                         <ul style={{ margin: '8px 0 0 0', paddingLeft: 20 }}>
                             <li>Create and schedule game sessions</li>

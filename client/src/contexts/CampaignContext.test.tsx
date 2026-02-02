@@ -211,7 +211,7 @@ describe('CampaignContext', () => {
             expect(latest?.id).toBe('to-remove');
         });
 
-        it('should return null when campaigns array is undefined', async () => {
+        it('should return latest campaign when campaigns exist', async () => {
             const { result } = renderHook(() => useCampaignContext(), {
                 wrapper: createWrapper(),
             });

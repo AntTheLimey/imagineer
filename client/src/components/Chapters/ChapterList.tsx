@@ -18,6 +18,7 @@
  * - Edit/delete chapter actions
  */
 
+import type { MouseEvent } from 'react';
 import { useState, useCallback } from 'react';
 import {
     Alert,
@@ -111,17 +112,17 @@ function ChapterListItem({
     const { data: sessions } = useSessionsByChapter(campaignId, chapter.id);
     const sessionCount = sessions?.length ?? 0;
 
-    const handleExpandClick = (event: React.MouseEvent) => {
+    const handleExpandClick = (event: MouseEvent) => {
         event.stopPropagation();
         onToggleExpand();
     };
 
-    const handleEditClick = (event: React.MouseEvent) => {
+    const handleEditClick = (event: MouseEvent) => {
         event.stopPropagation();
         onEdit();
     };
 
-    const handleDeleteClick = (event: React.MouseEvent) => {
+    const handleDeleteClick = (event: MouseEvent) => {
         event.stopPropagation();
         onDelete();
     };

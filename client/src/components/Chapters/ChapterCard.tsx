@@ -14,6 +14,7 @@
  * with hover effects and action buttons.
  */
 
+import type { MouseEvent } from 'react';
 import {
     Box,
     Card,
@@ -79,7 +80,7 @@ export default function ChapterCard({
     /**
      * Handles edit button click without triggering card click.
      */
-    const handleEditClick = (event: React.MouseEvent) => {
+    const handleEditClick = (event: MouseEvent) => {
         event.stopPropagation();
         onEdit();
     };
@@ -87,7 +88,7 @@ export default function ChapterCard({
     /**
      * Handles delete button click without triggering card click.
      */
-    const handleDeleteClick = (event: React.MouseEvent) => {
+    const handleDeleteClick = (event: MouseEvent) => {
         event.stopPropagation();
         onDelete();
     };

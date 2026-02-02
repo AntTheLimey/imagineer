@@ -159,14 +159,27 @@ export default function CampaignOverview() {
      * Cancel editing a field.
      */
     const handleFieldCancel = () => {
-        if (campaign) {
-            // Reset form data for this field
-            setFormData({
-                name: campaign.name,
-                description: campaign.description ?? '',
-                genre: (campaign.settings?.genre as string) ?? '',
-                imageStylePrompt: (campaign.settings?.imageStylePrompt as string) ?? '',
-            });
+        if (campaign && editingField) {
+            // Only reset the specific field being cancelled
+            let originalValue: string;
+            switch (editingField) {
+                case 'name':
+                    originalValue = campaign.name;
+                    break;
+                case 'description':
+                    originalValue = campaign.description ?? '';
+                    break;
+                case 'genre':
+                    originalValue = (campaign.settings?.genre as string) ?? '';
+                    break;
+                case 'imageStylePrompt':
+                    originalValue = (campaign.settings?.imageStylePrompt as string) ?? '';
+                    break;
+            }
+            setFormData(prev => ({
+                ...prev,
+                [editingField]: originalValue,
+            }));
         }
         setEditingField(null);
     };

@@ -73,28 +73,60 @@ func (db *DB) GetChapter(ctx context.Context, id uuid.UUID) (*models.Chapter, er
 
 // CreateChapter creates a new chapter in a campaign.
 // If SortOrder is not provided, it will be set to the next available value.
+// Uses a transaction with advisory lock to prevent race conditions when
+// auto-calculating sort_order for concurrent chapter creation requests.
 func (db *DB) CreateChapter(ctx context.Context, campaignID uuid.UUID, req models.CreateChapterRequest) (*models.Chapter, error) {
 	id := uuid.New()
 
-	// Determine sort_order: use provided value or calculate next value
-	var sortOrder int
+	// If sort_order is provided, we can skip the transaction
 	if req.SortOrder != nil {
-		sortOrder = *req.SortOrder
-	} else {
-		// Get the max sort_order for this campaign and add 1
-		var maxSortOrder *int
-		err := db.QueryRow(ctx,
-			"SELECT MAX(sort_order) FROM chapters WHERE campaign_id = $1",
-			campaignID,
-		).Scan(&maxSortOrder)
+		query := `
+            INSERT INTO chapters (id, campaign_id, title, overview, sort_order)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, campaign_id, title, overview, sort_order, created_at, updated_at`
+
+		var c models.Chapter
+		err := db.QueryRow(ctx, query, id, campaignID, req.Title, req.Overview, *req.SortOrder).Scan(
+			&c.ID, &c.CampaignID, &c.Title, &c.Overview, &c.SortOrder,
+			&c.CreatedAt, &c.UpdatedAt,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to determine sort_order: %w", err)
+			return nil, fmt.Errorf("failed to create chapter: %w", err)
 		}
-		if maxSortOrder != nil {
-			sortOrder = *maxSortOrder + 1
-		} else {
-			sortOrder = 0
-		}
+		return &c, nil
+	}
+
+	// Use transaction with advisory lock for auto-calculated sort_order
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // Rollback is a no-op if already committed
+
+	// Acquire advisory lock on campaign_id to serialize sort_order calculation
+	// Using the first 8 bytes of the UUID as the lock key
+	lockKey := int64(campaignID[0])<<56 | int64(campaignID[1])<<48 |
+		int64(campaignID[2])<<40 | int64(campaignID[3])<<32 |
+		int64(campaignID[4])<<24 | int64(campaignID[5])<<16 |
+		int64(campaignID[6])<<8 | int64(campaignID[7])
+	_, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", lockKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to acquire advisory lock: %w", err)
+	}
+
+	// Get the max sort_order for this campaign and add 1
+	var maxSortOrder *int
+	err = tx.QueryRow(ctx,
+		"SELECT MAX(sort_order) FROM chapters WHERE campaign_id = $1",
+		campaignID,
+	).Scan(&maxSortOrder)
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine sort_order: %w", err)
+	}
+
+	sortOrder := 0
+	if maxSortOrder != nil {
+		sortOrder = *maxSortOrder + 1
 	}
 
 	query := `
@@ -103,12 +135,16 @@ func (db *DB) CreateChapter(ctx context.Context, campaignID uuid.UUID, req model
         RETURNING id, campaign_id, title, overview, sort_order, created_at, updated_at`
 
 	var c models.Chapter
-	err := db.QueryRow(ctx, query, id, campaignID, req.Title, req.Overview, sortOrder).Scan(
+	err = tx.QueryRow(ctx, query, id, campaignID, req.Title, req.Overview, sortOrder).Scan(
 		&c.ID, &c.CampaignID, &c.Title, &c.Overview, &c.SortOrder,
 		&c.CreatedAt, &c.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create chapter: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return &c, nil

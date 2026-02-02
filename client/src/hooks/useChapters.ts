@@ -59,7 +59,7 @@ export function useChapter(
     return useQuery({
         queryKey: chapterKeys.detail(campaignId, chapterId),
         queryFn: () => chaptersApi.get(campaignId, chapterId),
-        enabled: options?.enabled ?? (!!campaignId && !!chapterId),
+        enabled: !!campaignId && !!chapterId && (options?.enabled ?? true),
     });
 }
 

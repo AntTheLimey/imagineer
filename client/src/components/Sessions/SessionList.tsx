@@ -18,6 +18,7 @@
  * - Add new session button
  */
 
+import type { MouseEvent } from 'react';
 import { useState, useCallback } from 'react';
 import {
     Alert,
@@ -131,12 +132,12 @@ function SessionListItem({
     onDelete,
     isDeleting,
 }: SessionListItemProps) {
-    const handleEditClick = (event: React.MouseEvent) => {
+    const handleEditClick = (event: MouseEvent) => {
         event.stopPropagation();
         onEdit();
     };
 
-    const handleDeleteClick = (event: React.MouseEvent) => {
+    const handleDeleteClick = (event: MouseEvent) => {
         event.stopPropagation();
         onDelete();
     };
