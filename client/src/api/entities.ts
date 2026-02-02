@@ -64,10 +64,14 @@ export const entitiesApi = {
      * List entities for a campaign with optional filtering.
      */
     list(params: ListEntitiesParams): Promise<Entity[]> {
-        const { campaignId, tags, ...rest } = params;
+        const { campaignId, entityType, tags, ...rest } = params;
         const queryParams: Record<string, string | number | boolean | undefined> = {
             ...rest,
         };
+        // Backend expects 'type' query parameter for entity type filter
+        if (entityType) {
+            queryParams.type = entityType;
+        }
         // Convert tags array to comma-separated string for query param
         if (tags && tags.length > 0) {
             queryParams.tags = tags.join(',');

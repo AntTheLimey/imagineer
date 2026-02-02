@@ -31,6 +31,8 @@ import {
     Typography,
 } from '@mui/material';
 import { FullScreenLayout } from '../layouts';
+import { RichTextEditor } from '../components/RichTextEditor';
+import { RelationshipEditor, PendingRelationship } from '../components/RelationshipEditor';
 import {
     useEntity,
     useCreateEntity,
@@ -42,6 +44,7 @@ import {
     useUnsavedChanges,
     useCampaignOwnership,
 } from '../hooks';
+import { useCreateRelationship } from '../hooks/useRelationships';
 import type { EntityType, SourceConfidence } from '../types';
 
 /**
@@ -222,9 +225,13 @@ export default function EntityEditor() {
         { enabled: isNewEntity && formData.name.length >= 2 }
     );
 
+    // State for pending relationships (for new entities)
+    const [pendingRelationships, setPendingRelationships] = useState<PendingRelationship[]>([]);
+
     // Mutations
     const createEntity = useCreateEntity();
     const updateEntity = useUpdateEntity();
+    const createRelationship = useCreateRelationship();
 
     const isSaving = createEntity.isPending || updateEntity.isPending;
 
@@ -343,6 +350,21 @@ export default function EntityEditor() {
                     sourceConfidence: formData.sourceConfidence,
                 });
 
+                // Create pending relationships after entity is created
+                for (const rel of pendingRelationships) {
+                    await createRelationship.mutateAsync({
+                        campaignId,
+                        sourceEntityId: newEntity.id,
+                        targetEntityId: rel.targetEntityId,
+                        relationshipType: rel.relationshipType,
+                        description: rel.description,
+                        bidirectional: rel.bidirectional,
+                    });
+                }
+
+                // Clear pending relationships
+                setPendingRelationships([]);
+
                 // Clean up draft
                 deleteDraft(draftKey);
                 clearDirty();
@@ -381,7 +403,9 @@ export default function EntityEditor() {
         isNewEntity,
         entityId,
         formData,
+        pendingRelationships,
         createEntity,
+        createRelationship,
         updateEntity,
         deleteDraft,
         draftKey,
@@ -554,15 +578,16 @@ export default function EntityEditor() {
                         </FormControl>
                     </Box>
 
-                    <TextField
-                        label="Description"
-                        fullWidth
-                        multiline
-                        rows={4}
-                        value={formData.description}
-                        onChange={(e) => updateField('description', e.target.value)}
-                        sx={{ mb: 3 }}
-                    />
+                    <Box sx={{ mb: 3 }}>
+                        <RichTextEditor
+                            label="Description"
+                            value={formData.description}
+                            onChange={(html) => updateField('description', html)}
+                            placeholder="Describe this entity..."
+                            error={!!formErrors.description}
+                            helperText={formErrors.description}
+                        />
+                    </Box>
 
                     <Autocomplete
                         multiple
@@ -629,6 +654,20 @@ export default function EntityEditor() {
                             sx={{ mb: 3 }}
                         />
                     )}
+
+                    {/* Relationships section */}
+                    <Box sx={{ mb: 3 }}>
+                        <Typography variant="subtitle1" gutterBottom fontWeight="medium">
+                            Relationships
+                        </Typography>
+                        {campaignId && (
+                            <RelationshipEditor
+                                campaignId={campaignId}
+                                entityId={isNewEntity ? undefined : entityId}
+                                onPendingRelationshipsChange={setPendingRelationships}
+                            />
+                        )}
+                    </Box>
 
                     <FormControl fullWidth>
                         <InputLabel>Source Confidence</InputLabel>

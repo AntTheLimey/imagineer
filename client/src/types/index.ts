@@ -139,3 +139,26 @@ export interface ImportResult {
     errors: string[];
     warnings: string[];
 }
+
+// Relationship type definition types
+export interface RelationshipType {
+    id: string;
+    campaignId?: string | null; // null = system default
+    name: string;
+    inverseName: string;
+    isSymmetric: boolean;
+    displayLabel: string;
+    inverseDisplayLabel: string;
+    description?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface CreateRelationshipTypeInput {
+    name: string;
+    inverseName: string;
+    isSymmetric: boolean;
+    displayLabel: string;
+    inverseDisplayLabel: string;
+    description?: string;
+}

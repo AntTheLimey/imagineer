@@ -19,6 +19,7 @@ vi.mock('@mui/icons-material', () => ({
     Folder: () => <span data-testid="folder-icon">Folder</span>,
     Upload: () => <span data-testid="upload-icon">Upload</span>,
     Logout: () => <span data-testid="logout-icon">Logout</span>,
+    Settings: () => <span data-testid="settings-icon">Settings</span>,
 }));
 
 // Mock the AuthContext

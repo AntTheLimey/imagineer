@@ -22,6 +22,7 @@ import (
 	"github.com/antonypegg/imagineer/internal/database"
 	"github.com/antonypegg/imagineer/internal/importers/common"
 	"github.com/antonypegg/imagineer/internal/importers/evernote"
+	"github.com/antonypegg/imagineer/internal/importers/evernotelocal"
 	"github.com/antonypegg/imagineer/internal/importers/googledocs"
 	"github.com/antonypegg/imagineer/internal/models"
 	"github.com/go-chi/chi/v5"
@@ -30,18 +31,20 @@ import (
 
 // ImportHandler handles import-related requests.
 type ImportHandler struct {
-	db                 *database.DB
-	evernoteImporter   common.Importer
-	googledocsImporter common.Importer
+	db                    *database.DB
+	evernoteImporter      common.Importer
+	googledocsImporter    common.Importer
+	evernoteLocalImporter *evernotelocal.Importer
 }
 
 // NewImportHandler creates an ImportHandler configured with the provided database
 // and default Evernote and Google Docs importers.
 func NewImportHandler(db *database.DB) *ImportHandler {
 	return &ImportHandler{
-		db:                 db,
-		evernoteImporter:   evernote.New(),
-		googledocsImporter: googledocs.New(),
+		db:                    db,
+		evernoteImporter:      evernote.New(),
+		googledocsImporter:    googledocs.New(),
+		evernoteLocalImporter: evernotelocal.New(),
 	}
 }
 
@@ -337,4 +340,133 @@ func (h *ImportHandler) createImportedEntities(ctx context.Context, campaignID u
 	}
 
 	return created, errors
+}
+
+// GetEvernoteLocalStatus handles GET /api/import/evernote/status
+// Checks if Evernote is running and accessible on macOS.
+func (h *ImportHandler) GetEvernoteLocalStatus(w http.ResponseWriter, r *http.Request) {
+	status := h.evernoteLocalImporter.CheckStatus(r.Context())
+	respondJSON(w, http.StatusOK, status)
+}
+
+// ListEvernoteLocalNotebooks handles GET /api/import/evernote/notebooks
+// Lists all notebooks from the local Evernote application.
+func (h *ImportHandler) ListEvernoteLocalNotebooks(w http.ResponseWriter, r *http.Request) {
+	// Verify authentication
+	_, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	notebooks, err := h.evernoteLocalImporter.ListNotebooks(r.Context())
+	if err != nil {
+		log.Printf("Error listing Evernote notebooks: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to list notebooks: "+err.Error())
+		return
+	}
+
+	if notebooks == nil {
+		notebooks = []evernotelocal.Notebook{}
+	}
+
+	respondJSON(w, http.StatusOK, notebooks)
+}
+
+// ListEvernoteLocalNotes handles GET /api/import/evernote/notebooks/{name}/notes
+// Lists all notes in a specific notebook.
+func (h *ImportHandler) ListEvernoteLocalNotes(w http.ResponseWriter, r *http.Request) {
+	// Verify authentication
+	_, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	notebookName := chi.URLParam(r, "name")
+	if notebookName == "" {
+		respondError(w, http.StatusBadRequest, "Notebook name is required")
+		return
+	}
+
+	notes, err := h.evernoteLocalImporter.ListNotesInNotebook(r.Context(), notebookName)
+	if err != nil {
+		log.Printf("Error listing notes in notebook %q: %v", notebookName, err)
+		respondError(w, http.StatusInternalServerError, "Failed to list notes: "+err.Error())
+		return
+	}
+
+	if notes == nil {
+		notes = []evernotelocal.NoteSummary{}
+	}
+
+	respondJSON(w, http.StatusOK, notes)
+}
+
+// ImportEvernoteLocal handles POST /api/import/evernote/import
+// Imports notes from a local Evernote notebook to a campaign.
+func (h *ImportHandler) ImportEvernoteLocal(w http.ResponseWriter, r *http.Request) {
+	// Verify authentication
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	var req evernotelocal.ImportRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if req.CampaignID == "" {
+		respondError(w, http.StatusBadRequest, "Campaign ID is required")
+		return
+	}
+
+	if req.NotebookName == "" {
+		respondError(w, http.StatusBadRequest, "Notebook name is required")
+		return
+	}
+
+	campaignID, err := uuid.Parse(req.CampaignID)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if err := h.db.VerifyCampaignOwnership(r.Context(), campaignID, userID); err != nil {
+		respondError(w, http.StatusNotFound, "Campaign not found")
+		return
+	}
+
+	options := common.ImportOptions{
+		CampaignID:         req.CampaignID,
+		SourceDocument:     "Evernote:" + req.NotebookName,
+		AutoDetectEntities: req.AutoDetectEntities,
+	}
+
+	// Import notes from the notebook
+	result, err := h.evernoteLocalImporter.ImportNotes(r.Context(), req.NotebookName, options)
+	if err != nil {
+		log.Printf("Error importing from Evernote notebook %q: %v", req.NotebookName, err)
+		respondError(w, http.StatusInternalServerError, "Failed to import notes: "+err.Error())
+		return
+	}
+
+	// Create entities in the database
+	createdEntities, importErrors := h.createImportedEntities(r.Context(), campaignID, result.Entities)
+	result.Errors = append(result.Errors, importErrors...)
+
+	response := map[string]interface{}{
+		"imported":      len(createdEntities),
+		"entities":      createdEntities,
+		"relationships": result.Relationships,
+		"events":        result.Events,
+		"warnings":      result.Warnings,
+		"errors":        result.Errors,
+	}
+
+	respondJSON(w, http.StatusOK, response)
 }

@@ -26,7 +26,7 @@ import (
 func (db *DB) ListCampaigns(ctx context.Context) ([]models.Campaign, error) {
 	query := `
         SELECT c.id, c.name, c.system_id, c.owner_id, c.description, c.settings,
-               c.created_at, c.updated_at,
+               c.genre, c.image_style_prompt, c.created_at, c.updated_at,
                gs.id, gs.name, gs.code
         FROM campaigns c
         LEFT JOIN game_systems gs ON c.system_id = gs.id
@@ -43,14 +43,20 @@ func (db *DB) ListCampaigns(ctx context.Context) ([]models.Campaign, error) {
 		var c models.Campaign
 		var gsID *uuid.UUID
 		var gsName, gsCode *string
+		var genre *string
 
 		err := rows.Scan(
 			&c.ID, &c.Name, &c.SystemID, &c.OwnerID, &c.Description, &c.Settings,
-			&c.CreatedAt, &c.UpdatedAt,
+			&genre, &c.ImageStylePrompt, &c.CreatedAt, &c.UpdatedAt,
 			&gsID, &gsName, &gsCode,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan campaign: %w", err)
+		}
+
+		if genre != nil {
+			g := models.CampaignGenre(*genre)
+			c.Genre = &g
 		}
 
 		if gsID != nil {
@@ -76,7 +82,7 @@ func (db *DB) ListCampaigns(ctx context.Context) ([]models.Campaign, error) {
 func (db *DB) ListCampaignsByOwner(ctx context.Context, ownerID uuid.UUID) ([]models.Campaign, error) {
 	query := `
         SELECT c.id, c.name, c.system_id, c.owner_id, c.description, c.settings,
-               c.created_at, c.updated_at,
+               c.genre, c.image_style_prompt, c.created_at, c.updated_at,
                gs.id, gs.name, gs.code
         FROM campaigns c
         LEFT JOIN game_systems gs ON c.system_id = gs.id
@@ -94,14 +100,20 @@ func (db *DB) ListCampaignsByOwner(ctx context.Context, ownerID uuid.UUID) ([]mo
 		var c models.Campaign
 		var gsID *uuid.UUID
 		var gsName, gsCode *string
+		var genre *string
 
 		err := rows.Scan(
 			&c.ID, &c.Name, &c.SystemID, &c.OwnerID, &c.Description, &c.Settings,
-			&c.CreatedAt, &c.UpdatedAt,
+			&genre, &c.ImageStylePrompt, &c.CreatedAt, &c.UpdatedAt,
 			&gsID, &gsName, &gsCode,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan campaign: %w", err)
+		}
+
+		if genre != nil {
+			g := models.CampaignGenre(*genre)
+			c.Genre = &g
 		}
 
 		if gsID != nil {
@@ -127,7 +139,7 @@ func (db *DB) ListCampaignsByOwner(ctx context.Context, ownerID uuid.UUID) ([]mo
 func (db *DB) GetCampaign(ctx context.Context, id uuid.UUID) (*models.Campaign, error) {
 	query := `
         SELECT c.id, c.name, c.system_id, c.owner_id, c.description, c.settings,
-               c.created_at, c.updated_at,
+               c.genre, c.image_style_prompt, c.created_at, c.updated_at,
                gs.id, gs.name, gs.code, gs.attribute_schema, gs.skill_schema,
                gs.character_sheet_template, gs.dice_conventions, gs.created_at
         FROM campaigns c
@@ -139,15 +151,21 @@ func (db *DB) GetCampaign(ctx context.Context, id uuid.UUID) (*models.Campaign, 
 	var gsName, gsCode *string
 	var gsAttrSchema, gsSkillSchema, gsCharSheet, gsDice []byte
 	var gsCreatedAt *interface{}
+	var genre *string
 
 	err := db.QueryRow(ctx, query, id).Scan(
 		&c.ID, &c.Name, &c.SystemID, &c.OwnerID, &c.Description, &c.Settings,
-		&c.CreatedAt, &c.UpdatedAt,
+		&genre, &c.ImageStylePrompt, &c.CreatedAt, &c.UpdatedAt,
 		&gsID, &gsName, &gsCode, &gsAttrSchema, &gsSkillSchema,
 		&gsCharSheet, &gsDice, &gsCreatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get campaign: %w", err)
+	}
+
+	if genre != nil {
+		g := models.CampaignGenre(*genre)
+		c.Genre = &g
 	}
 
 	if gsID != nil {
@@ -171,7 +189,7 @@ func (db *DB) GetCampaign(ctx context.Context, id uuid.UUID) (*models.Campaign, 
 func (db *DB) GetCampaignByOwner(ctx context.Context, id uuid.UUID, ownerID uuid.UUID) (*models.Campaign, error) {
 	query := `
         SELECT c.id, c.name, c.system_id, c.owner_id, c.description, c.settings,
-               c.created_at, c.updated_at,
+               c.genre, c.image_style_prompt, c.created_at, c.updated_at,
                gs.id, gs.name, gs.code, gs.attribute_schema, gs.skill_schema,
                gs.character_sheet_template, gs.dice_conventions, gs.created_at
         FROM campaigns c
@@ -183,15 +201,21 @@ func (db *DB) GetCampaignByOwner(ctx context.Context, id uuid.UUID, ownerID uuid
 	var gsName, gsCode *string
 	var gsAttrSchema, gsSkillSchema, gsCharSheet, gsDice []byte
 	var gsCreatedAt *interface{}
+	var genre *string
 
 	err := db.QueryRow(ctx, query, id, ownerID).Scan(
 		&c.ID, &c.Name, &c.SystemID, &c.OwnerID, &c.Description, &c.Settings,
-		&c.CreatedAt, &c.UpdatedAt,
+		&genre, &c.ImageStylePrompt, &c.CreatedAt, &c.UpdatedAt,
 		&gsID, &gsName, &gsCode, &gsAttrSchema, &gsSkillSchema,
 		&gsCharSheet, &gsDice, &gsCreatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get campaign: %w", err)
+	}
+
+	if genre != nil {
+		g := models.CampaignGenre(*genre)
+		c.Genre = &g
 	}
 
 	if gsID != nil {
@@ -219,18 +243,31 @@ func (db *DB) CreateCampaign(ctx context.Context, req models.CreateCampaignReque
 		settings = json.RawMessage("{}")
 	}
 
+	// Convert genre to string pointer for database
+	var genreStr *string
+	if req.Genre != nil {
+		s := string(*req.Genre)
+		genreStr = &s
+	}
+
 	query := `
-        INSERT INTO campaigns (id, name, system_id, description, settings)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING id, name, system_id, owner_id, description, settings, created_at, updated_at`
+        INSERT INTO campaigns (id, name, system_id, description, settings, genre, image_style_prompt)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id, name, system_id, owner_id, description, settings, genre, image_style_prompt, created_at, updated_at`
 
 	var c models.Campaign
-	err := db.QueryRow(ctx, query, id, req.Name, req.SystemID, req.Description, settings).Scan(
+	var retGenre *string
+	err := db.QueryRow(ctx, query, id, req.Name, req.SystemID, req.Description, settings, genreStr, req.ImageStylePrompt).Scan(
 		&c.ID, &c.Name, &c.SystemID, &c.OwnerID, &c.Description, &c.Settings,
-		&c.CreatedAt, &c.UpdatedAt,
+		&retGenre, &c.ImageStylePrompt, &c.CreatedAt, &c.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create campaign: %w", err)
+	}
+
+	if retGenre != nil {
+		g := models.CampaignGenre(*retGenre)
+		c.Genre = &g
 	}
 
 	return &c, nil
@@ -246,18 +283,31 @@ func (db *DB) CreateCampaignWithOwner(ctx context.Context, req models.CreateCamp
 		settings = json.RawMessage("{}")
 	}
 
+	// Convert genre to string pointer for database
+	var genreStr *string
+	if req.Genre != nil {
+		s := string(*req.Genre)
+		genreStr = &s
+	}
+
 	query := `
-        INSERT INTO campaigns (id, name, system_id, owner_id, description, settings)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING id, name, system_id, owner_id, description, settings, created_at, updated_at`
+        INSERT INTO campaigns (id, name, system_id, owner_id, description, settings, genre, image_style_prompt)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id, name, system_id, owner_id, description, settings, genre, image_style_prompt, created_at, updated_at`
 
 	var c models.Campaign
-	err := db.QueryRow(ctx, query, id, req.Name, req.SystemID, ownerID, req.Description, settings).Scan(
+	var retGenre *string
+	err := db.QueryRow(ctx, query, id, req.Name, req.SystemID, ownerID, req.Description, settings, genreStr, req.ImageStylePrompt).Scan(
 		&c.ID, &c.Name, &c.SystemID, &c.OwnerID, &c.Description, &c.Settings,
-		&c.CreatedAt, &c.UpdatedAt,
+		&retGenre, &c.ImageStylePrompt, &c.CreatedAt, &c.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create campaign: %w", err)
+	}
+
+	if retGenre != nil {
+		g := models.CampaignGenre(*retGenre)
+		c.Genre = &g
 	}
 
 	return &c, nil
@@ -293,19 +343,42 @@ func (db *DB) UpdateCampaign(ctx context.Context, id uuid.UUID, req models.Updat
 		settings = req.Settings
 	}
 
+	genre := existing.Genre
+	if req.Genre != nil {
+		genre = req.Genre
+	}
+
+	imageStylePrompt := existing.ImageStylePrompt
+	if req.ImageStylePrompt != nil {
+		imageStylePrompt = req.ImageStylePrompt
+	}
+
+	// Convert genre to string pointer for database
+	var genreStr *string
+	if genre != nil {
+		s := string(*genre)
+		genreStr = &s
+	}
+
 	query := `
         UPDATE campaigns
-        SET name = $2, system_id = $3, description = $4, settings = $5
+        SET name = $2, system_id = $3, description = $4, settings = $5, genre = $6, image_style_prompt = $7
         WHERE id = $1
-        RETURNING id, name, system_id, owner_id, description, settings, created_at, updated_at`
+        RETURNING id, name, system_id, owner_id, description, settings, genre, image_style_prompt, created_at, updated_at`
 
 	var c models.Campaign
-	err = db.QueryRow(ctx, query, id, name, systemID, description, settings).Scan(
+	var retGenre *string
+	err = db.QueryRow(ctx, query, id, name, systemID, description, settings, genreStr, imageStylePrompt).Scan(
 		&c.ID, &c.Name, &c.SystemID, &c.OwnerID, &c.Description, &c.Settings,
-		&c.CreatedAt, &c.UpdatedAt,
+		&retGenre, &c.ImageStylePrompt, &c.CreatedAt, &c.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update campaign: %w", err)
+	}
+
+	if retGenre != nil {
+		g := models.CampaignGenre(*retGenre)
+		c.Genre = &g
 	}
 
 	return &c, nil
@@ -342,19 +415,42 @@ func (db *DB) UpdateCampaignByOwner(ctx context.Context, id uuid.UUID, ownerID u
 		settings = req.Settings
 	}
 
+	genre := existing.Genre
+	if req.Genre != nil {
+		genre = req.Genre
+	}
+
+	imageStylePrompt := existing.ImageStylePrompt
+	if req.ImageStylePrompt != nil {
+		imageStylePrompt = req.ImageStylePrompt
+	}
+
+	// Convert genre to string pointer for database
+	var genreStr *string
+	if genre != nil {
+		s := string(*genre)
+		genreStr = &s
+	}
+
 	query := `
         UPDATE campaigns
-        SET name = $2, system_id = $3, description = $4, settings = $5
-        WHERE id = $1 AND owner_id = $6
-        RETURNING id, name, system_id, owner_id, description, settings, created_at, updated_at`
+        SET name = $2, system_id = $3, description = $4, settings = $5, genre = $6, image_style_prompt = $7
+        WHERE id = $1 AND owner_id = $8
+        RETURNING id, name, system_id, owner_id, description, settings, genre, image_style_prompt, created_at, updated_at`
 
 	var c models.Campaign
-	err = db.QueryRow(ctx, query, id, name, systemID, description, settings, ownerID).Scan(
+	var retGenre *string
+	err = db.QueryRow(ctx, query, id, name, systemID, description, settings, genreStr, imageStylePrompt, ownerID).Scan(
 		&c.ID, &c.Name, &c.SystemID, &c.OwnerID, &c.Description, &c.Settings,
-		&c.CreatedAt, &c.UpdatedAt,
+		&retGenre, &c.ImageStylePrompt, &c.CreatedAt, &c.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update campaign: %w", err)
+	}
+
+	if retGenre != nil {
+		g := models.CampaignGenre(*retGenre)
+		c.Genre = &g
 	}
 
 	return &c, nil
@@ -412,7 +508,7 @@ func (db *DB) VerifyCampaignOwnership(ctx context.Context, campaignID uuid.UUID,
 // GetRecentCampaigns retrieves the most recently updated campaigns.
 func (db *DB) GetRecentCampaigns(ctx context.Context, limit int) ([]models.Campaign, error) {
 	query := `
-        SELECT id, name, system_id, description, settings, created_at, updated_at
+        SELECT id, name, system_id, owner_id, description, settings, genre, image_style_prompt, created_at, updated_at
         FROM campaigns
         ORDER BY updated_at DESC
         LIMIT $1`
@@ -426,12 +522,17 @@ func (db *DB) GetRecentCampaigns(ctx context.Context, limit int) ([]models.Campa
 	var campaigns []models.Campaign
 	for rows.Next() {
 		var c models.Campaign
+		var genre *string
 		err := rows.Scan(
-			&c.ID, &c.Name, &c.SystemID, &c.Description, &c.Settings,
-			&c.CreatedAt, &c.UpdatedAt,
+			&c.ID, &c.Name, &c.SystemID, &c.OwnerID, &c.Description, &c.Settings,
+			&genre, &c.ImageStylePrompt, &c.CreatedAt, &c.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan campaign: %w", err)
+		}
+		if genre != nil {
+			g := models.CampaignGenre(*genre)
+			c.Genre = &g
 		}
 		campaigns = append(campaigns, c)
 	}
@@ -443,7 +544,7 @@ func (db *DB) GetRecentCampaigns(ctx context.Context, limit int) ([]models.Campa
 func (db *DB) GetCampaignsByOwnerID(ctx context.Context, ownerID uuid.UUID) ([]models.Campaign, error) {
 	query := `
         SELECT c.id, c.name, c.system_id, c.owner_id, c.description, c.settings,
-               c.created_at, c.updated_at,
+               c.genre, c.image_style_prompt, c.created_at, c.updated_at,
                gs.id, gs.name, gs.code
         FROM campaigns c
         LEFT JOIN game_systems gs ON c.system_id = gs.id
@@ -461,14 +562,20 @@ func (db *DB) GetCampaignsByOwnerID(ctx context.Context, ownerID uuid.UUID) ([]m
 		var c models.Campaign
 		var gsID *uuid.UUID
 		var gsName, gsCode *string
+		var genre *string
 
 		err := rows.Scan(
 			&c.ID, &c.Name, &c.SystemID, &c.OwnerID, &c.Description, &c.Settings,
-			&c.CreatedAt, &c.UpdatedAt,
+			&genre, &c.ImageStylePrompt, &c.CreatedAt, &c.UpdatedAt,
 			&gsID, &gsName, &gsCode,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan campaign: %w", err)
+		}
+
+		if genre != nil {
+			g := models.CampaignGenre(*genre)
+			c.Genre = &g
 		}
 
 		if gsID != nil {

@@ -32,14 +32,16 @@ type GameSystem struct {
 
 // Campaign represents an individual TTRPG campaign.
 type Campaign struct {
-	ID          uuid.UUID       `json:"id"`
-	Name        string          `json:"name"`
-	SystemID    *uuid.UUID      `json:"systemId,omitempty"`
-	OwnerID     *uuid.UUID      `json:"ownerId,omitempty"`
-	Description *string         `json:"description,omitempty"`
-	Settings    json.RawMessage `json:"settings,omitempty"`
-	CreatedAt   time.Time       `json:"createdAt"`
-	UpdatedAt   time.Time       `json:"updatedAt"`
+	ID               uuid.UUID       `json:"id"`
+	Name             string          `json:"name"`
+	SystemID         *uuid.UUID      `json:"systemId,omitempty"`
+	OwnerID          *uuid.UUID      `json:"ownerId,omitempty"`
+	Description      *string         `json:"description,omitempty"`
+	Settings         json.RawMessage `json:"settings,omitempty"`
+	Genre            *CampaignGenre  `json:"genre,omitempty"`
+	ImageStylePrompt *string         `json:"imageStylePrompt,omitempty"`
+	CreatedAt        time.Time       `json:"createdAt"`
+	UpdatedAt        time.Time       `json:"updatedAt"`
 
 	// Joined fields (not in database)
 	System *GameSystem `json:"system,omitempty"`
@@ -48,18 +50,22 @@ type Campaign struct {
 
 // CreateCampaignRequest represents the request body for creating a campaign.
 type CreateCampaignRequest struct {
-	Name        string          `json:"name"`
-	SystemID    *uuid.UUID      `json:"systemId,omitempty"`
-	Description *string         `json:"description,omitempty"`
-	Settings    json.RawMessage `json:"settings,omitempty"`
+	Name             string          `json:"name"`
+	SystemID         *uuid.UUID      `json:"systemId,omitempty"`
+	Description      *string         `json:"description,omitempty"`
+	Settings         json.RawMessage `json:"settings,omitempty"`
+	Genre            *CampaignGenre  `json:"genre,omitempty"`
+	ImageStylePrompt *string         `json:"imageStylePrompt,omitempty"`
 }
 
 // UpdateCampaignRequest represents the request body for updating a campaign.
 type UpdateCampaignRequest struct {
-	Name        *string         `json:"name,omitempty"`
-	SystemID    *uuid.UUID      `json:"systemId,omitempty"`
-	Description *string         `json:"description,omitempty"`
-	Settings    json.RawMessage `json:"settings,omitempty"`
+	Name             *string         `json:"name,omitempty"`
+	SystemID         *uuid.UUID      `json:"systemId,omitempty"`
+	Description      *string         `json:"description,omitempty"`
+	Settings         json.RawMessage `json:"settings,omitempty"`
+	Genre            *CampaignGenre  `json:"genre,omitempty"`
+	ImageStylePrompt *string         `json:"imageStylePrompt,omitempty"`
 }
 
 // EntityType represents the type of a campaign entity.
@@ -182,6 +188,30 @@ type UpdateRelationshipRequest struct {
 	Description      *string           `json:"description,omitempty"`
 	Bidirectional    *bool             `json:"bidirectional,omitempty"`
 	Strength         *int              `json:"strength,omitempty"`
+}
+
+// RelationshipType defines a relationship type with its inverse mapping.
+type RelationshipType struct {
+	ID                  uuid.UUID  `json:"id"`
+	CampaignID          *uuid.UUID `json:"campaignId,omitempty"` // nil = system default
+	Name                string     `json:"name"`
+	InverseName         string     `json:"inverseName"`
+	IsSymmetric         bool       `json:"isSymmetric"`
+	DisplayLabel        string     `json:"displayLabel"`
+	InverseDisplayLabel string     `json:"inverseDisplayLabel"`
+	Description         *string    `json:"description,omitempty"`
+	CreatedAt           time.Time  `json:"createdAt"`
+	UpdatedAt           time.Time  `json:"updatedAt"`
+}
+
+// CreateRelationshipTypeRequest is the request body for creating a relationship type.
+type CreateRelationshipTypeRequest struct {
+	Name                string  `json:"name"`
+	InverseName         string  `json:"inverseName"`
+	IsSymmetric         bool    `json:"isSymmetric"`
+	DisplayLabel        string  `json:"displayLabel"`
+	InverseDisplayLabel string  `json:"inverseDisplayLabel"`
+	Description         *string `json:"description,omitempty"`
 }
 
 // SessionStatus represents the status of a game session.
@@ -329,4 +359,110 @@ type ImportRequest struct {
 	AutoDetectEntities   bool      `json:"autoDetectEntities"`
 	ExtractRelationships bool      `json:"extractRelationships"`
 	ExtractEvents        bool      `json:"extractEvents"`
+}
+
+// LLMService represents supported LLM service providers.
+type LLMService string
+
+const (
+	LLMServiceAnthropic LLMService = "anthropic"
+	LLMServiceOpenAI    LLMService = "openai"
+	LLMServiceGemini    LLMService = "gemini"
+	LLMServiceVoyage    LLMService = "voyage"
+	LLMServiceStability LLMService = "stability"
+)
+
+// UserSettings stores a user's API keys and service preferences.
+// API key fields are excluded from JSON serialization to prevent secret exposure.
+// Use UserSettingsResponse for API responses with masked keys.
+type UserSettings struct {
+	UserID            uuid.UUID   `json:"userId"`
+	ContentGenService *LLMService `json:"contentGenService,omitempty"`
+	ContentGenAPIKey  *string     `json:"-"`
+	EmbeddingService  *LLMService `json:"embeddingService,omitempty"`
+	EmbeddingAPIKey   *string     `json:"-"`
+	ImageGenService   *LLMService `json:"imageGenService,omitempty"`
+	ImageGenAPIKey    *string     `json:"-"`
+	CreatedAt         time.Time   `json:"createdAt"`
+	UpdatedAt         time.Time   `json:"updatedAt"`
+}
+
+// UserSettingsResponse is the API response with masked API keys.
+type UserSettingsResponse struct {
+	UserID            uuid.UUID   `json:"userId"`
+	ContentGenService *LLMService `json:"contentGenService,omitempty"`
+	ContentGenAPIKey  *string     `json:"contentGenApiKey,omitempty"`
+	EmbeddingService  *LLMService `json:"embeddingService,omitempty"`
+	EmbeddingAPIKey   *string     `json:"embeddingApiKey,omitempty"`
+	ImageGenService   *LLMService `json:"imageGenService,omitempty"`
+	ImageGenAPIKey    *string     `json:"imageGenApiKey,omitempty"`
+	CreatedAt         time.Time   `json:"createdAt"`
+	UpdatedAt         time.Time   `json:"updatedAt"`
+}
+
+// UpdateUserSettingsRequest is the request body for updating user settings.
+type UpdateUserSettingsRequest struct {
+	ContentGenService *LLMService `json:"contentGenService,omitempty"`
+	ContentGenAPIKey  *string     `json:"contentGenApiKey,omitempty"`
+	EmbeddingService  *LLMService `json:"embeddingService,omitempty"`
+	EmbeddingAPIKey   *string     `json:"embeddingApiKey,omitempty"`
+	ImageGenService   *LLMService `json:"imageGenService,omitempty"`
+	ImageGenAPIKey    *string     `json:"imageGenApiKey,omitempty"`
+}
+
+// CampaignGenre represents campaign genre types.
+type CampaignGenre string
+
+const (
+	GenreAnimeManga         CampaignGenre = "anime_manga"
+	GenreCyberpunk          CampaignGenre = "cyberpunk"
+	GenreEspionage          CampaignGenre = "espionage"
+	GenreFantasy            CampaignGenre = "fantasy"
+	GenreGothic             CampaignGenre = "gothic"
+	GenreHistorical         CampaignGenre = "historical"
+	GenreHorror             CampaignGenre = "horror"
+	GenreLovecraftian       CampaignGenre = "lovecraftian"
+	GenreMilitary           CampaignGenre = "military"
+	GenreModernUrbanFantasy CampaignGenre = "modern_urban_fantasy"
+	GenreMystery            CampaignGenre = "mystery"
+	GenrePostApocalyptic    CampaignGenre = "post_apocalyptic"
+	GenrePulpAdventure      CampaignGenre = "pulp_adventure"
+	GenreScienceFiction     CampaignGenre = "science_fiction"
+	GenreSpaceOpera         CampaignGenre = "space_opera"
+	GenreSteampunk          CampaignGenre = "steampunk"
+	GenreSuperhero          CampaignGenre = "superhero"
+	GenreTimeTravel         CampaignGenre = "time_travel"
+	GenreWestern            CampaignGenre = "western"
+	GenreOther              CampaignGenre = "other"
+)
+
+// PlayerCharacter represents a player character in a campaign.
+type PlayerCharacter struct {
+	ID            uuid.UUID  `json:"id"`
+	CampaignID    uuid.UUID  `json:"campaignId"`
+	EntityID      *uuid.UUID `json:"entityId,omitempty"`
+	CharacterName string     `json:"characterName"`
+	PlayerName    string     `json:"playerName"`
+	Description   *string    `json:"description,omitempty"`
+	Background    *string    `json:"background,omitempty"`
+	CreatedAt     time.Time  `json:"createdAt"`
+	UpdatedAt     time.Time  `json:"updatedAt"`
+}
+
+// CreatePlayerCharacterRequest is the request body for creating a player character.
+type CreatePlayerCharacterRequest struct {
+	EntityID      *uuid.UUID `json:"entityId,omitempty"`
+	CharacterName string     `json:"characterName"`
+	PlayerName    string     `json:"playerName"`
+	Description   *string    `json:"description,omitempty"`
+	Background    *string    `json:"background,omitempty"`
+}
+
+// UpdatePlayerCharacterRequest is the request body for updating a player character.
+type UpdatePlayerCharacterRequest struct {
+	EntityID      *uuid.UUID `json:"entityId,omitempty"`
+	CharacterName *string    `json:"characterName,omitempty"`
+	PlayerName    *string    `json:"playerName,omitempty"`
+	Description   *string    `json:"description,omitempty"`
+	Background    *string    `json:"background,omitempty"`
 }
