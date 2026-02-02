@@ -54,6 +54,15 @@ Campaign organization:
 - Timeline events
 - Discovery tracking
 
+### [gm-session-patterns.md](gm-session-patterns.md)
+
+GM session preparation and management:
+
+- Session prep frameworks (Lazy DM, Three Clue Rule, Five Room Dungeon)
+- Campaign hierarchies (arcs, adventures, sessions, scenes)
+- Progress clocks and fronts
+- Pre-session and post-session checklists
+
 ### [rpg-terminology.md](rpg-terminology.md)
 
 Comprehensive terminology reference:
@@ -99,4 +108,4 @@ Comprehensive terminology reference:
 | fearful | Fear-based |
 | respectful | Admiration |
 
-Last Updated: 2026-01-31
+Last Updated: 2026-02-02

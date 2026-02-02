@@ -65,6 +65,176 @@ storage. Every MVP feature includes its AI component.
   - Pre-create: Levenshtein name similarity check for NPCs
   - Post-create: Run consistency checks on imported batch
 
+---
+
+## Sessions Section (Major Feature)
+
+### Research & Knowledge Base
+
+- [ ] Research GM campaign content structures (web search)
+  - Common campaign organization patterns
+  - Session prep best practices
+  - Session wrap-up structures
+  - "Prep" tasks and patterns used by experienced GMs
+- [ ] Update TTRPG Expert knowledge base with research findings
+
+### Text Entry & Entity Linking System
+
+- [ ] `[MVP-1]` @mention entity linking with autocomplete
+  - Syntax: @EntityName with typeahead autocomplete
+  - AI can auto-insert @mentions when detecting entities
+  - GM can manually type @ to trigger autocomplete
+  - Visual indicator for linked entities in text
+  - Click mention to view entity preview popup
+- [ ] `[MVP-1]` Text storage architecture for vectorization
+  - Separate text content from JSONB for pgedge vectorizer chunking
+  - Ensure all text entries can be chunked and embedded
+  - Entity link metadata stored alongside text
+
+### AI Memory System
+
+- [ ] `[MVP-1]` Campaign Memory - persistent context across all sessions
+  - Stores key campaign facts, themes, active plot threads
+  - GM can view, edit, and delete memory entries
+- [ ] `[MVP-1]` Chapter Memory - context scoped to chapter
+  - Chapter-specific plot points, NPCs, locations
+  - Inherits from Campaign Memory
+- [ ] `[MVP-1]` Session Memory - context for individual session
+  - Session-specific events, decisions, outcomes
+  - Inherits from Chapter and Campaign Memory
+- [ ] `[MVP-1]` Memory management UI
+  - View memories at each level (Campaign/Chapter/Session)
+  - Edit and delete memory entries (full GM control)
+  - Memory hierarchy visualization
+- [ ] `[MVP-1]` Token compression for chat context
+  - Preserve full chat logs for review
+  - Compress for AI context window
+  - Reference Anthropic memory system guidance
+  - Reference pgedge-postgres-mcp chat agent patterns
+
+### Chapters
+
+- [ ] `[MVP-1]` Chapter data model
+  - Title, overview (rich text), campaign_id
+  - Sort order within campaign
+  - Created/updated timestamps
+- [ ] `[MVP-1]` Chapter CRUD API endpoints
+- [ ] `[MVP-1]` Chapter list view in campaign dashboard
+- [ ] `[MVP-1]` Chapter editor UI
+  - Title field
+  - Rich text overview editor
+  - AI scans overview for entity mentions
+  - AI suggests new entities to create
+  - AI creates/suggests relationship links
+- [ ] `[MVP-1]` Entity sidebar for chapters
+  - Shows entities mentioned in chapter overview
+  - Click entity shows preview popup
+  - Option to insert entity link at cursor
+
+### Sessions
+
+- [ ] `[MVP-1]` Session data model
+  - Title, date, chapter_id (required)
+  - Stage: prep | play | wrap-up
+  - Sort order (chronological within chapter)
+  - Created/updated timestamps
+- [ ] `[MVP-1]` Session CRUD API endpoints
+- [ ] `[MVP-1]` Session list view under each chapter
+  - Chronological order (creation order)
+  - Visual indicator of current stage
+- [ ] `[MVP-1]` Session creation UI
+  - Title and date fields
+  - Auto-assigns to current chapter
+  - Starts in "prep" stage
+
+### Session Stages
+
+#### Session Prep
+
+- [ ] `[MVP-1]` Session Prep screen layout
+  - Top half: AI-generated summary display (previous session context)
+  - Bottom half: Rich text entry for GM notes
+  - Left sidebar: Related entity lists by type
+  - Right sidebar: AI assistant panel
+- [ ] `[MVP-1]` Previous session summary display
+  - AI-generated summary from previous session wrap-up
+  - Collapsible for more screen space
+- [ ] `[MVP-1]` Prep notes editor
+  - Rich text with @mention entity linking
+  - GM prepares 2-4 hours of content
+  - Structure into events/encounters (optional)
+- [ ] `[MVP-1]` Entity detection in prep notes
+  - AI scans for existing entities
+  - AI suggests new entities to create
+  - Running list of detected/created entities
+- [ ] `[MVP-2]` Prep breakdown into events/encounters
+  - Optional linear structure for play traversal
+  - Reorderable event list
+
+#### Session Play
+
+- [ ] `[MVP-1]` Session Play screen layout
+  - Main content: Prep notes with event/encounter traversal
+  - Right panel: Always-visible AI chat assistant
+  - Dynamic entity lists: New entities discovered during play
+- [ ] `[MVP-1]` Play mode navigation
+  - Traverse prep events/encounters linearly
+  - Free navigation back to prep notes
+- [ ] `[MVP-1]` AI Play Assistant chat
+  - On-the-fly help during session
+  - Create reactions and side content
+  - Answer rules questions
+  - Full chat log preserved
+- [ ] `[MVP-1]` Real-time entity extraction
+  - AI creates entities from chat conversations
+  - Running list of new entities with relationships
+  - GM can accept immediately (add to campaign knowledge)
+  - GM can defer to draft mode (review in wrap-up)
+- [ ] `[MVP-2]` Draft canon mode for deferred entities
+  - Entities created but not yet canonical
+  - Flagged for review in wrap-up stage
+
+#### Session Wrap-up
+
+- [ ] `[MVP-1]` Session Wrap-up screen layout
+  - Top half: AI-generated session summary (editable)
+  - Bottom half: Additional notes entry
+  - Sidebars: Entities created/modified during session
+- [ ] `[MVP-1]` AI session summary generation
+  - Synthesize from prep notes, play chat, and wrap-up notes
+  - Editable by GM before finalizing
+  - Contributes to campaign story arc
+- [ ] `[MVP-1]` Knowledge extraction
+  - Review entities created during play
+  - Review draft canon items for approval/edit
+  - Extract additional entities from wrap-up notes
+- [ ] `[MVP-1]` Relationship creation
+  - AI suggests relationships between session entities
+  - GM approves/rejects/edits relationships
+- [ ] `[MVP-2]` Campaign story integration
+  - Add session summary to campaign timeline
+  - Update chapter context with session outcomes
+
+### Session UI Components
+
+- [ ] `[MVP-1]` Entity sidebar component (reusable)
+  - Grouped by entity type (NPCs, Locations, Items, etc.)
+  - Only shows types with relevant entities
+  - Scoped to campaign/chapter/session context
+  - Click shows entity preview popup
+  - Click can insert @mention at cursor
+- [ ] `[MVP-1]` Entity preview popup
+  - Quick view of entity details
+  - Options: Insert link, Navigate to entity, Close
+- [ ] `[MVP-1]` AI summary panel component (reusable)
+  - Displays AI-generated summaries
+  - Collapsible/expandable
+  - Shows relevant context for current view
+- [ ] `[MVP-2]` Stage navigation component
+  - Visual indicator of current stage
+  - Free navigation between Prep/Play/Wrap-up
+  - Confirmation when leaving with unsaved changes
+
 ## MVP Backlog
 
 Priority features for initial release, ordered by dependency.
