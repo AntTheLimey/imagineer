@@ -170,7 +170,7 @@ describe('CampaignDashboard', () => {
         render(<CampaignDashboard />, { wrapper: createWrapper() });
 
         // Check breadcrumbs
-        expect(screen.getByText('Campaigns')).toBeInTheDocument();
+        expect(screen.getByText('Home')).toBeInTheDocument();
         // The campaign name appears both in breadcrumbs and title
         expect(screen.getAllByText('My Awesome Campaign').length).toBeGreaterThanOrEqual(1);
     });

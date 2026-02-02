@@ -97,8 +97,7 @@ const NAV_ITEMS: Array<{
         id: 'sessions',
         label: 'Manage Sessions',
         icon: <TimelineIcon />,
-        type: 'route',
-        path: '/timeline',
+        type: 'internal',
     },
     {
         id: 'player-characters',

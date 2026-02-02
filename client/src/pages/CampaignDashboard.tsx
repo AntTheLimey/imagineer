@@ -31,12 +31,73 @@ import CampaignSettings, {
     type CampaignSettingsData,
     campaignToFormData,
 } from '../components/CampaignSettings';
+import { ChapterList, ChapterEditor } from '../components/Chapters';
+import { SessionList, SessionEditor } from '../components/Sessions';
 import {
     useCampaign,
     useUpdateCampaign,
     useUnsavedChanges,
 } from '../hooks';
 import { useCampaignContext } from '../contexts/CampaignContext';
+import type { Chapter, Session } from '../types';
+
+/**
+ * Sessions management view with chapters and sessions.
+ */
+function SessionsView({
+    campaignId,
+    selectedChapterId,
+    onSelectChapter,
+    selectedSessionId,
+    onSelectSession,
+    onCreateChapter,
+    onEditChapter,
+    onCreateSession,
+    onEditSession,
+}: {
+    campaignId: string;
+    selectedChapterId?: string;
+    onSelectChapter: (id: string) => void;
+    selectedSessionId?: string;
+    onSelectSession: (id: string) => void;
+    onCreateChapter: () => void;
+    onEditChapter: (chapter: Chapter) => void;
+    onCreateSession: () => void;
+    onEditSession: (session: Session) => void;
+}) {
+    return (
+        <Box sx={{ display: 'flex', gap: 3, height: '100%' }}>
+            {/* Chapters Panel */}
+            <Box sx={{ width: 320, flexShrink: 0 }}>
+                <ChapterList
+                    campaignId={campaignId}
+                    selectedChapterId={selectedChapterId}
+                    onSelectChapter={onSelectChapter}
+                    onCreateChapter={onCreateChapter}
+                    onEditChapter={onEditChapter}
+                />
+            </Box>
+
+            {/* Sessions Panel */}
+            <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                {selectedChapterId ? (
+                    <SessionList
+                        campaignId={campaignId}
+                        chapterId={selectedChapterId}
+                        selectedSessionId={selectedSessionId}
+                        onSelectSession={onSelectSession}
+                        onCreateSession={onCreateSession}
+                        onEditSession={onEditSession}
+                    />
+                ) : (
+                    <Alert severity="info">
+                        Select a chapter to view its sessions, or create a new chapter to get started.
+                    </Alert>
+                )}
+            </Box>
+        </Box>
+    );
+}
 
 /**
  * Placeholder component for Player Characters view.
@@ -78,6 +139,14 @@ export default function CampaignDashboard() {
     // Form data state (managed here for proper dirty tracking)
     const [formData, setFormData] = useState<CampaignSettingsData | null>(null);
     const [isFormDirty, setIsFormDirty] = useState(false);
+
+    // Sessions view state
+    const [selectedChapterId, setSelectedChapterId] = useState<string | undefined>();
+    const [selectedSessionId, setSelectedSessionId] = useState<string | undefined>();
+    const [chapterEditorOpen, setChapterEditorOpen] = useState(false);
+    const [editingChapterId, setEditingChapterId] = useState<string | undefined>();
+    const [sessionEditorOpen, setSessionEditorOpen] = useState(false);
+    const [editingSessionId, setEditingSessionId] = useState<string | undefined>();
 
     // Campaign context for keeping app-wide state updated
     const { setCurrentCampaignId } = useCampaignContext();
@@ -189,7 +258,7 @@ export default function CampaignDashboard() {
      * Handle back navigation with unsaved changes check.
      */
     const handleBack = useCallback(() => {
-        const goBack = () => navigate('/campaigns');
+        const goBack = () => navigate('/');
         if (!checkUnsavedChanges(goBack)) {
             goBack();
         }
@@ -198,7 +267,7 @@ export default function CampaignDashboard() {
     // Build breadcrumbs
     const breadcrumbs = useMemo(
         () => [
-            { label: 'Campaigns', path: '/campaigns' },
+            { label: 'Home', path: '/' },
             { label: campaign?.name ?? 'Campaign' },
         ],
         [campaign]
@@ -218,6 +287,59 @@ export default function CampaignDashboard() {
                         onChange={handleFormChange}
                         formData={formData ?? undefined}
                     />
+                );
+            case 'sessions':
+                return (
+                    <>
+                        <SessionsView
+                            campaignId={campaignId!}
+                            selectedChapterId={selectedChapterId}
+                            onSelectChapter={setSelectedChapterId}
+                            selectedSessionId={selectedSessionId}
+                            onSelectSession={setSelectedSessionId}
+                            onCreateChapter={() => {
+                                setEditingChapterId(undefined);
+                                setChapterEditorOpen(true);
+                            }}
+                            onEditChapter={(chapter) => {
+                                setEditingChapterId(chapter.id);
+                                setChapterEditorOpen(true);
+                            }}
+                            onCreateSession={() => {
+                                setEditingSessionId(undefined);
+                                setSessionEditorOpen(true);
+                            }}
+                            onEditSession={(session) => {
+                                setEditingSessionId(session.id);
+                                setSessionEditorOpen(true);
+                            }}
+                        />
+
+                        {/* Chapter Editor Dialog */}
+                        <ChapterEditor
+                            campaignId={campaignId!}
+                            chapterId={editingChapterId}
+                            open={chapterEditorOpen}
+                            onClose={() => setChapterEditorOpen(false)}
+                            onSave={(chapter) => {
+                                setSelectedChapterId(chapter.id);
+                                setChapterEditorOpen(false);
+                            }}
+                        />
+
+                        {/* Session Editor Dialog */}
+                        <SessionEditor
+                            campaignId={campaignId!}
+                            chapterId={selectedChapterId}
+                            sessionId={editingSessionId}
+                            open={sessionEditorOpen}
+                            onClose={() => setSessionEditorOpen(false)}
+                            onSave={(session) => {
+                                setSelectedSessionId(session.id);
+                                setSessionEditorOpen(false);
+                            }}
+                        />
+                    </>
                 );
             case 'player-characters':
                 return <PlayerCharactersView />;
