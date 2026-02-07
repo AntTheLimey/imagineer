@@ -20,7 +20,7 @@ import {
     Link as RelationshipIcon,
 } from '@mui/icons-material';
 import { useEntityRelationships } from '../../hooks';
-import { sanitizeHtml } from '../../utils';
+import { MarkdownRenderer } from '../MarkdownRenderer';
 import type { Entity, EntityType } from '../../types';
 
 /**
@@ -200,15 +200,10 @@ export default function EntityPreviewPanel({
                             fontSize: '0.875rem',
                             '& p': { mt: 0, mb: 1 },
                             '& p:last-child': { mb: 0 },
-                            display: '-webkit-box',
-                            WebkitLineClamp: 6,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden',
                         }}
-                        dangerouslySetInnerHTML={{
-                            __html: sanitizeHtml(entity.description),
-                        }}
-                    />
+                    >
+                        <MarkdownRenderer content={entity.description} maxLines={6} />
+                    </Box>
                 ) : (
                     <Typography variant="body2">No description</Typography>
                 )}

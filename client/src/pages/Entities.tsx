@@ -55,7 +55,7 @@ import {
     useSimilarEntities,
     useCampaignOwnership,
 } from '../hooks';
-import { sanitizeHtml, stripHtml } from '../utils';
+import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import type { Entity, EntityType, SourceConfidence } from '../types';
 
 /**
@@ -581,7 +581,7 @@ export default function Entities() {
                                                     whiteSpace: 'nowrap',
                                                 }}
                                             >
-                                                {entity.description ? stripHtml(entity.description) : '-'}
+                                                {entity.description ? entity.description.slice(0, 100) + (entity.description.length > 100 ? '...' : '') : '-'}
                                             </Typography>
                                         </TableCell>
                                         <TableCell>
@@ -902,10 +902,9 @@ export default function Entities() {
                                             '& p': { mt: 0, mb: 1 },
                                             '& p:last-child': { mb: 0 },
                                         }}
-                                        dangerouslySetInnerHTML={{
-                                            __html: sanitizeHtml(dialogEntity.description),
-                                        }}
-                                    />
+                                    >
+                                        <MarkdownRenderer content={dialogEntity.description} />
+                                    </Box>
                                 </Box>
                             )}
 

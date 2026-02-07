@@ -50,7 +50,7 @@ import {
     useCampaignStats,
 } from '../hooks';
 import { useCampaignContext } from '../contexts/CampaignContext';
-import { sanitizeHtml } from '../utils';
+import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import type { GameSystem } from '../types';
 
 /**
@@ -542,10 +542,9 @@ export default function CampaignOverview() {
                                 '& p': { mt: 0, mb: 1 },
                                 '& p:last-child': { mb: 0 },
                             }}
-                            dangerouslySetInnerHTML={{
-                                __html: sanitizeHtml(campaign.description),
-                            }}
-                        />
+                        >
+                            <MarkdownRenderer content={campaign.description} />
+                        </Box>
                     ) : (
                         <Typography variant="body1" color="text.secondary" fontStyle="italic">
                             No description provided
