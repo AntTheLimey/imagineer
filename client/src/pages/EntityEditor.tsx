@@ -31,7 +31,7 @@ import {
     Typography,
 } from '@mui/material';
 import { FullScreenLayout } from '../layouts';
-import { RichTextEditor } from '../components/RichTextEditor';
+import { MarkdownEditor } from '../components/MarkdownEditor';
 import { RelationshipEditor, PendingRelationship } from '../components/RelationshipEditor';
 import {
     useEntity,
@@ -350,16 +350,26 @@ export default function EntityEditor() {
                     sourceConfidence: formData.sourceConfidence,
                 });
 
-                // Create pending relationships after entity is created
-                for (const rel of pendingRelationships) {
-                    await createRelationship.mutateAsync({
-                        campaignId,
-                        sourceEntityId: newEntity.id,
-                        targetEntityId: rel.targetEntityId,
-                        relationshipType: rel.relationshipType,
-                        description: rel.description,
-                        bidirectional: rel.bidirectional,
-                    });
+                // Create pending relationships after entity is created using Promise.allSettled
+                if (pendingRelationships.length > 0) {
+                    const relationshipResults = await Promise.allSettled(
+                        pendingRelationships.map((rel) =>
+                            createRelationship.mutateAsync({
+                                campaignId,
+                                sourceEntityId: newEntity.id,
+                                targetEntityId: rel.targetEntityId,
+                                relationshipType: rel.relationshipType,
+                                description: rel.description,
+                                bidirectional: rel.bidirectional,
+                            })
+                        )
+                    );
+                    const failures = relationshipResults.filter(
+                        (r) => r.status === 'rejected'
+                    );
+                    if (failures.length > 0) {
+                        console.warn(`${failures.length} relationship(s) failed to create`);
+                    }
                 }
 
                 // Clear pending relationships
@@ -579,10 +589,10 @@ export default function EntityEditor() {
                     </Box>
 
                     <Box sx={{ mb: 3 }}>
-                        <RichTextEditor
+                        <MarkdownEditor
                             label="Description"
                             value={formData.description}
-                            onChange={(html) => updateField('description', html)}
+                            onChange={(md) => updateField('description', md)}
                             placeholder="Describe this entity..."
                             error={!!formErrors.description}
                             helperText={formErrors.description}

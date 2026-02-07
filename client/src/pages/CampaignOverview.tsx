@@ -41,7 +41,8 @@ import {
     Close as CancelIcon,
     Check as CheckIcon,
 } from '@mui/icons-material';
-import { RichTextEditor } from '../components/RichTextEditor';
+import { MarkdownEditor } from '../components/MarkdownEditor';
+import { GENRE_OPTIONS } from '../components/CampaignSettings';
 import {
     useCampaign,
     useUpdateCampaign,
@@ -51,32 +52,6 @@ import {
 import { useCampaignContext } from '../contexts/CampaignContext';
 import { sanitizeHtml } from '../utils';
 import type { GameSystem } from '../types';
-
-/**
- * Available genre options for campaigns.
- */
-const GENRE_OPTIONS = [
-    'Fantasy',
-    'Sci-Fi',
-    'Horror',
-    'Mystery',
-    'Cyberpunk',
-    'Steampunk',
-    'Post-Apocalyptic',
-    'Superhero',
-    'Historical',
-    'Urban Fantasy',
-    'Space Opera',
-    'Dark Fantasy',
-    'Pulp Adventure',
-    'Western',
-    'Mythological',
-    'Modern Day',
-    'Noir',
-    'Wuxia',
-    'Military',
-    'Comedy',
-] as const;
 
 /**
  * Fields that can be edited inline.
@@ -532,10 +507,10 @@ export default function CampaignOverview() {
                     </Box>
                     {isEditing || editingField === 'description' ? (
                         <Box>
-                            <RichTextEditor
+                            <MarkdownEditor
                                 label=""
                                 value={formData.description}
-                                onChange={(html) => updateField('description', html)}
+                                onChange={(md) => updateField('description', md)}
                                 placeholder="Describe your campaign setting, themes, and background..."
                                 minHeight={150}
                                 maxHeight={300}

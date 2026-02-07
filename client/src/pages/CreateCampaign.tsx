@@ -31,7 +31,7 @@ import {
     Typography,
 } from '@mui/material';
 import { FullScreenLayout } from '../layouts';
-import { RichTextEditor } from '../components/RichTextEditor';
+import { MarkdownEditor } from '../components/MarkdownEditor';
 import { useCreateCampaign, useGameSystems } from '../hooks';
 import { useCampaignContext } from '../contexts/CampaignContext';
 
@@ -39,26 +39,26 @@ import { useCampaignContext } from '../contexts/CampaignContext';
  * Available genre options for campaigns.
  */
 const GENRE_OPTIONS = [
-    'Fantasy',
-    'Sci-Fi',
-    'Horror',
-    'Mystery',
-    'Cyberpunk',
-    'Steampunk',
-    'Post-Apocalyptic',
-    'Superhero',
-    'Historical',
-    'Urban Fantasy',
-    'Space Opera',
-    'Dark Fantasy',
-    'Pulp Adventure',
-    'Western',
-    'Mythological',
-    'Modern Day',
-    'Noir',
-    'Wuxia',
-    'Military',
     'Comedy',
+    'Cyberpunk',
+    'Dark Fantasy',
+    'Fantasy',
+    'Historical',
+    'Horror',
+    'Military',
+    'Modern Day',
+    'Mystery',
+    'Mythological',
+    'Noir',
+    'Post-Apocalyptic',
+    'Pulp Adventure',
+    'Sci-Fi',
+    'Space Opera',
+    'Steampunk',
+    'Superhero',
+    'Urban Fantasy',
+    'Western',
+    'Wuxia',
 ] as const;
 
 /**
@@ -290,10 +290,10 @@ export default function CreateCampaign() {
 
                     {/* Description */}
                     <Box sx={{ mb: 3 }}>
-                        <RichTextEditor
+                        <MarkdownEditor
                             label="Description"
                             value={formData.description}
-                            onChange={(html) => updateField('description', html)}
+                            onChange={(md) => updateField('description', md)}
                             placeholder="Describe your campaign setting, themes, and background..."
                             minHeight={150}
                             maxHeight={300}
