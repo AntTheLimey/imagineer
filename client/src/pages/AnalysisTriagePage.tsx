@@ -160,6 +160,16 @@ export default function AnalysisTriagePage() {
         : 0;
     const totalCount = items ? items.length : 0;
 
+    if (Number.isNaN(numericCampaignId) || Number.isNaN(numericJobId)) {
+        return (
+            <Box sx={{ p: 4 }}>
+                <Alert severity="error">
+                    Invalid campaign or job ID.
+                </Alert>
+            </Box>
+        );
+    }
+
     /**
      * Handle resolving an item with the given resolution.
      */

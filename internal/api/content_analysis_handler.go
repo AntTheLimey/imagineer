@@ -13,10 +13,13 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"strconv"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/antonypegg/imagineer/internal/analysis"
 	"github.com/antonypegg/imagineer/internal/auth"
@@ -214,6 +217,29 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 	itemID, err := parseInt64(r, "itemId")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid item ID")
+		return
+	}
+
+	// Verify the item belongs to a job within the specified campaign.
+	var itemCampaignID int64
+	err = h.db.QueryRow(r.Context(),
+		`SELECT j.campaign_id FROM content_analysis_items i
+		 JOIN content_analysis_jobs j ON i.job_id = j.id
+		 WHERE i.id = $1`,
+		itemID,
+	).Scan(&itemCampaignID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		respondError(w, http.StatusNotFound, "Analysis item not found")
+		return
+	}
+	if err != nil {
+		log.Printf("Error verifying item campaign ownership: %v", err)
+		respondError(w, http.StatusInternalServerError,
+			"Failed to verify analysis item")
+		return
+	}
+	if itemCampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Analysis item not found")
 		return
 	}
 
