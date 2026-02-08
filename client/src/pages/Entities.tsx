@@ -192,6 +192,15 @@ export default function Entities() {
     // Check if current user is the campaign owner (GM)
     const { isOwner: isGM } = useCampaignOwnership(campaignId ?? 0);
 
+    /**
+     * Navigate to entities page filtered by the clicked wiki link name.
+     */
+    const handleEntityClick = useCallback((name: string) => {
+        if (campaignId) {
+            navigate(`/campaigns/${campaignId}/entities?search=${encodeURIComponent(name)}`);
+        }
+    }, [campaignId, navigate]);
+
     // Pagination state
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -904,7 +913,11 @@ export default function Entities() {
                                             '& p:last-child': { mb: 0 },
                                         }}
                                     >
-                                        <MarkdownRenderer content={dialogEntity.description} />
+                                        <MarkdownRenderer
+                                            content={dialogEntity.description}
+                                            campaignId={campaignId}
+                                            onEntityClick={handleEntityClick}
+                                        />
                                     </Box>
                                 </Box>
                             )}

@@ -598,6 +598,7 @@ export default function EntityEditor() {
                             placeholder="Describe this entity..."
                             error={!!formErrors.description}
                             helperText={formErrors.description}
+                            campaignId={campaignId}
                         />
                     </Box>
 

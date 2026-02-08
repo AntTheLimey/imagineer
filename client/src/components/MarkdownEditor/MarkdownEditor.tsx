@@ -8,18 +8,22 @@
  *-------------------------------------------------------------------------
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
     Box,
     FormHelperText,
     InputLabel,
     Paper,
 } from '@mui/material';
+import { Extension } from '@tiptap/core';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
+import Suggestion from '@tiptap/suggestion';
 import { Markdown } from 'tiptap-markdown';
 import EditorToolbar from './EditorToolbar';
+import WikiLinkNode from './WikiLinkNode';
+import { buildWikiLinkSuggestion } from './WikiLinkSuggestion';
 
 /**
  * Shape of the tiptap-markdown storage object.
@@ -56,6 +60,8 @@ export interface MarkdownEditorProps {
     maxHeight?: number;
     /** If true, the editor is disabled. */
     disabled?: boolean;
+    /** Campaign ID for wiki link entity resolution. */
+    campaignId?: number;
 }
 
 /**
@@ -94,6 +100,7 @@ export default function MarkdownEditor({
     minHeight = 200,
     maxHeight = 500,
     disabled = false,
+    campaignId,
 }: MarkdownEditorProps) {
     // Keep a ref to the latest onChange callback so the onUpdate
     // closure always invokes the current version (Bug 2 fix).
@@ -105,8 +112,10 @@ export default function MarkdownEditor({
     // that the editor already knows about (Bug 1 fix).
     const isInternalUpdate = useRef(false);
 
-    const editor = useEditor({
-        extensions: [
+    // Build the extensions array, conditionally including the wiki
+    // link suggestion plugin when a campaignId is available.
+    const extensions = useMemo(() => {
+        const base = [
             StarterKit,
             Placeholder.configure({
                 placeholder: placeholder ?? '',
@@ -116,7 +125,34 @@ export default function MarkdownEditor({
                 transformCopiedText: true,
                 transformPastedText: true,
             }),
-        ],
+            WikiLinkNode,
+        ];
+
+        if (campaignId) {
+            const suggestionConfig =
+                buildWikiLinkSuggestion(campaignId);
+
+            const WikiLinkSuggestionExtension = Extension.create({
+                name: 'wikiLinkSuggestion',
+
+                addProseMirrorPlugins() {
+                    return [
+                        Suggestion({
+                            ...suggestionConfig,
+                            editor: this.editor,
+                        }),
+                    ];
+                },
+            });
+
+            base.push(WikiLinkSuggestionExtension);
+        }
+
+        return base;
+    }, [campaignId, placeholder]);
+
+    const editor = useEditor({
+        extensions,
         content: value,
         editable: !disabled,
         onUpdate: ({ editor }) => {
@@ -193,6 +229,7 @@ export default function MarkdownEditor({
                 <EditorToolbar
                     editor={editor}
                     disabled={disabled}
+                    campaignId={campaignId}
                 />
                 <Box
                     sx={{

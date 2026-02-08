@@ -10,13 +10,32 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ReactNode } from 'react';
 import MarkdownEditor from './MarkdownEditor';
+
+function createWrapper() {
+    const queryClient = new QueryClient({
+        defaultOptions: {
+            queries: { retry: false },
+        },
+    });
+
+    return function Wrapper({ children }: { children: ReactNode }) {
+        return (
+            <QueryClientProvider client={queryClient}>
+                {children}
+            </QueryClientProvider>
+        );
+    };
+}
 
 describe('MarkdownEditor', () => {
     it('renders without crashing', async () => {
         const onChange = vi.fn();
         const { container } = render(
-            <MarkdownEditor value="" onChange={onChange} />
+            <MarkdownEditor value="" onChange={onChange} />,
+            { wrapper: createWrapper() }
         );
 
         await waitFor(() => {
@@ -32,7 +51,8 @@ describe('MarkdownEditor', () => {
             <MarkdownEditor
                 value="**bold text**"
                 onChange={onChange}
-            />
+            />,
+            { wrapper: createWrapper() }
         );
 
         await waitFor(() => {
@@ -51,7 +71,8 @@ describe('MarkdownEditor', () => {
                 value=""
                 onChange={onChange}
                 label="Description"
-            />
+            />,
+            { wrapper: createWrapper() }
         );
 
         expect(screen.getByText('Description')).toBeInTheDocument();
@@ -64,7 +85,8 @@ describe('MarkdownEditor', () => {
                 value=""
                 onChange={onChange}
                 placeholder="Enter text..."
-            />
+            />,
+            { wrapper: createWrapper() }
         );
 
         await waitFor(() => {
@@ -81,7 +103,8 @@ describe('MarkdownEditor', () => {
                 value=""
                 onChange={onChange}
                 helperText="Required field"
-            />
+            />,
+            { wrapper: createWrapper() }
         );
 
         expect(
@@ -94,7 +117,8 @@ describe('MarkdownEditor', () => {
 
         expect(() => {
             render(
-                <MarkdownEditor value="" onChange={onChange} />
+                <MarkdownEditor value="" onChange={onChange} />,
+                { wrapper: createWrapper() }
             );
         }).not.toThrow();
     });

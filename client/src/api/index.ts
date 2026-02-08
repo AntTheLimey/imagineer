@@ -85,3 +85,6 @@ export type {
     EntitySuggestion,
     DetectEntitiesResponse,
 } from './entityDetection';
+
+export { entityResolveApi } from './entityResolve';
+export type { EntityResolveResult } from './entityResolve';

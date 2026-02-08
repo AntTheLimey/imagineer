@@ -21,6 +21,7 @@ import {
     Redo,
 } from '@mui/icons-material';
 import { Editor } from '@tiptap/react';
+import WikiLinkToolbarButton from './WikiLinkToolbarButton';
 
 /**
  * Props for the EditorToolbar component.
@@ -30,6 +31,8 @@ interface EditorToolbarProps {
     editor: Editor | null;
     /** Whether the toolbar should be disabled. */
     disabled?: boolean;
+    /** Campaign ID for wiki link entity resolution. */
+    campaignId?: number;
 }
 
 /**
@@ -47,6 +50,7 @@ interface EditorToolbarProps {
 export default function EditorToolbar({
     editor,
     disabled = false,
+    campaignId,
 }: EditorToolbarProps) {
     if (!editor) {
         return null;
@@ -293,6 +297,18 @@ export default function EditorToolbar({
                     <HorizontalRule fontSize="small" />
                 </IconButton>
             </Tooltip>
+
+            <Divider
+                orientation="vertical"
+                flexItem
+                sx={{ mx: 0.5 }}
+            />
+
+            {/* Wiki links */}
+            <WikiLinkToolbarButton
+                editor={editor}
+                campaignId={campaignId}
+            />
 
             <Divider
                 orientation="vertical"
