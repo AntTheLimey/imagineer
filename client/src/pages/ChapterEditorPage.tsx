@@ -64,6 +64,32 @@ const DEFAULT_FORM_DATA: ChapterFormData = {
 };
 
 /**
+ * Produce a human-friendly label for how long ago an ISO timestamp occurred.
+ *
+ * @param isoString - An ISO 8601 timestamp string (e.g., "2026-02-01T12:34:56Z")
+ * @returns `just now` for times less than 1 minute ago, `N minutes ago` for times less than 1 hour, `N hours ago` for times less than 24 hours, or the locale-formatted date for older timestamps
+ */
+function formatRelativeTime(isoString: string): string {
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffSecs = Math.floor(diffMs / 1000);
+    const diffMins = Math.floor(diffSecs / 60);
+
+    if (diffMins < 1) {
+        return 'just now';
+    }
+    if (diffMins < 60) {
+        return `${diffMins} minute${diffMins === 1 ? '' : 's'} ago`;
+    }
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) {
+        return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+    }
+    return date.toLocaleDateString();
+}
+
+/**
  * Full-screen editor for creating and editing chapters with entity association panel.
  *
  * @returns The React element for the Chapter Editor page
@@ -473,7 +499,7 @@ export default function ChapterEditorPage() {
             onSave={handleSave}
             onSaveAndClose={handleSaveAndClose}
             onBack={handleBack}
-            lastSaved={lastSaved}
+            subtitle={lastSaved ? `Auto-saved ${formatRelativeTime(lastSaved)}` : undefined}
         >
             {/* Draft recovery alert */}
             {showDraftRecovery && (
