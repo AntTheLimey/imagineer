@@ -49,6 +49,14 @@ describe('CampaignDashboard', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        // Stub requestAnimationFrame/cancelAnimationFrame to prevent
+        // happy-dom/MUI TextareaAutosize incompatibility in CI
+        vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+            return setTimeout(() => cb(Date.now()), 0) as unknown as number;
+        });
+        vi.stubGlobal('cancelAnimationFrame', (id: number) => {
+            clearTimeout(id);
+        });
         queryClient = new QueryClient({
             defaultOptions: {
                 queries: {
@@ -61,6 +69,7 @@ describe('CampaignDashboard', () => {
     afterEach(() => {
         cleanup();
         queryClient.clear();
+        vi.unstubAllGlobals();
     });
 
     /**
