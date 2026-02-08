@@ -14,6 +14,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/antonypegg/imagineer/internal/auth"
 	"github.com/antonypegg/imagineer/internal/database"
@@ -58,7 +59,7 @@ func (h *EntityResolveHandler) ResolveEntity(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Validate name query parameter
-	name := r.URL.Query().Get("name")
+	name := strings.TrimSpace(r.URL.Query().Get("name"))
 	if name == "" {
 		respondError(w, http.StatusBadRequest, "Query parameter 'name' is required")
 		return

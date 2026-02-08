@@ -82,11 +82,6 @@ function findDoubleBracketMatch(config: {
 }
 
 /**
- * Debounce timer ID for the items callback.
- */
-let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-
-/**
  * Builds the suggestion configuration for wiki link autocomplete.
  *
  * The returned object is compatible with `@tiptap/suggestion` and
@@ -108,6 +103,8 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 export function buildWikiLinkSuggestion(
     campaignId: number,
 ): Omit<SuggestionOptions<EntityResolveResult>, 'editor'> {
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
     return {
         pluginKey: wikiLinkSuggestionPluginKey,
 

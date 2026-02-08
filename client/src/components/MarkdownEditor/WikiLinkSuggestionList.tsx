@@ -138,7 +138,7 @@ const WikiLinkSuggestionList = forwardRef<
                 </Box>
             )}
 
-            {!tooShort && loading && (
+            {!tooShort && loading && items.length === 0 && (
                 <Box
                     sx={{
                         display: 'flex',

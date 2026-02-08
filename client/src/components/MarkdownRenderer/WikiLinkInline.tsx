@@ -92,21 +92,27 @@ export default function WikiLinkInline({
         }
     };
 
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleClick();
+        }
+    };
+
     return (
         <Box
             component="span"
-            role="button"
+            role={onEntityClick ? "button" : undefined}
             tabIndex={onEntityClick ? 0 : undefined}
             data-entity-name={entityName}
             data-testid="wiki-link"
             sx={sx}
-            onClick={handleClick}
-            onKeyDown={(e: React.KeyboardEvent) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    handleClick();
+            {...(onEntityClick
+                ? {
+                    onClick: handleClick,
+                    onKeyDown: handleKeyDown,
                 }
-            }}
+                : {})}
         >
             {children}
         </Box>
