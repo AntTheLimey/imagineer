@@ -16,11 +16,11 @@ package analysis
 import (
 	"context"
 	"fmt"
+	"github.com/antonypegg/imagineer/internal/database"
+	"github.com/antonypegg/imagineer/internal/models"
 	"log"
 	"regexp"
 	"strings"
-	"github.com/antonypegg/imagineer/internal/database"
-	"github.com/antonypegg/imagineer/internal/models"
 )
 
 // wikiLinkRe matches wiki-link syntax: [[Name]] or [[Name|Display]].
@@ -352,4 +352,3 @@ func buildMatchedNames(
 	}
 	return matched
 }
-

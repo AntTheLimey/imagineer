@@ -61,13 +61,13 @@ func TestContentAnalysisJob_JSONMarshal(t *testing.T) {
 // can be unmarshaled from raw JSON strings, simulating API input.
 func TestContentAnalysisJob_JSONMarshalFromString(t *testing.T) {
 	tests := []struct {
-		name           string
-		jsonData       string
-		wantStatus     string
-		wantTotal      int
-		wantResolved   int
-		wantSourceTbl  string
-		wantSourceFld  string
+		name          string
+		jsonData      string
+		wantStatus    string
+		wantTotal     int
+		wantResolved  int
+		wantSourceTbl string
+		wantSourceFld string
 	}{
 		{
 			name:          "pending job with no items",
@@ -433,10 +433,10 @@ func TestAnalysisSummary_JSONKeys(t *testing.T) {
 // correct omitempty behavior.
 func TestContentAnalysisItem_NullableFields(t *testing.T) {
 	tests := []struct {
-		name           string
-		item           models.ContentAnalysisItem
-		absentFields   []string
-		presentFields  []string
+		name          string
+		item          models.ContentAnalysisItem
+		absentFields  []string
+		presentFields []string
 	}{
 		{
 			name: "all optional fields nil",
