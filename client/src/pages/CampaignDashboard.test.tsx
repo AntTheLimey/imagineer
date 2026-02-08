@@ -11,8 +11,8 @@
  * Tests for CampaignDashboard page component.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import CampaignDashboard from './CampaignDashboard';
@@ -44,42 +44,50 @@ vi.mock('../hooks', async () => {
 // Import the mocked hook
 import { useCampaign } from '../hooks';
 
-/**
- * Create a wrapper with all required providers.
- */
-function createWrapper() {
-    const queryClient = new QueryClient({
-        defaultOptions: {
-            queries: {
-                retry: false,
-            },
-        },
-    });
-
-    return function Wrapper({ children }: { children: React.ReactNode }) {
-        return (
-            <QueryClientProvider client={queryClient}>
-                <MemoryRouter initialEntries={['/campaigns/1/dashboard']}>
-                    <CampaignProvider>
-                        <DraftProvider>
-                            <Routes>
-                                <Route
-                                    path="/campaigns/:id/dashboard"
-                                    element={children}
-                                />
-                            </Routes>
-                        </DraftProvider>
-                    </CampaignProvider>
-                </MemoryRouter>
-            </QueryClientProvider>
-        );
-    };
-}
-
 describe('CampaignDashboard', () => {
+    let queryClient: QueryClient;
+
     beforeEach(() => {
         vi.clearAllMocks();
+        queryClient = new QueryClient({
+            defaultOptions: {
+                queries: {
+                    retry: false,
+                },
+            },
+        });
     });
+
+    afterEach(() => {
+        cleanup();
+        queryClient.clear();
+    });
+
+    /**
+     * Create a wrapper with all required providers.
+     * Uses the shared queryClient from beforeEach so it can be
+     * properly cleaned up in afterEach.
+     */
+    function createWrapper() {
+        return function Wrapper({ children }: { children: React.ReactNode }) {
+            return (
+                <QueryClientProvider client={queryClient}>
+                    <MemoryRouter initialEntries={['/campaigns/1/dashboard']}>
+                        <CampaignProvider>
+                            <DraftProvider>
+                                <Routes>
+                                    <Route
+                                        path="/campaigns/:id/dashboard"
+                                        element={children}
+                                    />
+                                </Routes>
+                            </DraftProvider>
+                        </CampaignProvider>
+                    </MemoryRouter>
+                </QueryClientProvider>
+            );
+        };
+    }
 
     it('renders loading state when campaign is loading', () => {
         vi.mocked(useCampaign).mockReturnValue({
