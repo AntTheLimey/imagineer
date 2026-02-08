@@ -20,6 +20,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/antonypegg/imagineer/internal/database"
@@ -189,7 +190,7 @@ func (h *AuthHandler) HandleGoogleCallback(w http.ResponseWriter, r *http.Reques
 
 	// Build user JSON for frontend
 	userResponse := UserResponse{
-		ID:        user.ID.String(),
+		ID:        strconv.FormatInt(user.ID, 10),
 		Email:     user.Email,
 		Name:      user.Name,
 		AvatarURL: user.AvatarURL,
@@ -283,7 +284,7 @@ func (h *AuthHandler) generateJWT(user *models.User) (string, error) {
 	expiresAt := time.Now().Add(time.Duration(h.jwtExpiryHrs) * time.Hour)
 
 	claims := JWTClaims{
-		UserID: user.ID.String(),
+		UserID: strconv.FormatInt(user.ID, 10),
 		Email:  user.Email,
 		Name:   user.Name,
 		Exp:    expiresAt.Unix(),

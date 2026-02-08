@@ -11,8 +11,8 @@
  * Tests for CampaignDashboard page component.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import CampaignDashboard from './CampaignDashboard';
@@ -32,8 +32,8 @@ vi.mock('../hooks', async () => {
         })),
         useGameSystems: vi.fn(() => ({
             data: [
-                { id: 'coc-7e', name: 'Call of Cthulhu 7th Edition' },
-                { id: 'gurps-4e', name: 'GURPS 4th Edition' },
+                { id: 1, name: 'Call of Cthulhu 7th Edition' },
+                { id: 2, name: 'GURPS 4th Edition' },
             ],
             isLoading: false,
             error: null,
@@ -44,42 +44,59 @@ vi.mock('../hooks', async () => {
 // Import the mocked hook
 import { useCampaign } from '../hooks';
 
-/**
- * Create a wrapper with all required providers.
- */
-function createWrapper() {
-    const queryClient = new QueryClient({
-        defaultOptions: {
-            queries: {
-                retry: false,
-            },
-        },
-    });
-
-    return function Wrapper({ children }: { children: React.ReactNode }) {
-        return (
-            <QueryClientProvider client={queryClient}>
-                <MemoryRouter initialEntries={['/campaigns/test-campaign-id/dashboard']}>
-                    <CampaignProvider>
-                        <DraftProvider>
-                            <Routes>
-                                <Route
-                                    path="/campaigns/:id/dashboard"
-                                    element={children}
-                                />
-                            </Routes>
-                        </DraftProvider>
-                    </CampaignProvider>
-                </MemoryRouter>
-            </QueryClientProvider>
-        );
-    };
-}
-
 describe('CampaignDashboard', () => {
+    let queryClient: QueryClient;
+
     beforeEach(() => {
         vi.clearAllMocks();
+        // Stub requestAnimationFrame/cancelAnimationFrame to prevent
+        // happy-dom/MUI TextareaAutosize incompatibility in CI
+        vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+            return setTimeout(() => cb(Date.now()), 0) as unknown as number;
+        });
+        vi.stubGlobal('cancelAnimationFrame', (id: number) => {
+            clearTimeout(id);
+        });
+        queryClient = new QueryClient({
+            defaultOptions: {
+                queries: {
+                    retry: false,
+                },
+            },
+        });
     });
+
+    afterEach(() => {
+        cleanup();
+        queryClient.clear();
+        vi.unstubAllGlobals();
+    });
+
+    /**
+     * Create a wrapper with all required providers.
+     * Uses the shared queryClient from beforeEach so it can be
+     * properly cleaned up in afterEach.
+     */
+    function createWrapper() {
+        return function Wrapper({ children }: { children: React.ReactNode }) {
+            return (
+                <QueryClientProvider client={queryClient}>
+                    <MemoryRouter initialEntries={['/campaigns/1/dashboard']}>
+                        <CampaignProvider>
+                            <DraftProvider>
+                                <Routes>
+                                    <Route
+                                        path="/campaigns/:id/dashboard"
+                                        element={children}
+                                    />
+                                </Routes>
+                            </DraftProvider>
+                        </CampaignProvider>
+                    </MemoryRouter>
+                </QueryClientProvider>
+            );
+        };
+    }
 
     it('renders loading state when campaign is loading', () => {
         vi.mocked(useCampaign).mockReturnValue({
@@ -108,9 +125,9 @@ describe('CampaignDashboard', () => {
     it('renders campaign settings when campaign is loaded', () => {
         vi.mocked(useCampaign).mockReturnValue({
             data: {
-                id: 'test-campaign-id',
+                id: 1,
                 name: 'Test Campaign',
-                systemId: 'coc-7e',
+                systemId: 1,
                 description: 'A test campaign',
                 settings: {},
                 createdAt: '2025-01-01T00:00:00Z',
@@ -130,9 +147,9 @@ describe('CampaignDashboard', () => {
     it('renders navigation items', () => {
         vi.mocked(useCampaign).mockReturnValue({
             data: {
-                id: 'test-campaign-id',
+                id: 1,
                 name: 'Test Campaign',
-                systemId: 'coc-7e',
+                systemId: 1,
                 settings: {},
                 createdAt: '2025-01-01T00:00:00Z',
                 updatedAt: '2025-01-01T00:00:00Z',
@@ -156,9 +173,9 @@ describe('CampaignDashboard', () => {
     it('renders breadcrumbs with campaign name', () => {
         vi.mocked(useCampaign).mockReturnValue({
             data: {
-                id: 'test-campaign-id',
+                id: 1,
                 name: 'My Awesome Campaign',
-                systemId: 'coc-7e',
+                systemId: 1,
                 settings: {},
                 createdAt: '2025-01-01T00:00:00Z',
                 updatedAt: '2025-01-01T00:00:00Z',
@@ -170,7 +187,7 @@ describe('CampaignDashboard', () => {
         render(<CampaignDashboard />, { wrapper: createWrapper() });
 
         // Check breadcrumbs
-        expect(screen.getByText('Campaigns')).toBeInTheDocument();
+        expect(screen.getByText('Home')).toBeInTheDocument();
         // The campaign name appears both in breadcrumbs and title
         expect(screen.getAllByText('My Awesome Campaign').length).toBeGreaterThanOrEqual(1);
     });

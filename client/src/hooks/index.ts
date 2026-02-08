@@ -117,3 +117,31 @@ export {
     useImportEvernoteLocal,
     evernoteImportKeys,
 } from './useEvernoteImport';
+
+// Chapter hooks
+export {
+    useChapters,
+    useChapter,
+    useCreateChapter,
+    useUpdateChapter,
+    useDeleteChapter,
+    chapterKeys,
+} from './useChapters';
+
+// Session hooks
+export {
+    useSessions,
+    useSessionsByChapter,
+    useSession,
+    useCreateSession,
+    useUpdateSession,
+    useDeleteSession,
+    sessionKeys,
+} from './useSessions';
+
+// Entity detection hooks
+export { useEntityDetection } from './useEntityDetection';
+export type {
+    UseEntityDetectionOptions,
+    UseEntityDetectionReturn,
+} from './useEntityDetection';

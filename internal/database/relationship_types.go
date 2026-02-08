@@ -15,13 +15,12 @@ import (
 	"fmt"
 
 	"github.com/antonypegg/imagineer/internal/models"
-	"github.com/google/uuid"
 )
 
 // ListRelationshipTypes returns all relationship types available for a campaign.
 // This includes system defaults (campaign_id IS NULL) and campaign-specific types.
 // Results are sorted by name.
-func (db *DB) ListRelationshipTypes(ctx context.Context, campaignID uuid.UUID) ([]models.RelationshipType, error) {
+func (db *DB) ListRelationshipTypes(ctx context.Context, campaignID int64) ([]models.RelationshipType, error) {
 	query := `
 		SELECT id, campaign_id, name, inverse_name, is_symmetric,
 		       display_label, inverse_display_label, description,
@@ -58,7 +57,7 @@ func (db *DB) ListRelationshipTypes(ctx context.Context, campaignID uuid.UUID) (
 }
 
 // GetRelationshipType retrieves a single relationship type by ID.
-func (db *DB) GetRelationshipType(ctx context.Context, id uuid.UUID) (*models.RelationshipType, error) {
+func (db *DB) GetRelationshipType(ctx context.Context, id int64) (*models.RelationshipType, error) {
 	query := `
 		SELECT id, campaign_id, name, inverse_name, is_symmetric,
 		       display_label, inverse_display_label, description,
@@ -80,20 +79,18 @@ func (db *DB) GetRelationshipType(ctx context.Context, id uuid.UUID) (*models.Re
 }
 
 // CreateRelationshipType creates a new campaign-specific relationship type.
-func (db *DB) CreateRelationshipType(ctx context.Context, campaignID uuid.UUID, req models.CreateRelationshipTypeRequest) (*models.RelationshipType, error) {
-	id := uuid.New()
-
+func (db *DB) CreateRelationshipType(ctx context.Context, campaignID int64, req models.CreateRelationshipTypeRequest) (*models.RelationshipType, error) {
 	query := `
-		INSERT INTO relationship_types (id, campaign_id, name, inverse_name, is_symmetric,
+		INSERT INTO relationship_types (campaign_id, name, inverse_name, is_symmetric,
 		                                display_label, inverse_display_label, description)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, campaign_id, name, inverse_name, is_symmetric,
 		          display_label, inverse_display_label, description,
 		          created_at, updated_at`
 
 	var rt models.RelationshipType
 	err := db.QueryRow(ctx, query,
-		id, campaignID, req.Name, req.InverseName, req.IsSymmetric,
+		campaignID, req.Name, req.InverseName, req.IsSymmetric,
 		req.DisplayLabel, req.InverseDisplayLabel, req.Description,
 	).Scan(
 		&rt.ID, &rt.CampaignID, &rt.Name, &rt.InverseName, &rt.IsSymmetric,
@@ -109,7 +106,7 @@ func (db *DB) CreateRelationshipType(ctx context.Context, campaignID uuid.UUID, 
 
 // DeleteRelationshipType deletes a campaign-specific relationship type.
 // System default types (campaign_id IS NULL) cannot be deleted.
-func (db *DB) DeleteRelationshipType(ctx context.Context, id uuid.UUID) error {
+func (db *DB) DeleteRelationshipType(ctx context.Context, id int64) error {
 	// Only delete if it's a campaign-specific type (not a system default)
 	query := `DELETE FROM relationship_types WHERE id = $1 AND campaign_id IS NOT NULL`
 	result, err := db.Pool.Exec(ctx, query, id)
@@ -126,7 +123,7 @@ func (db *DB) DeleteRelationshipType(ctx context.Context, id uuid.UUID) error {
 
 // GetInverseType returns the inverse type name for a given relationship type.
 // It checks campaign-specific types first, then falls back to system defaults.
-func (db *DB) GetInverseType(ctx context.Context, campaignID uuid.UUID, typeName string) (string, error) {
+func (db *DB) GetInverseType(ctx context.Context, campaignID int64, typeName string) (string, error) {
 	query := `SELECT get_inverse_relationship_type($1, $2)`
 
 	var inverseName *string
@@ -143,7 +140,7 @@ func (db *DB) GetInverseType(ctx context.Context, campaignID uuid.UUID, typeName
 }
 
 // IsSystemRelationshipType checks if a relationship type is a system default.
-func (db *DB) IsSystemRelationshipType(ctx context.Context, id uuid.UUID) (bool, error) {
+func (db *DB) IsSystemRelationshipType(ctx context.Context, id int64) (bool, error) {
 	query := `SELECT campaign_id IS NULL FROM relationship_types WHERE id = $1`
 
 	var isSystem bool

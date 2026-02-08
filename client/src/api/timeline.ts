@@ -18,26 +18,26 @@ import type { TimelineEvent, DatePrecision } from '../types';
  * Parameters for listing timeline events.
  */
 export interface ListTimelineEventsParams {
-    campaignId: string;
+    campaignId: number;
     page?: number;
     pageSize?: number;
     isPlayerKnown?: boolean;
     startDate?: string;
     endDate?: string;
-    entityId?: string;
+    entityId?: number;
 }
 
 /**
  * Input for creating a new timeline event.
  */
 export interface CreateTimelineEventInput {
-    campaignId: string;
+    campaignId: number;
     eventDate?: string;
     eventTime?: string;
     datePrecision: DatePrecision;
     description: string;
-    entityIds?: string[];
-    sessionId?: string;
+    entityIds?: number[];
+    sessionId?: number;
     isPlayerKnown?: boolean;
     sourceDocument?: string;
 }
@@ -50,8 +50,8 @@ export interface UpdateTimelineEventInput {
     eventTime?: string;
     datePrecision?: DatePrecision;
     description?: string;
-    entityIds?: string[];
-    sessionId?: string;
+    entityIds?: number[];
+    sessionId?: number;
     isPlayerKnown?: boolean;
     sourceDocument?: string;
 }
@@ -74,7 +74,7 @@ export const timelineApi = {
     /**
      * Get a single timeline event by ID.
      */
-    get(campaignId: string, eventId: string): Promise<TimelineEvent> {
+    get(campaignId: number, eventId: number): Promise<TimelineEvent> {
         return apiClient.get<TimelineEvent>(
             `/campaigns/${campaignId}/timeline/${eventId}`
         );
@@ -95,8 +95,8 @@ export const timelineApi = {
      * Update an existing timeline event.
      */
     update(
-        campaignId: string,
-        eventId: string,
+        campaignId: number,
+        eventId: number,
         input: UpdateTimelineEventInput
     ): Promise<TimelineEvent> {
         return apiClient.put<TimelineEvent>(
@@ -108,14 +108,14 @@ export const timelineApi = {
     /**
      * Delete a timeline event.
      */
-    delete(campaignId: string, eventId: string): Promise<void> {
+    delete(campaignId: number, eventId: number): Promise<void> {
         return apiClient.delete<void>(`/campaigns/${campaignId}/timeline/${eventId}`);
     },
 
     /**
      * Get timeline events involving a specific entity.
      */
-    getForEntity(campaignId: string, entityId: string): Promise<TimelineEvent[]> {
+    getForEntity(campaignId: number, entityId: number): Promise<TimelineEvent[]> {
         return apiClient.get<TimelineEvent[]>(
             `/campaigns/${campaignId}/entities/${entityId}/timeline`
         );

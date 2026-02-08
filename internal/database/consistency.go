@@ -16,49 +16,48 @@ import (
 	"time"
 
 	"github.com/antonypegg/imagineer/internal/models"
-	"github.com/google/uuid"
 )
 
 // OrphanedEntity represents an entity with no relationships or timeline references.
 type OrphanedEntity struct {
-	ID         uuid.UUID         `json:"id"`
+	ID         int64             `json:"id"`
 	Name       string            `json:"name"`
 	EntityType models.EntityType `json:"entityType"`
 }
 
 // DuplicateNamePair represents two entities with similar names.
 type DuplicateNamePair struct {
-	EntityID1  uuid.UUID `json:"entityId1"`
-	Name1      string    `json:"name1"`
-	EntityID2  uuid.UUID `json:"entityId2"`
-	Name2      string    `json:"name2"`
-	Similarity float64   `json:"similarity"`
+	EntityID1  int64   `json:"entityId1"`
+	Name1      string  `json:"name1"`
+	EntityID2  int64   `json:"entityId2"`
+	Name2      string  `json:"name2"`
+	Similarity float64 `json:"similarity"`
 }
 
 // TimelineConflict represents an entity appearing in multiple events at the same time.
 type TimelineConflict struct {
-	EntityID   uuid.UUID   `json:"entityId"`
-	EntityName string      `json:"entityName"`
-	EventDate  time.Time   `json:"eventDate"`
-	EventCount int         `json:"eventCount"`
-	EventIDs   []uuid.UUID `json:"eventIds"`
+	EntityID   int64     `json:"entityId"`
+	EntityName string    `json:"entityName"`
+	EventDate  time.Time `json:"eventDate"`
+	EventCount int       `json:"eventCount"`
+	EventIDs   []int64   `json:"eventIds"`
 }
 
 // InvalidReference represents a relationship pointing to a non-existent entity.
 type InvalidReference struct {
-	RelationshipID  uuid.UUID `json:"relationshipId"`
-	MissingEntityID uuid.UUID `json:"missingEntityId"`
-	ReferenceType   string    `json:"referenceType"` // "source" or "target"
+	RelationshipID  int64  `json:"relationshipId"`
+	MissingEntityID int64  `json:"missingEntityId"`
+	ReferenceType   string `json:"referenceType"` // "source" or "target"
 }
 
 // EmptySession represents a completed session with no entity references.
 type EmptySession struct {
-	ID            uuid.UUID `json:"id"`
-	SessionNumber int       `json:"sessionNumber"`
+	ID            int64 `json:"id"`
+	SessionNumber int   `json:"sessionNumber"`
 }
 
 // FindOrphanedEntities retrieves entities with no relationships or timeline references.
-func (db *DB) FindOrphanedEntities(ctx context.Context, campaignID uuid.UUID, entityTypeFilter *string) ([]OrphanedEntity, error) {
+func (db *DB) FindOrphanedEntities(ctx context.Context, campaignID int64, entityTypeFilter *string) ([]OrphanedEntity, error) {
 	query := `
 		SELECT e.id, e.name, e.entity_type
 		FROM entities e
@@ -98,7 +97,7 @@ func (db *DB) FindOrphanedEntities(ctx context.Context, campaignID uuid.UUID, en
 
 // FindDuplicateNames retrieves pairs of entities with similar names using pg_trgm.
 // The threshold parameter specifies the minimum similarity score (0.0 to 1.0).
-func (db *DB) FindDuplicateNames(ctx context.Context, campaignID uuid.UUID, threshold float64) ([]DuplicateNamePair, error) {
+func (db *DB) FindDuplicateNames(ctx context.Context, campaignID int64, threshold float64) ([]DuplicateNamePair, error) {
 	query := `
 		SELECT
 			e1.id AS entity_id1,
@@ -136,7 +135,7 @@ func (db *DB) FindDuplicateNames(ctx context.Context, campaignID uuid.UUID, thre
 }
 
 // FindTimelineConflicts retrieves entities appearing in multiple events at the same date.
-func (db *DB) FindTimelineConflicts(ctx context.Context, campaignID uuid.UUID) ([]TimelineConflict, error) {
+func (db *DB) FindTimelineConflicts(ctx context.Context, campaignID int64) ([]TimelineConflict, error) {
 	// First, find entities with potential conflicts
 	query := `
 		WITH entity_event_dates AS (
@@ -192,7 +191,7 @@ func (db *DB) FindTimelineConflicts(ctx context.Context, campaignID uuid.UUID) (
 }
 
 // FindMissingRelationshipTargets retrieves relationships pointing to non-existent entities.
-func (db *DB) FindMissingRelationshipTargets(ctx context.Context, campaignID uuid.UUID) ([]InvalidReference, error) {
+func (db *DB) FindMissingRelationshipTargets(ctx context.Context, campaignID int64) ([]InvalidReference, error) {
 	query := `
 		SELECT r.id, r.source_entity_id, 'source'
 		FROM relationships r
@@ -227,7 +226,7 @@ func (db *DB) FindMissingRelationshipTargets(ctx context.Context, campaignID uui
 }
 
 // FindSessionsWithoutEntities retrieves completed sessions with no entity discoveries.
-func (db *DB) FindSessionsWithoutEntities(ctx context.Context, campaignID uuid.UUID) ([]EmptySession, error) {
+func (db *DB) FindSessionsWithoutEntities(ctx context.Context, campaignID int64) ([]EmptySession, error) {
 	query := `
 		SELECT s.id, COALESCE(s.session_number, 0) as session_number
 		FROM sessions s

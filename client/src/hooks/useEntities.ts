@@ -28,9 +28,9 @@ export const entityKeys = {
     lists: () => [...entityKeys.all, 'list'] as const,
     list: (params: ListEntitiesParams) => [...entityKeys.lists(), params] as const,
     details: () => [...entityKeys.all, 'detail'] as const,
-    detail: (campaignId: string, entityId: string) =>
+    detail: (campaignId: number, entityId: number) =>
         [...entityKeys.details(), campaignId, entityId] as const,
-    similar: (campaignId: string, name: string) =>
+    similar: (campaignId: number, name: string) =>
         [...entityKeys.all, 'similar', campaignId, name] as const,
 };
 
@@ -49,8 +49,8 @@ export function useEntities(params: ListEntitiesParams) {
  * Hook to fetch a single entity by ID.
  */
 export function useEntity(
-    campaignId: string,
-    entityId: string,
+    campaignId: number,
+    entityId: number,
     options?: { enabled?: boolean }
 ) {
     return useQuery({
@@ -64,7 +64,7 @@ export function useEntity(
  * Hook to search for similar entities (for duplicate detection).
  */
 export function useSimilarEntities(
-    campaignId: string,
+    campaignId: number,
     name: string,
     options?: { enabled?: boolean }
 ) {
@@ -90,7 +90,7 @@ export function useCreateEntity() {
                 predicate: (query) => {
                     const key = query.queryKey as unknown[];
                     if (key.length >= 3 && typeof key[2] === 'object' && key[2] !== null) {
-                        const params = key[2] as { campaignId?: string };
+                        const params = key[2] as { campaignId?: number };
                         return params.campaignId === data.campaignId;
                     }
                     return false;
@@ -112,8 +112,8 @@ export function useUpdateEntity() {
             entityId,
             input,
         }: {
-            campaignId: string;
-            entityId: string;
+            campaignId: number;
+            entityId: number;
             input: UpdateEntityInput;
         }) => entitiesApi.update(campaignId, entityId, input),
         onSuccess: (data: Entity) => {
@@ -128,7 +128,7 @@ export function useUpdateEntity() {
                 predicate: (query) => {
                     const key = query.queryKey as unknown[];
                     if (key.length >= 3 && typeof key[2] === 'object' && key[2] !== null) {
-                        const params = key[2] as { campaignId?: string };
+                        const params = key[2] as { campaignId?: number };
                         return params.campaignId === data.campaignId;
                     }
                     return false;
@@ -149,10 +149,10 @@ export function useDeleteEntity() {
             campaignId,
             entityId,
         }: {
-            campaignId: string;
-            entityId: string;
+            campaignId: number;
+            entityId: number;
         }) => entitiesApi.delete(campaignId, entityId),
-        onSuccess: (_data: void, variables: { campaignId: string; entityId: string }) => {
+        onSuccess: (_data: void, variables: { campaignId: number; entityId: number }) => {
             // Remove from cache
             queryClient.removeQueries({
                 queryKey: entityKeys.detail(variables.campaignId, variables.entityId),
@@ -163,7 +163,7 @@ export function useDeleteEntity() {
                 predicate: (query) => {
                     const key = query.queryKey as unknown[];
                     if (key.length >= 3 && typeof key[2] === 'object' && key[2] !== null) {
-                        const params = key[2] as { campaignId?: string };
+                        const params = key[2] as { campaignId?: number };
                         return params.campaignId === variables.campaignId;
                     }
                     return false;

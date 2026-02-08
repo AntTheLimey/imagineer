@@ -17,7 +17,7 @@ import {
     useCallback,
     ReactNode,
 } from 'react';
-import { useCampaign } from '../hooks';
+import { useCampaign, useCampaigns } from '../hooks';
 import type { Campaign } from '../types';
 
 const CAMPAIGN_STORAGE_KEY = 'imagineer_current_campaign_id';
@@ -27,17 +27,25 @@ const CAMPAIGN_STORAGE_KEY = 'imagineer_current_campaign_id';
  */
 interface CampaignContextValue {
     /** ID of the currently selected campaign */
-    currentCampaignId: string | null;
+    currentCampaignId: number | null;
     /** Full campaign object for the current campaign */
     currentCampaign: Campaign | null;
     /** Whether the campaign data is currently loading */
     isLoading: boolean;
+    /** Whether we are still initializing (validating stored campaign) */
+    isInitializing: boolean;
     /** Error if campaign fetch failed */
     error: Error | null;
+    /** All available campaigns for the user */
+    campaigns: Campaign[] | undefined;
+    /** Whether campaigns list is loading */
+    campaignsLoading: boolean;
     /** Set the current campaign by ID (persists to localStorage) */
-    setCurrentCampaignId: (id: string | null) => void;
+    setCurrentCampaignId: (id: number | null) => void;
     /** Clear the current campaign selection */
     clearCurrentCampaign: () => void;
+    /** Get the most recently created campaign */
+    getLatestCampaign: () => Campaign | null;
 }
 
 const CampaignContext = createContext<CampaignContextValue | undefined>(
@@ -49,34 +57,68 @@ interface CampaignProviderProps {
 }
 
 /**
- * Provides campaign selection state to descendant components via React context.
+ * Provides campaign selection state and actions to descendant components via React context.
  *
- * Persists the selected campaign ID to localStorage and fetches the full
- * campaign object using React Query. The context value includes the current
- * campaign ID and object, loading state, and functions to change selection.
+ * Initializes the selected campaign ID from localStorage, validates it against the user's
+ * fetched campaign list (clearing it if no longer valid), persists changes back to localStorage,
+ * and fetches the full current campaign object when an ID is set. The context value exposes:
+ * `currentCampaignId`, `currentCampaign`, `isLoading`, `isInitializing`, `error`, `campaigns`,
+ * `campaignsLoading`, `setCurrentCampaignId`, `clearCurrentCampaign`, and `getLatestCampaign`.
  */
 export function CampaignProvider({ children }: CampaignProviderProps) {
     const [currentCampaignId, setCurrentCampaignIdState] = useState<
-        string | null
+        number | null
     >(() => {
         // Initialize from localStorage
         const stored = localStorage.getItem(CAMPAIGN_STORAGE_KEY);
-        return stored ?? null;
+        if (stored) {
+            const parsed = Number(stored);
+            return Number.isNaN(parsed) ? null : parsed;
+        }
+        return null;
     });
+
+    // Track whether we've completed initial validation
+    const [isInitializing, setIsInitializing] = useState(true);
+
+    // Fetch all campaigns to validate stored ID and provide list
+    const {
+        data: campaigns,
+        isLoading: campaignsLoading,
+    } = useCampaigns();
 
     // Fetch the full campaign object when ID changes
     const {
         data: currentCampaign,
         isLoading,
         error,
-    } = useCampaign(currentCampaignId ?? '', {
+    } = useCampaign(currentCampaignId ?? 0, {
         enabled: !!currentCampaignId,
     });
+
+    // Validate stored campaign ID against user's campaigns
+    useEffect(() => {
+        if (campaignsLoading) {
+            return;
+        }
+
+        // Once campaigns are loaded, validate the stored ID
+        if (currentCampaignId && campaigns) {
+            const isValid = campaigns.some(c => c.id === currentCampaignId);
+            if (!isValid) {
+                // Stored campaign no longer valid, clear it
+                setCurrentCampaignIdState(null);
+                localStorage.removeItem(CAMPAIGN_STORAGE_KEY);
+            }
+        }
+
+        setIsInitializing(false);
+    }, [campaigns, campaignsLoading, currentCampaignId]);
 
     // Persist campaign ID to localStorage when it changes
     useEffect(() => {
         if (currentCampaignId) {
-            localStorage.setItem(CAMPAIGN_STORAGE_KEY, currentCampaignId);
+            localStorage.setItem(CAMPAIGN_STORAGE_KEY, String(currentCampaignId));
         } else {
             localStorage.removeItem(CAMPAIGN_STORAGE_KEY);
         }
@@ -85,7 +127,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     /**
      * Set the current campaign by ID.
      */
-    const setCurrentCampaignId = useCallback((id: string | null) => {
+    const setCurrentCampaignId = useCallback((id: number | null) => {
         setCurrentCampaignIdState(id);
     }, []);
 
@@ -96,13 +138,32 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
         setCurrentCampaignIdState(null);
     }, []);
 
+    /**
+     * Get the most recently created campaign.
+     * Returns null if no campaigns exist.
+     */
+    const getLatestCampaign = useCallback((): Campaign | null => {
+        if (!campaigns || campaigns.length === 0) {
+            return null;
+        }
+        // Sort by createdAt descending and return the first one
+        const sorted = [...campaigns].sort((a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        return sorted[0];
+    }, [campaigns]);
+
     const value: CampaignContextValue = {
         currentCampaignId,
         currentCampaign: currentCampaign ?? null,
         isLoading,
+        isInitializing,
         error: error as Error | null,
+        campaigns,
+        campaignsLoading,
         setCurrentCampaignId,
         clearCurrentCampaign,
+        getLatestCampaign,
     };
 
     return (

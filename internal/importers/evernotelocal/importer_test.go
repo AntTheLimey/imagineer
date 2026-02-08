@@ -11,6 +11,7 @@
 package evernotelocal
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/antonypegg/imagineer/internal/importers/common"
@@ -267,5 +268,80 @@ func TestImporterName(t *testing.T) {
 	name := importer.Name()
 	if name != "Evernote Local" {
 		t.Errorf("Name() = %q, want %q", name, "Evernote Local")
+	}
+}
+
+func TestEvernoteVersionConstants(t *testing.T) {
+	tests := []struct {
+		name     string
+		version  EvernoteVersion
+		expected string
+	}{
+		{
+			name:     "unknown version",
+			version:  EvernoteVersionUnknown,
+			expected: "unknown",
+		},
+		{
+			name:     "legacy version",
+			version:  EvernoteVersionLegacy,
+			expected: "legacy",
+		},
+		{
+			name:     "10.x version",
+			version:  EvernoteVersion10,
+			expected: "10.x",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if string(tt.version) != tt.expected {
+				t.Errorf("EvernoteVersion = %q, want %q", tt.version, tt.expected)
+			}
+		})
+	}
+}
+
+func TestEvernoteStatusHasVersion(t *testing.T) {
+	status := EvernoteStatus{
+		Available: true,
+		Running:   true,
+		Version:   EvernoteVersionLegacy,
+	}
+
+	if status.Version != EvernoteVersionLegacy {
+		t.Errorf("EvernoteStatus.Version = %q, want %q", status.Version, EvernoteVersionLegacy)
+	}
+}
+
+func TestEvernote10ErrorMessage(t *testing.T) {
+	// Verify the error message contains expected guidance
+	if Evernote10Error == "" {
+		t.Error("Evernote10Error should not be empty")
+	}
+
+	expectedPhrases := []string{
+		"Evernote 10.x detected",
+		"ENEX",
+		"Export notebook",
+		"Evernote Legacy",
+	}
+
+	for _, phrase := range expectedPhrases {
+		if !strings.Contains(Evernote10Error, phrase) {
+			t.Errorf("Evernote10Error should contain %q", phrase)
+		}
+	}
+}
+
+func TestErrEvernote10Unsupported(t *testing.T) {
+	if ErrEvernote10Unsupported == nil {
+		t.Error("ErrEvernote10Unsupported should not be nil")
+	}
+
+	errStr := ErrEvernote10Unsupported.Error()
+	if !strings.Contains(errStr, "10.x") {
+		t.Errorf("ErrEvernote10Unsupported.Error() = %q, should mention 10.x", errStr)
 	}
 }

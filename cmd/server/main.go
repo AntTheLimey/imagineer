@@ -24,6 +24,7 @@ import (
 	"github.com/antonypegg/imagineer/internal/api"
 	"github.com/antonypegg/imagineer/internal/auth"
 	"github.com/antonypegg/imagineer/internal/database"
+	"github.com/joho/godotenv"
 )
 
 // main initializes application configuration and services, starts the HTTP server, and performs a graceful shutdown on interrupt signals.
@@ -33,6 +34,13 @@ import (
 // It constructs the API router, starts the HTTP server with sensible timeouts, and blocks until an OS interrupt (SIGINT or SIGTERM) is received,
 // at which point it attempts a graceful shutdown within a configured timeout.
 func main() {
+	// Load .env file if present. This is a no-op in production where
+	// environment variables are set directly. Already-set variables
+	// are not overridden.
+	if err := godotenv.Load(); err != nil {
+		log.Printf("No .env file found: %v", err)
+	}
+
 	fmt.Println("Imagineer - TTRPG Campaign Intelligence Platform")
 	fmt.Println("Version: 0.1.0-dev")
 

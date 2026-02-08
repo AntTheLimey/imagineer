@@ -16,12 +16,11 @@ import (
 	"fmt"
 
 	"github.com/antonypegg/imagineer/internal/models"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
 // ListPlayerCharacters retrieves all player characters for a campaign.
-func (db *DB) ListPlayerCharacters(ctx context.Context, campaignID uuid.UUID) ([]models.PlayerCharacter, error) {
+func (db *DB) ListPlayerCharacters(ctx context.Context, campaignID int64) ([]models.PlayerCharacter, error) {
 	query := `
         SELECT id, campaign_id, entity_id, character_name, player_name,
                description, background, created_at, updated_at
@@ -39,7 +38,7 @@ func (db *DB) ListPlayerCharacters(ctx context.Context, campaignID uuid.UUID) ([
 }
 
 // GetPlayerCharacter retrieves a player character by ID.
-func (db *DB) GetPlayerCharacter(ctx context.Context, id uuid.UUID) (*models.PlayerCharacter, error) {
+func (db *DB) GetPlayerCharacter(ctx context.Context, id int64) (*models.PlayerCharacter, error) {
 	query := `
         SELECT id, campaign_id, entity_id, character_name, player_name,
                description, background, created_at, updated_at
@@ -62,19 +61,17 @@ func (db *DB) GetPlayerCharacter(ctx context.Context, id uuid.UUID) (*models.Pla
 }
 
 // CreatePlayerCharacter creates a new player character in a campaign.
-func (db *DB) CreatePlayerCharacter(ctx context.Context, campaignID uuid.UUID, req models.CreatePlayerCharacterRequest) (*models.PlayerCharacter, error) {
-	id := uuid.New()
-
+func (db *DB) CreatePlayerCharacter(ctx context.Context, campaignID int64, req models.CreatePlayerCharacterRequest) (*models.PlayerCharacter, error) {
 	query := `
-        INSERT INTO player_characters (id, campaign_id, entity_id, character_name,
+        INSERT INTO player_characters (campaign_id, entity_id, character_name,
                                         player_name, description, background)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id, campaign_id, entity_id, character_name, player_name,
                   description, background, created_at, updated_at`
 
 	var pc models.PlayerCharacter
 	err := db.QueryRow(ctx, query,
-		id, campaignID, req.EntityID, req.CharacterName,
+		campaignID, req.EntityID, req.CharacterName,
 		req.PlayerName, req.Description, req.Background,
 	).Scan(
 		&pc.ID, &pc.CampaignID, &pc.EntityID, &pc.CharacterName, &pc.PlayerName,
@@ -90,7 +87,7 @@ func (db *DB) CreatePlayerCharacter(ctx context.Context, campaignID uuid.UUID, r
 // UpdatePlayerCharacter updates an existing player character using COALESCE.
 // Uses database-side COALESCE to atomically merge updates, preventing race conditions.
 // NULL values in the request preserve existing values in the database.
-func (db *DB) UpdatePlayerCharacter(ctx context.Context, id uuid.UUID, req models.UpdatePlayerCharacterRequest) (*models.PlayerCharacter, error) {
+func (db *DB) UpdatePlayerCharacter(ctx context.Context, id int64, req models.UpdatePlayerCharacterRequest) (*models.PlayerCharacter, error) {
 	query := `
         UPDATE player_characters
         SET entity_id = COALESCE($2, entity_id),
@@ -120,7 +117,7 @@ func (db *DB) UpdatePlayerCharacter(ctx context.Context, id uuid.UUID, req model
 }
 
 // DeletePlayerCharacter deletes a player character by ID.
-func (db *DB) DeletePlayerCharacter(ctx context.Context, id uuid.UUID) error {
+func (db *DB) DeletePlayerCharacter(ctx context.Context, id int64) error {
 	query := `DELETE FROM player_characters WHERE id = $1`
 	result, err := db.Pool.Exec(ctx, query, id)
 	if err != nil {

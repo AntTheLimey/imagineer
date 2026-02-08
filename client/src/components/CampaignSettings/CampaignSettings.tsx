@@ -28,7 +28,7 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import { RichTextEditor } from '../RichTextEditor';
+import { MarkdownEditor } from '../MarkdownEditor';
 import { useGameSystems } from '../../hooks';
 import type { Campaign, GameSystem } from '../../types';
 
@@ -37,26 +37,26 @@ import type { Campaign, GameSystem } from '../../types';
  * Re-exported from index.ts for fast refresh compatibility.
  */
 const GENRE_OPTIONS = [
-    'Fantasy',
-    'Sci-Fi',
-    'Horror',
-    'Mystery',
-    'Cyberpunk',
-    'Steampunk',
-    'Post-Apocalyptic',
-    'Superhero',
-    'Historical',
-    'Urban Fantasy',
-    'Space Opera',
-    'Dark Fantasy',
-    'Pulp Adventure',
-    'Western',
-    'Mythological',
-    'Modern Day',
-    'Noir',
-    'Wuxia',
-    'Military',
     'Comedy',
+    'Cyberpunk',
+    'Dark Fantasy',
+    'Fantasy',
+    'Historical',
+    'Horror',
+    'Military',
+    'Modern Day',
+    'Mystery',
+    'Mythological',
+    'Noir',
+    'Post-Apocalyptic',
+    'Pulp Adventure',
+    'Sci-Fi',
+    'Space Opera',
+    'Steampunk',
+    'Superhero',
+    'Urban Fantasy',
+    'Western',
+    'Wuxia',
 ] as const;
 
 /**
@@ -104,7 +104,7 @@ function campaignToFormData(campaign: Campaign): CampaignSettingsData {
     return {
         name: campaign.name,
         description: campaign.description ?? '',
-        gameSystemId: campaign.systemId,
+        gameSystemId: String(campaign.systemId),
         genre: (campaign.settings?.genre as string) ?? '',
         imageStylePrompt: (campaign.settings?.imageStylePrompt as string) ?? '',
     };
@@ -202,7 +202,8 @@ export default function CampaignSettings({
      * Get game system name by ID.
      */
     const getGameSystemName = (id: string): string => {
-        const system = gameSystems?.find((gs: GameSystem) => gs.id === id);
+        const numericId = Number(id);
+        const system = gameSystems?.find((gs: GameSystem) => gs.id === numericId);
         return system?.name ?? 'Unknown System';
     };
 
@@ -260,10 +261,10 @@ export default function CampaignSettings({
 
             {/* Description */}
             <Box sx={{ mb: 3 }}>
-                <RichTextEditor
+                <MarkdownEditor
                     label="Description"
                     value={formData.description}
-                    onChange={(html) => updateField('description', html)}
+                    onChange={(md) => updateField('description', md)}
                     placeholder="Describe your campaign setting, themes, and background..."
                     minHeight={150}
                     maxHeight={300}
@@ -285,7 +286,7 @@ export default function CampaignSettings({
                         <MenuItem disabled>Error loading systems</MenuItem>
                     ) : (
                         gameSystems?.map((system: GameSystem) => (
-                            <MenuItem key={system.id} value={system.id}>
+                            <MenuItem key={system.id} value={String(system.id)}>
                                 {system.name}
                             </MenuItem>
                         ))

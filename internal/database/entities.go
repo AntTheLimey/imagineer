@@ -16,12 +16,11 @@ import (
 	"fmt"
 
 	"github.com/antonypegg/imagineer/internal/models"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
 // ListEntitiesByCampaign retrieves all entities for a campaign.
-func (db *DB) ListEntitiesByCampaign(ctx context.Context, campaignID uuid.UUID) ([]models.Entity, error) {
+func (db *DB) ListEntitiesByCampaign(ctx context.Context, campaignID int64) ([]models.Entity, error) {
 	query := `
         SELECT id, campaign_id, entity_type, name, description, attributes,
                tags, gm_notes, discovered_session, source_document,
@@ -40,7 +39,7 @@ func (db *DB) ListEntitiesByCampaign(ctx context.Context, campaignID uuid.UUID) 
 }
 
 // ListEntitiesByType retrieves all entities of a specific type for a campaign.
-func (db *DB) ListEntitiesByType(ctx context.Context, campaignID uuid.UUID, entityType models.EntityType) ([]models.Entity, error) {
+func (db *DB) ListEntitiesByType(ctx context.Context, campaignID int64, entityType models.EntityType) ([]models.Entity, error) {
 	query := `
         SELECT id, campaign_id, entity_type, name, description, attributes,
                tags, gm_notes, discovered_session, source_document,
@@ -59,7 +58,7 @@ func (db *DB) ListEntitiesByType(ctx context.Context, campaignID uuid.UUID, enti
 }
 
 // GetEntity retrieves an entity by ID.
-func (db *DB) GetEntity(ctx context.Context, id uuid.UUID) (*models.Entity, error) {
+func (db *DB) GetEntity(ctx context.Context, id int64) (*models.Entity, error) {
 	query := `
         SELECT id, campaign_id, entity_type, name, description, attributes,
                tags, gm_notes, discovered_session, source_document,
@@ -82,9 +81,7 @@ func (db *DB) GetEntity(ctx context.Context, id uuid.UUID) (*models.Entity, erro
 }
 
 // CreateEntity creates a new entity.
-func (db *DB) CreateEntity(ctx context.Context, campaignID uuid.UUID, req models.CreateEntityRequest) (*models.Entity, error) {
-	id := uuid.New()
-
+func (db *DB) CreateEntity(ctx context.Context, campaignID int64, req models.CreateEntityRequest) (*models.Entity, error) {
 	attributes := req.Attributes
 	if attributes == nil {
 		attributes = json.RawMessage("{}")
@@ -101,17 +98,17 @@ func (db *DB) CreateEntity(ctx context.Context, campaignID uuid.UUID, req models
 	}
 
 	query := `
-        INSERT INTO entities (id, campaign_id, entity_type, name, description,
+        INSERT INTO entities (campaign_id, entity_type, name, description,
                               attributes, tags, gm_notes, discovered_session,
                               source_document, source_confidence)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING id, campaign_id, entity_type, name, description, attributes,
                   tags, gm_notes, discovered_session, source_document,
                   source_confidence, version, created_at, updated_at`
 
 	var e models.Entity
 	err := db.QueryRow(ctx, query,
-		id, campaignID, req.EntityType, req.Name, req.Description,
+		campaignID, req.EntityType, req.Name, req.Description,
 		attributes, tags, req.GMNotes, req.DiscoveredSession,
 		req.SourceDocument, sourceConfidence,
 	).Scan(
@@ -128,7 +125,7 @@ func (db *DB) CreateEntity(ctx context.Context, campaignID uuid.UUID, req models
 }
 
 // UpdateEntity updates an existing entity.
-func (db *DB) UpdateEntity(ctx context.Context, id uuid.UUID, req models.UpdateEntityRequest) (*models.Entity, error) {
+func (db *DB) UpdateEntity(ctx context.Context, id int64, req models.UpdateEntityRequest) (*models.Entity, error) {
 	// First get the existing entity
 	existing, err := db.GetEntity(ctx, id)
 	if err != nil {
@@ -210,7 +207,7 @@ func (db *DB) UpdateEntity(ctx context.Context, id uuid.UUID, req models.UpdateE
 }
 
 // DeleteEntity deletes an entity by ID.
-func (db *DB) DeleteEntity(ctx context.Context, id uuid.UUID) error {
+func (db *DB) DeleteEntity(ctx context.Context, id int64) error {
 	query := `DELETE FROM entities WHERE id = $1`
 	result, err := db.Pool.Exec(ctx, query, id)
 	if err != nil {
@@ -261,7 +258,7 @@ func (db *DB) CountEntitiesByType(ctx context.Context) (map[string]int, error) {
 }
 
 // SearchEntitiesByName searches for entities with similar names.
-func (db *DB) SearchEntitiesByName(ctx context.Context, campaignID uuid.UUID, name string, limit int) ([]models.Entity, error) {
+func (db *DB) SearchEntitiesByName(ctx context.Context, campaignID int64, name string, limit int) ([]models.Entity, error) {
 	query := `
         SELECT id, campaign_id, entity_type, name, description, attributes,
                tags, gm_notes, discovered_session, source_document,

@@ -15,7 +15,6 @@ import (
 	"testing"
 
 	"github.com/antonypegg/imagineer/internal/agents"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -34,9 +33,9 @@ func TestChecker_Description(t *testing.T) {
 	assert.Contains(t, desc, "inconsistencies")
 }
 
-// TestParseCampaignID_ValidUUID tests parsing a valid UUID parameter.
-func TestParseCampaignID_ValidUUID(t *testing.T) {
-	expected := uuid.New()
+// TestParseCampaignID_ValidInt64 tests parsing a valid int64 parameter.
+func TestParseCampaignID_ValidInt64(t *testing.T) {
+	expected := int64(42)
 	params := map[string]any{
 		"campaign_id": expected,
 	}
@@ -46,11 +45,11 @@ func TestParseCampaignID_ValidUUID(t *testing.T) {
 	assert.Equal(t, expected, result)
 }
 
-// TestParseCampaignID_ValidString tests parsing a valid UUID string parameter.
+// TestParseCampaignID_ValidString tests parsing a valid int64 string parameter.
 func TestParseCampaignID_ValidString(t *testing.T) {
-	expected := uuid.New()
+	expected := int64(42)
 	params := map[string]any{
-		"campaign_id": expected.String(),
+		"campaign_id": "42",
 	}
 
 	result, err := parseCampaignID(params)
@@ -67,10 +66,10 @@ func TestParseCampaignID_Missing(t *testing.T) {
 	assert.Contains(t, err.Error(), "campaign_id parameter is required")
 }
 
-// TestParseCampaignID_InvalidString tests error when campaign_id is an invalid string.
+// TestParseCampaignID_InvalidString tests error when campaign_id is a non-numeric string.
 func TestParseCampaignID_InvalidString(t *testing.T) {
 	params := map[string]any{
-		"campaign_id": "not-a-uuid",
+		"campaign_id": "not-a-number",
 	}
 
 	_, err := parseCampaignID(params)
@@ -81,12 +80,12 @@ func TestParseCampaignID_InvalidString(t *testing.T) {
 // TestParseCampaignID_InvalidType tests error when campaign_id is wrong type.
 func TestParseCampaignID_InvalidType(t *testing.T) {
 	params := map[string]any{
-		"campaign_id": 12345,
+		"campaign_id": true,
 	}
 
 	_, err := parseCampaignID(params)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "must be a UUID or string")
+	assert.Contains(t, err.Error(), "must be a number or string")
 }
 
 // TestSummarizeIssues_Empty tests summarizing an empty issue list.
@@ -120,8 +119,8 @@ func TestSummarizeIssues_Mixed(t *testing.T) {
 
 // TestConsistencyIssue_Structure tests the ConsistencyIssue struct fields.
 func TestConsistencyIssue_Structure(t *testing.T) {
-	entityID := uuid.New()
-	relatedID := uuid.New()
+	entityID := int64(100)
+	relatedID := int64(200)
 
 	issue := ConsistencyIssue{
 		Type:        "orphaned_entity",
@@ -130,7 +129,7 @@ func TestConsistencyIssue_Structure(t *testing.T) {
 		EntityName:  "Test Entity",
 		Description: "Entity has no relationships",
 		Suggestion:  "Consider linking or removing",
-		RelatedIDs:  []uuid.UUID{relatedID},
+		RelatedIDs:  []int64{relatedID},
 	}
 
 	assert.Equal(t, "orphaned_entity", issue.Type)
@@ -145,8 +144,8 @@ func TestConsistencyIssue_Structure(t *testing.T) {
 
 // TestCheckerResult_Structure tests the CheckerResult struct fields.
 func TestCheckerResult_Structure(t *testing.T) {
-	campaignID := uuid.New()
-	entityID := uuid.New()
+	campaignID := int64(1)
+	entityID := int64(2)
 
 	result := CheckerResult{
 		CampaignID: campaignID,

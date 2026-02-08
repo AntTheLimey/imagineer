@@ -39,7 +39,7 @@ import type { EntityType } from '../../types';
  */
 export interface EntityListLeftPanelProps {
     /** The campaign ID to display entity filters for. */
-    campaignId: string;
+    campaignId: number;
     /** The currently selected entity type filter, or 'all' for no filter. */
     selectedType: EntityType | 'all';
     /** Callback fired when a type filter is selected. */
@@ -106,8 +106,9 @@ export default function EntityListLeftPanel({
     // Fetch campaign details for the header
     const { data: campaign, isLoading: campaignLoading } = useCampaign(campaignId);
 
-    // Fetch all entities (with large page size) to calculate counts
-    // Using a large pageSize to get all entities for accurate counts
+    // Fetch all entities (with large page size) to calculate counts.
+    // NOTE: This approach has a limitation for campaigns with >1000 entities.
+    // A dedicated count endpoint would be more robust for very large campaigns.
     const { data: entities, isLoading: entitiesLoading } = useEntities({
         campaignId,
         pageSize: 1000,

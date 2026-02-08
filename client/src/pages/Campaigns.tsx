@@ -34,6 +34,13 @@ import { Add as AddIcon } from '@mui/icons-material';
 import { useCampaigns, useCreateCampaign, useGameSystems } from '../hooks';
 import type { Campaign } from '../types';
 
+/**
+ * Render the campaigns management view with a list of campaigns, a dialog to create a new campaign, and navigation controls for campaign details, entities, and timeline.
+ *
+ * Displays a loading skeleton while campaigns are loading, shows error alerts when loading or creation fails, renders an empty-state prompt when there are no campaigns, and lists campaign cards (each showing name, game system, and optional description) that navigate to their overview on click. Includes a "New Campaign" button that opens a dialog for entering a campaign name, selecting a game system, and adding an optional description; submitting the dialog triggers the create campaign mutation and resets the form on success.
+ *
+ * @returns The JSX element for the campaigns management UI.
+ */
 export default function Campaigns() {
     const navigate = useNavigate();
     const [open, setOpen] = useState(false);
@@ -66,7 +73,7 @@ export default function Campaigns() {
         try {
             await createCampaign.mutateAsync({
                 name: newCampaign.name,
-                systemId: newCampaign.systemId,
+                systemId: Number(newCampaign.systemId),
                 description: newCampaign.description || undefined,
             });
             setOpen(false);
@@ -78,7 +85,7 @@ export default function Campaigns() {
     };
 
     const handleCampaignClick = (campaign: Campaign) => {
-        navigate(`/campaigns/${campaign.id}/dashboard`);
+        navigate(`/campaigns/${campaign.id}/overview`);
     };
 
     // Loading state

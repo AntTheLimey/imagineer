@@ -14,9 +14,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/antonypegg/imagineer/internal/auth"
 	"github.com/antonypegg/imagineer/internal/database"
@@ -26,7 +28,6 @@ import (
 	"github.com/antonypegg/imagineer/internal/importers/googledocs"
 	"github.com/antonypegg/imagineer/internal/models"
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 )
 
 // ImportHandler handles import-related requests.
@@ -58,7 +59,7 @@ func (h *ImportHandler) ImportEvernote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	campaignID, err := uuid.Parse(campaignIDStr)
+	campaignID, err := strconv.ParseInt(campaignIDStr, 10, 64)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -99,7 +100,7 @@ func (h *ImportHandler) ImportEvernote(w http.ResponseWriter, r *http.Request) {
 
 	// Parse options from form
 	options := common.ImportOptions{
-		CampaignID:           campaignID.String(),
+		CampaignID:           fmt.Sprintf("%d", campaignID),
 		GameSystemCode:       r.FormValue("gameSystemCode"),
 		SourceDocument:       header.Filename,
 		AutoDetectEntities:   r.FormValue("autoDetectEntities") == "true",
@@ -141,7 +142,7 @@ func (h *ImportHandler) ImportGoogleDocs(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	campaignID, err := uuid.Parse(campaignIDStr)
+	campaignID, err := strconv.ParseInt(campaignIDStr, 10, 64)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -191,7 +192,7 @@ func (h *ImportHandler) ImportGoogleDocs(w http.ResponseWriter, r *http.Request)
 	}
 
 	options := common.ImportOptions{
-		CampaignID:           campaignID.String(),
+		CampaignID:           fmt.Sprintf("%d", campaignID),
 		GameSystemCode:       req.GameSystemCode,
 		SourceDocument:       sourceDoc,
 		AutoDetectEntities:   req.AutoDetectEntities,
@@ -234,7 +235,7 @@ func (h *ImportHandler) ImportFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	campaignID, err := uuid.Parse(campaignIDStr)
+	campaignID, err := strconv.ParseInt(campaignIDStr, 10, 64)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -275,7 +276,7 @@ func (h *ImportHandler) ImportFile(w http.ResponseWriter, r *http.Request) {
 
 	// Parse options from form
 	options := common.ImportOptions{
-		CampaignID:           campaignID.String(),
+		CampaignID:           fmt.Sprintf("%d", campaignID),
 		GameSystemCode:       r.FormValue("gameSystemCode"),
 		SourceDocument:       header.Filename,
 		AutoDetectEntities:   r.FormValue("autoDetectEntities") == "true",
@@ -309,7 +310,7 @@ func (h *ImportHandler) ImportFile(w http.ResponseWriter, r *http.Request) {
 }
 
 // createImportedEntities creates entities in the database from imported data.
-func (h *ImportHandler) createImportedEntities(ctx context.Context, campaignID uuid.UUID, extracted []common.ExtractedEntity) ([]models.Entity, []string) {
+func (h *ImportHandler) createImportedEntities(ctx context.Context, campaignID int64, extracted []common.ExtractedEntity) ([]models.Entity, []string) {
 	var created []models.Entity
 	var errors []string
 
@@ -429,7 +430,7 @@ func (h *ImportHandler) ImportEvernoteLocal(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	campaignID, err := uuid.Parse(req.CampaignID)
+	campaignID, err := strconv.ParseInt(req.CampaignID, 10, 64)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return

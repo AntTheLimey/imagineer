@@ -11,4 +11,4 @@
  * Utility function exports.
  */
 
-export { sanitizeHtml, stripHtml } from './sanitizeHtml';
+

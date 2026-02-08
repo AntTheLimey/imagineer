@@ -8,6 +8,77 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Ollama Embedding Pipeline (Local-First Semantic Search)
+  - Ollama container in Docker Compose for local embedding
+    generation using `mxbai-embed-large` model (1024 dimensions).
+  - Vectorization extended to chapters, sessions, and campaign
+    memories with a hybrid search function.
+  - Hybrid search API endpoint `GET /campaigns/{id}/search`
+    combining vector similarity (70%) with BM25 text search (30%).
+  - Entity detection upgraded to use vector search with
+    text-based fallback.
+  - Ollama added as embedding service option in Account Settings
+    (no API key required for local operation).
+- Campaign Description Vectorization
+  - Campaign descriptions are now vectorized and searchable
+    via the hybrid semantic search endpoint.
+  - `search_campaign_content()` SQL function returns campaign
+    description matches with `source_table='campaigns'`.
+  - Chunk size tuned to 200 tokens for campaign descriptions
+    (HTML content requires smaller chunks than plain text).
+- Integration Tests for Embedding Pipeline
+  - Build-tagged (`integration`) tests verifying vectorization
+    availability, chunk creation, search results, and campaign
+    description search.
+  - `make test-integration` target for running embedding tests
+    against live Docker services.
+- Chapters and Sessions Management
+  - Chapters table, enhanced sessions table with stages, and
+    AI memory system tables.
+  - Chapter model and CRUD operations in Go backend (`internal/database/chapters.go`).
+  - Session model updated with ChapterID, Title, and Stage workflow fields.
+  - REST API endpoints for chapters: GET/POST `/campaigns/{id}/chapters`,
+    GET/PUT/DELETE `/campaigns/{id}/chapters/{chapterId}`.
+  - REST API endpoints for sessions: GET/POST `/campaigns/{id}/sessions`,
+    GET/PUT/DELETE `/campaigns/{id}/sessions/{sessionId}`,
+    GET `/campaigns/{id}/chapters/{chapterId}/sessions`.
+  - Session workflow stages: prep (blue), play (green), wrap_up (orange).
+  - React types, API services, and hooks for chapters and sessions.
+  - ChapterList component with expand/collapse and delete confirmation.
+  - ChapterEditor dialog for creating/editing chapters.
+  - SessionList component with stage indicators and quick actions.
+  - SessionCard with visual stage indicator and metadata display.
+  - SessionEditor dialog with stage navigation and field editing.
+  - SessionStageNav for navigating between prep/play/wrap-up stages.
+  - SessionStageIndicator showing current stage with appropriate colors.
+  - SessionsView integrated into Campaign Dashboard with chapter/session panels.
+- App Navigation Restructure
+  - HomePage (`HomePage.tsx`) with smart campaign redirect logic - redirects
+    to current or latest campaign overview, shows welcome screen if none.
+  - CampaignOverview (`CampaignOverview.tsx`) with read-first design and
+    inline field editing for name, description, genre, and image style prompt.
+  - CreateCampaign (`CreateCampaign.tsx`) full-page form with validation.
+  - NoCampaignSelected (`NoCampaignSelected.tsx`) welcome/onboarding screen
+    with feature highlights and campaign cards for existing users.
+  - Sessions placeholder page (`Sessions.tsx`) showing planned features.
+  - App.tsx routing updated to use AppShell consistently with campaign-centric
+    URL structure (`/campaigns/{id}/overview`, `/campaigns/{id}/sessions`).
+  - Legacy route redirects: `/campaigns` redirects to `/`, `/campaigns/{id}/dashboard`
+    redirects to `/campaigns/{id}/overview`.
+- Evernote Importer Improvements
+  - Evernote 10.x version detection distinguishes between Evernote Legacy (7.x)
+    with full AppleScript support and Evernote 10.x with limited support.
+  - Helpful error messages guide users to export ENEX files or install
+    Evernote Legacy when Evernote 10.x is detected.
+- GM Session Patterns Knowledge Base
+  - `.claude/ttrpg-expert/gm-session-patterns.md` documents GM preparation
+    techniques including Lazy DM's Eight Steps, Three Clue Rule, Five Room
+    Dungeon, and Fronts/Clocks systems.
+- AI Memory System Design
+  - `docs/memory-system-design.md` documents three-tier memory architecture
+    (Campaign, Chapter, Session) with token compression and entity extraction.
+- Favicon (`client/public/favicon.svg`) added for browser tab branding.
+
 - UX Foundation (Phase 1)
   - Three-panel layout component (`ThreePanelLayout.tsx`) with responsive
     behavior: desktop (all 3 panels), tablet (drawer for left), mobile (bottom
@@ -31,8 +102,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   for TTRPG expert agent with comprehensive terminology reference covering GM
   titles across systems.
 - Multi-User Foundation & Authentication
-  - Database migration `003_add_users.sql` adds users table and owner_id
-    foreign key on campaigns table.
+  - Users table and owner_id foreign key on campaigns table
+    (included in the consolidated schema migration).
   - User model and database operations in Go backend handle user creation,
     retrieval, and campaign ownership.
   - Google OAuth authentication flow enables sign-in and sign-up via Google.
@@ -108,11 +179,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Timeline page forEach lint error from implicit return (CodeRabbit)
 - Campaign scoping security issue in relationship and timeline handlers -
   now verify resources belong to the campaign specified in URL (CodeRabbit)
+- Worked around pgedge_vectorizer UUID primary key bug: chunk
+  tables now correctly use UUID `source_id` columns instead of
+  BIGINT, matching Imagineer's UUID primary keys. Applied via
+  SQL hotfix pending upstream fix in pgedge_vectorizer.
+- Fixed `search_campaign_content()` SQL function referencing
+  non-existent column `c.chunk` (correct column is `c.content`
+  in pgedge_vectorizer chunk tables).
 
 ### Changed
 
-- Renamed `keeper_notes` column to `gm_notes` throughout codebase (migration
-  004) from Call of Cthulhu-specific to generic RPG terminology.
+- Squashed 10 incremental database migrations into two files:
+  `001_schema.sql` (complete schema with 20 tables, indexes,
+  triggers, functions, views, and vectorization) and
+  `002_seed_data.sql` (game systems and default relationship
+  types). The database is still in active development, so no
+  data preservation was needed.
+- Renamed `keeper_notes` column to `gm_notes` throughout the
+  codebase, moving from Call of Cthulhu-specific to generic RPG
+  terminology.
 - GM notes filtered at API level; non-campaign-owners receive empty `gmNotes`
   field in entity responses.
 - Client-side GM notes UI hidden for non-owners using `useCampaignOwnership`
@@ -156,8 +241,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - PostgreSQL schema with UUID primary keys and JSONB columns
 - Core tables: game_systems, campaigns, sessions, entities, relationships,
   timeline_events, canon_conflicts, schema_migrations
-- Initial migration (001_initial_schema.sql) with all core tables
-- Game system seed data (002_seed_game_systems.sql) for CoC 7e, GURPS 4e, FitD
+- Schema migration (001_schema.sql) with all tables, indexes,
+  triggers, functions, views, and vectorization
+- Seed data migration (002_seed_data.sql) for CoC 7e, GURPS 4e,
+  FitD game systems and default relationship types
 - GIN indexes for JSONB and array columns
 - Trigram index for fuzzy name matching
 - Automatic updated_at triggers

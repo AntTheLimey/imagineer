@@ -15,23 +15,18 @@ import (
 	"fmt"
 
 	"github.com/antonypegg/imagineer/internal/models"
-	"github.com/google/uuid"
 )
 
 // CreateUser creates a new user in the database.
 func (db *DB) CreateUser(ctx context.Context, user *models.User) error {
-	if user.ID == uuid.Nil {
-		user.ID = uuid.New()
-	}
-
 	query := `
-		INSERT INTO users (id, google_id, email, name, avatar_url)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING created_at, updated_at`
+		INSERT INTO users (google_id, email, name, avatar_url)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, created_at, updated_at`
 
 	err := db.QueryRow(ctx, query,
-		user.ID, user.GoogleID, user.Email, user.Name, user.AvatarURL,
-	).Scan(&user.CreatedAt, &user.UpdatedAt)
+		user.GoogleID, user.Email, user.Name, user.AvatarURL,
+	).Scan(&user.ID, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create user: %w", err)
 	}
@@ -39,8 +34,8 @@ func (db *DB) CreateUser(ctx context.Context, user *models.User) error {
 	return nil
 }
 
-// GetUserByID retrieves a user by their UUID.
-func (db *DB) GetUserByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
+// GetUserByID retrieves a user by their ID.
+func (db *DB) GetUserByID(ctx context.Context, id int64) (*models.User, error) {
 	query := `
 		SELECT id, google_id, email, name, avatar_url, created_at, updated_at
 		FROM users

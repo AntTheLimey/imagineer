@@ -15,12 +15,11 @@ import (
 	"fmt"
 
 	"github.com/antonypegg/imagineer/internal/models"
-	"github.com/google/uuid"
 	"github.com/lib/pq"
 )
 
 // ListTimelineEventsByCampaign retrieves all timeline events for a campaign.
-func (db *DB) ListTimelineEventsByCampaign(ctx context.Context, campaignID uuid.UUID) ([]models.TimelineEvent, error) {
+func (db *DB) ListTimelineEventsByCampaign(ctx context.Context, campaignID int64) ([]models.TimelineEvent, error) {
 	query := `
         SELECT id, campaign_id, event_date, event_time, date_precision,
                description, entity_ids, session_id, is_player_known,
@@ -38,7 +37,7 @@ func (db *DB) ListTimelineEventsByCampaign(ctx context.Context, campaignID uuid.
 	var events []models.TimelineEvent
 	for rows.Next() {
 		var e models.TimelineEvent
-		var entityIDs []uuid.UUID
+		var entityIDs []int64
 		err := rows.Scan(
 			&e.ID, &e.CampaignID, &e.EventDate, &e.EventTime, &e.DatePrecision,
 			&e.Description, pq.Array(&entityIDs), &e.SessionID, &e.IsPlayerKnown,
@@ -59,7 +58,7 @@ func (db *DB) ListTimelineEventsByCampaign(ctx context.Context, campaignID uuid.
 }
 
 // GetTimelineEvent retrieves a timeline event by ID.
-func (db *DB) GetTimelineEvent(ctx context.Context, id uuid.UUID) (*models.TimelineEvent, error) {
+func (db *DB) GetTimelineEvent(ctx context.Context, id int64) (*models.TimelineEvent, error) {
 	query := `
         SELECT id, campaign_id, event_date, event_time, date_precision,
                description, entity_ids, session_id, is_player_known,
@@ -68,7 +67,7 @@ func (db *DB) GetTimelineEvent(ctx context.Context, id uuid.UUID) (*models.Timel
         WHERE id = $1`
 
 	var e models.TimelineEvent
-	var entityIDs []uuid.UUID
+	var entityIDs []int64
 	err := db.QueryRow(ctx, query, id).Scan(
 		&e.ID, &e.CampaignID, &e.EventDate, &e.EventTime, &e.DatePrecision,
 		&e.Description, pq.Array(&entityIDs), &e.SessionID, &e.IsPlayerKnown,
@@ -83,27 +82,25 @@ func (db *DB) GetTimelineEvent(ctx context.Context, id uuid.UUID) (*models.Timel
 }
 
 // CreateTimelineEvent creates a new timeline event.
-func (db *DB) CreateTimelineEvent(ctx context.Context, campaignID uuid.UUID, req models.CreateTimelineEventRequest) (*models.TimelineEvent, error) {
-	id := uuid.New()
-
+func (db *DB) CreateTimelineEvent(ctx context.Context, campaignID int64, req models.CreateTimelineEventRequest) (*models.TimelineEvent, error) {
 	entityIDs := req.EntityIDs
 	if entityIDs == nil {
-		entityIDs = []uuid.UUID{}
+		entityIDs = []int64{}
 	}
 
 	query := `
-        INSERT INTO timeline_events (id, campaign_id, event_date, event_time,
+        INSERT INTO timeline_events (campaign_id, event_date, event_time,
                                      date_precision, description, entity_ids,
                                      session_id, is_player_known, source_document)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING id, campaign_id, event_date, event_time, date_precision,
                   description, entity_ids, session_id, is_player_known,
                   source_document, created_at, updated_at`
 
 	var e models.TimelineEvent
-	var returnedEntityIDs []uuid.UUID
+	var returnedEntityIDs []int64
 	err := db.QueryRow(ctx, query,
-		id, campaignID, req.EventDate, req.EventTime, req.DatePrecision,
+		campaignID, req.EventDate, req.EventTime, req.DatePrecision,
 		req.Description, pq.Array(entityIDs), req.SessionID, req.IsPlayerKnown,
 		req.SourceDocument,
 	).Scan(
@@ -120,7 +117,7 @@ func (db *DB) CreateTimelineEvent(ctx context.Context, campaignID uuid.UUID, req
 }
 
 // UpdateTimelineEvent updates an existing timeline event.
-func (db *DB) UpdateTimelineEvent(ctx context.Context, id uuid.UUID, req models.UpdateTimelineEventRequest) (*models.TimelineEvent, error) {
+func (db *DB) UpdateTimelineEvent(ctx context.Context, id int64, req models.UpdateTimelineEventRequest) (*models.TimelineEvent, error) {
 	// First get the existing event
 	existing, err := db.GetTimelineEvent(ctx, id)
 	if err != nil {
@@ -179,7 +176,7 @@ func (db *DB) UpdateTimelineEvent(ctx context.Context, id uuid.UUID, req models.
                   source_document, created_at, updated_at`
 
 	var e models.TimelineEvent
-	var returnedEntityIDs []uuid.UUID
+	var returnedEntityIDs []int64
 	err = db.QueryRow(ctx, query,
 		id, eventDate, eventTime, datePrecision, description,
 		pq.Array(entityIDs), sessionID, isPlayerKnown, sourceDocument,
@@ -197,7 +194,7 @@ func (db *DB) UpdateTimelineEvent(ctx context.Context, id uuid.UUID, req models.
 }
 
 // DeleteTimelineEvent deletes a timeline event by ID.
-func (db *DB) DeleteTimelineEvent(ctx context.Context, id uuid.UUID) error {
+func (db *DB) DeleteTimelineEvent(ctx context.Context, id int64) error {
 	query := `DELETE FROM timeline_events WHERE id = $1`
 	result, err := db.Pool.Exec(ctx, query, id)
 	if err != nil {
@@ -212,7 +209,7 @@ func (db *DB) DeleteTimelineEvent(ctx context.Context, id uuid.UUID) error {
 }
 
 // GetTimelineEventsForEntity retrieves all timeline events involving a specific entity.
-func (db *DB) GetTimelineEventsForEntity(ctx context.Context, entityID uuid.UUID) ([]models.TimelineEvent, error) {
+func (db *DB) GetTimelineEventsForEntity(ctx context.Context, entityID int64) ([]models.TimelineEvent, error) {
 	query := `
         SELECT id, campaign_id, event_date, event_time, date_precision,
                description, entity_ids, session_id, is_player_known,
@@ -230,7 +227,7 @@ func (db *DB) GetTimelineEventsForEntity(ctx context.Context, entityID uuid.UUID
 	var events []models.TimelineEvent
 	for rows.Next() {
 		var e models.TimelineEvent
-		var entityIDs []uuid.UUID
+		var entityIDs []int64
 		err := rows.Scan(
 			&e.ID, &e.CampaignID, &e.EventDate, &e.EventTime, &e.DatePrecision,
 			&e.Description, pq.Array(&entityIDs), &e.SessionID, &e.IsPlayerKnown,

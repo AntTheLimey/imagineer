@@ -1,4 +1,4 @@
-.PHONY: help up down reset logs shell psql build test test-server test-client test-all test-db lint coverage migrate migrate-status backup restore status client-dev client-build dev
+.PHONY: help up down reset logs shell psql build run test test-server test-client test-all test-db test-integration lint coverage migrate migrate-status backup restore status client-dev client-build dev ollama-init
 
 # Default target
 help:
@@ -13,6 +13,7 @@ help:
 	@echo "  make shell          - Open shell in postgres container"
 	@echo "  make psql           - Open psql session"
 	@echo "  make build          - Build Go binaries"
+	@echo "  make run            - Run API server (loads .env automatically)"
 	@echo "  make test           - Run all tests"
 	@echo "  make test-server    - Run Go server tests"
 	@echo "  make test-client    - Run React client tests"
@@ -27,6 +28,8 @@ help:
 	@echo "  make client-dev     - Start React dev server"
 	@echo "  make client-build   - Build React client"
 	@echo "  make dev            - Start all services for development"
+	@echo "  make ollama-init    - Pull Ollama embedding model"
+	@echo "  make test-integration - Run embedding integration tests (requires Docker)"
 
 # Docker commands
 up:
@@ -59,6 +62,9 @@ psql:
 build:
 	go build -o bin/imagineer ./cmd/server
 	go build -o bin/imagineer-cli ./cmd/cli
+
+run:
+	go run ./cmd/server
 
 # Test commands
 test: test-server test-client
@@ -110,6 +116,11 @@ test-db:
 	@echo "=== Testing database extensions ==="
 	@./scripts/test-db-extensions.sh
 
+test-integration:
+	@echo "=== Running embedding integration tests ==="
+	@echo "NOTE: Requires Docker services (postgres + ollama) to be running"
+	go test -v -tags integration -timeout 300s ./internal/database/...
+
 # Client commands
 client-dev:
 	@if [ -d "client" ]; then \
@@ -148,6 +159,11 @@ status:
 	@echo ""
 	@echo "=== Game Systems ==="
 	@docker exec imagineer-postgres psql -U imagineer -d imagineer -t -c "SELECT name FROM game_systems;" 2>/dev/null || echo "Not available"
+
+# Ollama commands
+ollama-init:
+	@echo "Pulling Ollama embedding model..."
+	@./scripts/ollama-init.sh
 
 # Development commands
 dev:

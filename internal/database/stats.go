@@ -15,7 +15,6 @@ import (
 	"fmt"
 
 	"github.com/antonypegg/imagineer/internal/models"
-	"github.com/google/uuid"
 )
 
 // GetDashboardStats retrieves statistics for the dashboard.
@@ -111,7 +110,7 @@ func (db *DB) GetFrontendDashboardStats(ctx context.Context) (*models.FrontendDa
 }
 
 // GetCampaignStats retrieves statistics for a specific campaign.
-func (db *DB) GetCampaignStats(ctx context.Context, campaignID uuid.UUID) (*models.CampaignStats, error) {
+func (db *DB) GetCampaignStats(ctx context.Context, campaignID int64) (*models.CampaignStats, error) {
 	stats := &models.CampaignStats{
 		EntityCounts: make(map[string]int),
 	}

@@ -27,9 +27,8 @@ import {
 } from '@mui/material';
 import {
     Menu as MenuIcon,
-    Dashboard as DashboardIcon,
+    Home as HomeIcon,
     Folder as CampaignIcon,
-    Upload as ImportIcon,
     Logout as LogoutIcon,
     Settings as SettingsIcon,
 } from '@mui/icons-material';
@@ -39,9 +38,8 @@ import { useAuth } from '../contexts/AuthContext';
 const drawerWidth = 240;
 
 const menuItems = [
-    { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
+    { text: 'Home', icon: <HomeIcon />, path: '/' },
     { text: 'Campaigns', icon: <CampaignIcon />, path: '/campaigns' },
-    { text: 'Import', icon: <ImportIcon />, path: '/import' },
 ];
 
 interface LayoutProps {

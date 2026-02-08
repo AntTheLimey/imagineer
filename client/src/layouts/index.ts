@@ -16,6 +16,6 @@
  * - FullScreenLayout: Full-screen editing layout with actions
  */
 
-export { default as AppShell } from './AppShell';
+export { default as AppShell, DRAWER_WIDTH } from './AppShell';
 export { default as ThreePanelLayout } from './ThreePanelLayout';
 export { default as FullScreenLayout } from './FullScreenLayout';

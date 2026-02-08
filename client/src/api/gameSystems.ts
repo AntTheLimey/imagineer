@@ -28,7 +28,7 @@ export const gameSystemsApi = {
     /**
      * Get a single game system by ID.
      */
-    get(id: string): Promise<GameSystem> {
+    get(id: number): Promise<GameSystem> {
         return apiClient.get<GameSystem>(`/game-systems/${id}`);
     },
 

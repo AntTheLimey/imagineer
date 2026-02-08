@@ -21,7 +21,7 @@ export const gameSystemKeys = {
     all: ['gameSystems'] as const,
     lists: () => [...gameSystemKeys.all, 'list'] as const,
     details: () => [...gameSystemKeys.all, 'detail'] as const,
-    detail: (id: string) => [...gameSystemKeys.details(), id] as const,
+    detail: (id: number) => [...gameSystemKeys.details(), id] as const,
     byCode: (code: string) => [...gameSystemKeys.all, 'code', code] as const,
 };
 
@@ -40,7 +40,7 @@ export function useGameSystems() {
 /**
  * Hook to fetch a single game system by ID.
  */
-export function useGameSystem(id: string, options?: { enabled?: boolean }) {
+export function useGameSystem(id: number, options?: { enabled?: boolean }) {
     return useQuery({
         queryKey: gameSystemKeys.detail(id),
         queryFn: () => gameSystemsApi.get(id),

@@ -20,7 +20,7 @@ import type { Campaign } from '../types';
 export interface ListCampaignsParams {
     page?: number;
     pageSize?: number;
-    systemId?: string;
+    systemId?: number;
 }
 
 /**
@@ -28,7 +28,7 @@ export interface ListCampaignsParams {
  */
 export interface CreateCampaignInput {
     name: string;
-    systemId: string;
+    systemId: number;
     description?: string;
     settings?: Record<string, unknown>;
 }
@@ -56,7 +56,7 @@ export const campaignsApi = {
     /**
      * Get a single campaign by ID.
      */
-    get(id: string): Promise<Campaign> {
+    get(id: number): Promise<Campaign> {
         return apiClient.get<Campaign>(`/campaigns/${id}`);
     },
 
@@ -70,14 +70,14 @@ export const campaignsApi = {
     /**
      * Update an existing campaign.
      */
-    update(id: string, input: UpdateCampaignInput): Promise<Campaign> {
+    update(id: number, input: UpdateCampaignInput): Promise<Campaign> {
         return apiClient.put<Campaign>(`/campaigns/${id}`, input);
     },
 
     /**
      * Delete a campaign.
      */
-    delete(id: string): Promise<void> {
+    delete(id: number): Promise<void> {
         return apiClient.delete<void>(`/campaigns/${id}`);
     },
 };

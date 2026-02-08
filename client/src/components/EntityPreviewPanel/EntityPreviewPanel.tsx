@@ -20,7 +20,7 @@ import {
     Link as RelationshipIcon,
 } from '@mui/icons-material';
 import { useEntityRelationships } from '../../hooks';
-import { sanitizeHtml } from '../../utils';
+import { MarkdownRenderer } from '../MarkdownRenderer';
 import type { Entity, EntityType } from '../../types';
 
 /**
@@ -30,7 +30,7 @@ export interface EntityPreviewPanelProps {
     /** The entity to preview, or null if no entity is selected. */
     entity: Entity | null;
     /** The campaign ID for relationship queries. */
-    campaignId: string;
+    campaignId: number;
     /** Callback fired when the Edit button is clicked. */
     onEdit: () => void;
     /** Callback fired when the Delete button is clicked. */
@@ -102,7 +102,7 @@ export default function EntityPreviewPanel({
     // Fetch relationships for the selected entity
     const { data: relationships } = useEntityRelationships(
         campaignId,
-        entity?.id ?? '',
+        entity?.id ?? 0,
         { enabled: !!entity }
     );
 
@@ -200,15 +200,10 @@ export default function EntityPreviewPanel({
                             fontSize: '0.875rem',
                             '& p': { mt: 0, mb: 1 },
                             '& p:last-child': { mb: 0 },
-                            display: '-webkit-box',
-                            WebkitLineClamp: 6,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden',
                         }}
-                        dangerouslySetInnerHTML={{
-                            __html: sanitizeHtml(entity.description),
-                        }}
-                    />
+                    >
+                        <MarkdownRenderer content={entity.description} maxLines={6} />
+                    </Box>
                 ) : (
                     <Typography variant="body2">No description</Typography>
                 )}

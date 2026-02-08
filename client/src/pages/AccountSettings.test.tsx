@@ -51,24 +51,47 @@ vi.mock('@mui/icons-material', () => ({
     Done: () => <span data-testid="done-icon">Done</span>,
     Visibility: () => <span data-testid="visibility-icon">Show</span>,
     VisibilityOff: () => <span data-testid="visibility-off-icon">Hide</span>,
+    Dashboard: () => <span data-testid="dashboard-icon">Dashboard</span>,
+    Add: () => <span data-testid="add-icon">Add</span>,
+    FileUpload: () => <span data-testid="file-upload-icon">FileUpload</span>,
+    Logout: () => <span data-testid="logout-icon">Logout</span>,
+    Menu: () => <span data-testid="menu-icon">Menu</span>,
+    People: () => <span data-testid="people-icon">People</span>,
+    Settings: () => <span data-testid="settings-icon">Settings</span>,
+    EventNote: () => <span data-testid="event-note-icon">EventNote</span>,
+    Timeline: () => <span data-testid="timeline-icon">Timeline</span>,
+    // Entity type icons for AppShell navigation
+    Business: () => <span data-testid="business-icon">Business</span>,
+    Category: () => <span data-testid="category-icon">Category</span>,
+    Description: () => <span data-testid="description-icon">Description</span>,
+    Event: () => <span data-testid="event-icon">Event</span>,
+    ExpandLess: () => <span data-testid="expand-less-icon">ExpandLess</span>,
+    ExpandMore: () => <span data-testid="expand-more-icon">ExpandMore</span>,
+    Groups: () => <span data-testid="groups-icon">Groups</span>,
+    Inventory: () => <span data-testid="inventory-icon">Inventory</span>,
+    List: () => <span data-testid="list-icon">List</span>,
+    Person: () => <span data-testid="person-icon">Person</span>,
+    Pets: () => <span data-testid="pets-icon">Pets</span>,
+    Place: () => <span data-testid="place-icon">Place</span>,
+    Search: () => <span data-testid="search-icon">Search</span>,
 }));
 
 const mockSettings: UserSettingsResponse = {
-    content_gen_service: 'anthropic',
-    content_gen_api_key: '****abc1',
-    embedding_service: 'voyage',
-    embedding_api_key: '****xyz2',
-    image_gen_service: 'openai',
-    image_gen_api_key: '****def3',
+    contentGenService: 'anthropic',
+    contentGenApiKey: '****abc1',
+    embeddingService: 'voyage',
+    embeddingApiKey: '****xyz2',
+    imageGenService: 'openai',
+    imageGenApiKey: '****def3',
 };
 
 const emptySettings: UserSettingsResponse = {
-    content_gen_service: null,
-    content_gen_api_key: null,
-    embedding_service: null,
-    embedding_api_key: null,
-    image_gen_service: null,
-    image_gen_api_key: null,
+    contentGenService: null,
+    contentGenApiKey: null,
+    embeddingService: null,
+    embeddingApiKey: null,
+    imageGenService: null,
+    imageGenApiKey: null,
 };
 
 function renderWithRouter(component: React.ReactNode) {
@@ -326,6 +349,29 @@ describe('AccountSettings', () => {
         expect(mockNavigate).toHaveBeenCalledWith('/');
     });
 
+    it('should hide embedding API key input when Ollama is selected', () => {
+        const ollamaSettings: UserSettingsResponse = {
+            ...mockSettings,
+            embeddingService: 'ollama',
+            embeddingApiKey: null,
+        };
+
+        vi.mocked(useUserSettings).mockReturnValue({
+            data: ollamaSettings,
+            isLoading: false,
+            error: null,
+        } as unknown as ReturnType<typeof useUserSettings>);
+
+        renderWithRouter(<AccountSettings />);
+
+        // Should only have 2 API key password inputs (not 3)
+        const passwordInputs = document.querySelectorAll('input[type="password"]');
+        expect(passwordInputs.length).toBe(2);
+
+        // Should show the "no API key required" message
+        expect(screen.getByText(/no API key required/i)).toBeInTheDocument();
+    });
+
     it('should show breadcrumbs', () => {
         vi.mocked(useUserSettings).mockReturnValue({
             data: mockSettings,
@@ -335,8 +381,8 @@ describe('AccountSettings', () => {
 
         renderWithRouter(<AccountSettings />);
 
-        // Dashboard link in breadcrumbs
-        expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
+        // Home link in breadcrumbs
+        expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
         // Account Settings appears in both breadcrumb and title
         const accountSettingsElements = screen.getAllByText('Account Settings');
         expect(accountSettingsElements.length).toBeGreaterThanOrEqual(2);

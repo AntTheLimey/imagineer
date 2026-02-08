@@ -17,19 +17,20 @@ import {
 } from '@mui/material';
 import { useEntities } from '../../hooks/useEntities';
 import type { Entity, EntityType } from '../../types';
+import { entityTypeColors, formatEntityType } from './entityConstants';
 
 /**
  * Props for the EntitySelector component.
  */
 export interface EntitySelectorProps {
     /** The campaign ID to search entities within. */
-    campaignId: string;
+    campaignId: number;
     /** The currently selected entity. */
     value: Entity | null;
     /** Callback fired when the selected entity changes. */
     onChange: (entity: Entity | null) => void;
     /** Entity IDs to exclude from the options (e.g., the current entity). */
-    excludeIds?: string[];
+    excludeIds?: number[];
     /** Optional entity type filter. */
     filterType?: EntityType;
     /** Label displayed above the input. */
@@ -42,29 +43,6 @@ export interface EntitySelectorProps {
     helperText?: string;
     /** If true, the input is disabled. */
     disabled?: boolean;
-}
-
-/**
- * Maps entity types to display colours for chips.
- */
-const entityTypeColors: Record<EntityType, 'default' | 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'info'> = {
-    npc: 'primary',
-    location: 'success',
-    item: 'warning',
-    faction: 'secondary',
-    clue: 'info',
-    creature: 'error',
-    organization: 'secondary',
-    event: 'info',
-    document: 'default',
-    other: 'default',
-};
-
-/**
- * Formats an entity type for display.
- */
-function formatEntityType(type: EntityType): string {
-    return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
 /**

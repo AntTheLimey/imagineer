@@ -33,7 +33,10 @@ var ErrMissingJWTSecret = errors.New("JWT secret is required for authentication"
 // JWT authentication middleware is applied to protected routes (campaigns, entities,
 // stats, imports, agents).
 //
-// Returns an error if jwtSecret is empty, as authentication is required for security.
+// NewRouter creates and returns a configured HTTP router for the API, including middleware, CORS,
+// public routes, and authentication-protected routes for campaign, entity, user, import, agent and
+// statistics endpoints.
+// If jwtSecret is empty, NewRouter returns ErrMissingJWTSecret.
 func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string) (http.Handler, error) {
 	if jwtSecret == "" {
 		return nil, ErrMissingJWTSecret
@@ -61,6 +64,7 @@ func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string)
 	h := NewHandler(db)
 	importHandler := NewImportHandler(db)
 	agentHandler := NewAgentHandler(db)
+	entityDetectionHandler := NewEntityDetectionHandler(db)
 
 	// API routes
 	r.Route("/api", func(r chi.Router) {
@@ -104,6 +108,9 @@ func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string)
 					// Campaign stats
 					r.Get("/stats", h.GetCampaignStats)
 
+					// Campaign content search
+					r.Get("/search", h.SearchCampaignContent)
+
 					// Campaign entities
 					r.Get("/entities", h.ListEntities)
 					r.Post("/entities", h.CreateEntity)
@@ -136,6 +143,34 @@ func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string)
 						r.Get("/", h.GetPlayerCharacter)
 						r.Put("/", h.UpdatePlayerCharacter)
 						r.Delete("/", h.DeletePlayerCharacter)
+					})
+
+					// Chapters
+					r.Get("/chapters", h.ListChapters)
+					r.Post("/chapters", h.CreateChapter)
+					r.Post("/chapters/detect-entities", entityDetectionHandler.DetectEntities)
+					r.Route("/chapters/{chapterId}", func(r chi.Router) {
+						r.Get("/", h.GetChapter)
+						r.Put("/", h.UpdateChapter)
+						r.Delete("/", h.DeleteChapter)
+						r.Get("/sessions", h.ListSessionsByChapter)
+
+						// Chapter entity links
+						r.Get("/entities", h.ListChapterEntities)
+						r.Post("/entities", h.CreateChapterEntity)
+						r.Route("/entities/{linkId}", func(r chi.Router) {
+							r.Put("/", h.UpdateChapterEntity)
+							r.Delete("/", h.DeleteChapterEntity)
+						})
+					})
+
+					// Sessions
+					r.Get("/sessions", h.ListSessions)
+					r.Post("/sessions", h.CreateSession)
+					r.Route("/sessions/{sessionId}", func(r chi.Router) {
+						r.Get("/", h.GetSession)
+						r.Put("/", h.UpdateSession)
+						r.Delete("/", h.DeleteSession)
 					})
 
 					// Campaign timeline

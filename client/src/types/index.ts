@@ -1,6 +1,6 @@
 // Game System types
 export interface GameSystem {
-    id: string;
+    id: number;
     name: string;
     code: string;
     attributeSchema: Record<string, unknown>;
@@ -11,10 +11,10 @@ export interface GameSystem {
 
 // Campaign types
 export interface Campaign {
-    id: string;
+    id: number;
     name: string;
-    systemId: string;
-    ownerId?: string;
+    systemId: number;
+    ownerId?: number;
     description?: string;
     settings: Record<string, unknown>;
     createdAt: string;
@@ -37,15 +37,15 @@ export type EntityType =
 export type SourceConfidence = 'DRAFT' | 'AUTHORITATIVE' | 'SUPERSEDED';
 
 export interface Entity {
-    id: string;
-    campaignId: string;
+    id: number;
+    campaignId: number;
     entityType: EntityType;
     name: string;
     description?: string;
     attributes: Record<string, unknown>;
     tags: string[];
     gmNotes?: string;
-    discoveredSession?: string;
+    discoveredSession?: number;
     sourceDocument?: string;
     sourceConfidence: SourceConfidence;
     version: number;
@@ -65,10 +65,10 @@ export type RelationshipTone =
     | 'unknown';
 
 export interface Relationship {
-    id: string;
-    campaignId: string;
-    sourceEntityId: string;
-    targetEntityId: string;
+    id: number;
+    campaignId: number;
+    sourceEntityId: number;
+    targetEntityId: number;
     relationshipType: string;
     tone?: RelationshipTone;
     description?: string;
@@ -78,20 +78,48 @@ export interface Relationship {
     updatedAt: string;
 }
 
+// Chapter types
+export interface Chapter {
+    id: number;
+    campaignId: number;
+    title: string;
+    overview?: string;
+    sortOrder: number;
+    createdAt: string;
+    updatedAt: string;
+}
+
+// Chapter-Entity link types
+export type ChapterEntityMentionType = 'linked' | 'mentioned' | 'featured';
+
+export interface ChapterEntity {
+    id: number;
+    chapterId: number;
+    entityId: number;
+    mentionType: ChapterEntityMentionType;
+    createdAt: string;
+    entity?: Entity;
+}
+
 // Session types
+export type SessionStage = 'prep' | 'play' | 'wrap_up';
+
 export type SessionStatus = 'PLANNED' | 'COMPLETED' | 'SKIPPED';
 
 export interface Session {
-    id: string;
-    campaignId: string;
+    id: number;
+    campaignId: number;
+    chapterId?: number;
+    title?: string;
     sessionNumber?: number;
     plannedDate?: string;
     actualDate?: string;
     status: SessionStatus;
+    stage: SessionStage;
     prepNotes?: string;
     plannedScenes?: unknown[];
     actualNotes?: string;
-    discoveries?: Array<{ entityId: string; howDiscovered: string }>;
+    discoveries?: Array<{ entityId: number; howDiscovered: string }>;
     playerDecisions?: unknown[];
     consequences?: unknown[];
     createdAt: string;
@@ -102,14 +130,14 @@ export interface Session {
 export type DatePrecision = 'exact' | 'approximate' | 'month' | 'year' | 'unknown';
 
 export interface TimelineEvent {
-    id: string;
-    campaignId: string;
+    id: number;
+    campaignId: number;
     eventDate?: string;
     eventTime?: string;
     datePrecision: DatePrecision;
     description: string;
-    entityIds: string[];
-    sessionId?: string;
+    entityIds: number[];
+    sessionId?: number;
     isPlayerKnown: boolean;
     sourceDocument?: string;
     createdAt: string;
@@ -120,9 +148,9 @@ export interface TimelineEvent {
 export type ConflictStatus = 'DETECTED' | 'ACKNOWLEDGED' | 'RESOLVED';
 
 export interface CanonConflict {
-    id: string;
-    campaignId: string;
-    entityId?: string;
+    id: number;
+    campaignId: number;
+    entityId?: number;
     fieldName?: string;
     conflictingValues: Array<{ value: string; source: string; date: string }>;
     status: ConflictStatus;
@@ -142,8 +170,8 @@ export interface ImportResult {
 
 // Relationship type definition types
 export interface RelationshipType {
-    id: string;
-    campaignId?: string | null; // null = system default
+    id: number;
+    campaignId?: number | null; // null = system default
     name: string;
     inverseName: string;
     isSymmetric: boolean;

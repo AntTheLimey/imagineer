@@ -35,7 +35,7 @@ import NotesList from './NotesList';
 import ImportProgress from './ImportProgress';
 
 export interface EvernoteImportProps {
-    campaignId: string;
+    campaignId: number;
 }
 
 type ImportStep = 'status' | 'notebooks' | 'notes' | 'results';
@@ -72,6 +72,7 @@ export default function EvernoteImport({ campaignId }: EvernoteImportProps) {
         data: notebooks,
         isLoading: notebooksLoading,
         refetch: refetchNotebooks,
+        error: notebooksError,
     } = useEvernoteNotebooks({
         enabled: isMacOS && (step === 'notebooks' || step === 'notes'),
     });
@@ -197,6 +198,36 @@ export default function EvernoteImport({ campaignId }: EvernoteImportProps) {
 
     // Render notebooks step
     if (step === 'notebooks') {
+        // Check for notebooks loading error (e.g., Evernote 10.x not supported)
+        if (notebooksError) {
+            const errorMessage = notebooksError instanceof Error
+                ? notebooksError.message
+                : 'Failed to load notebooks from Evernote.';
+
+            return (
+                <Box>
+                    <Alert
+                        severity="warning"
+                        sx={{ mb: 2 }}
+                        action={
+                            <Button
+                                color="inherit"
+                                size="small"
+                                startIcon={<RefreshIcon />}
+                                onClick={() => refetchNotebooks()}
+                            >
+                                Retry
+                            </Button>
+                        }
+                    >
+                        <Typography variant="body2" component="div" sx={{ whiteSpace: 'pre-wrap' }}>
+                            {errorMessage}
+                        </Typography>
+                    </Alert>
+                </Box>
+            );
+        }
+
         return (
             <NotebookList
                 notebooks={notebooks ?? []}

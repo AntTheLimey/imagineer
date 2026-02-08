@@ -31,7 +31,7 @@ import {
     Typography,
 } from '@mui/material';
 import { FullScreenLayout } from '../layouts';
-import { RichTextEditor } from '../components/RichTextEditor';
+import { MarkdownEditor } from '../components/MarkdownEditor';
 import { RelationshipEditor, PendingRelationship } from '../components/RelationshipEditor';
 import {
     useEntity,
@@ -155,38 +155,40 @@ function formatRelativeTime(isoString: string): string {
 }
 
 /**
- * Full-screen page for creating and editing campaign entities with autosave, draft recovery, validation, and unsaved-change protection.
+ * Full-screen editor for creating and editing campaign entities with autosave, draft recovery, validation, and unsaved-change protection.
  *
- * Renders a form for entity fields (name, type, description, tags, JSON attributes, GM notes, source confidence), shows draft-recovery and similar-entity warnings when applicable, handles create/update mutations, and protects navigation when there are unsaved changes.
+ * Renders the entity form (name, type, description, tags, JSON attributes, GM notes, source confidence), manages drafts and autosave, detects similar entities for duplicates, handles create/update mutations and relationship creation, and prevents unintended navigation when there are unsaved changes.
  *
- * @returns The React element for the Entity Editor page used to create or edit campaign entities.
+ * @returns The React element for the Entity Editor page
  */
 export default function EntityEditor() {
-    const { campaignId, entityId } = useParams<{
+    const params = useParams<{
         campaignId: string;
         entityId?: string;
     }>();
+    const campaignId = params.campaignId ? Number(params.campaignId) : undefined;
+    const entityId = params.entityId && params.entityId !== 'new' ? Number(params.entityId) : undefined;
     const navigate = useNavigate();
 
-    const isNewEntity = !entityId || entityId === 'new';
+    const isNewEntity = !entityId;
     const draftKey = isNewEntity
         ? `entity-new-${campaignId}`
         : `entity-${entityId}`;
 
     // Fetch campaign for breadcrumbs
-    const { data: campaign } = useCampaign(campaignId ?? '', {
+    const { data: campaign } = useCampaign(campaignId ?? 0, {
         enabled: !!campaignId,
     });
 
     // Check if current user is the campaign owner (GM)
-    const { isOwner: isGM } = useCampaignOwnership(campaignId ?? '');
+    const { isOwner: isGM } = useCampaignOwnership(campaignId ?? 0);
 
     // Fetch existing entity if editing
     const {
         data: existingEntity,
         isLoading: entityLoading,
         error: entityError,
-    } = useEntity(campaignId ?? '', entityId ?? '', {
+    } = useEntity(campaignId ?? 0, entityId ?? 0, {
         enabled: !isNewEntity && !!campaignId && !!entityId,
     });
 
@@ -208,7 +210,7 @@ export default function EntityEditor() {
         });
 
     // Track the last hydrated entity ID to detect route changes
-    const lastHydratedEntityIdRef = useRef<string | undefined>(undefined);
+    const lastHydratedEntityIdRef = useRef<number | undefined>(undefined);
 
     // Autosave
     const { lastSaved } = useAutosave({
@@ -220,7 +222,7 @@ export default function EntityEditor() {
 
     // Similar entities for duplicate detection (new entities only)
     const { data: similarEntities } = useSimilarEntities(
-        campaignId ?? '',
+        campaignId ?? 0,
         formData.name,
         { enabled: isNewEntity && formData.name.length >= 2 }
     );
@@ -350,16 +352,26 @@ export default function EntityEditor() {
                     sourceConfidence: formData.sourceConfidence,
                 });
 
-                // Create pending relationships after entity is created
-                for (const rel of pendingRelationships) {
-                    await createRelationship.mutateAsync({
-                        campaignId,
-                        sourceEntityId: newEntity.id,
-                        targetEntityId: rel.targetEntityId,
-                        relationshipType: rel.relationshipType,
-                        description: rel.description,
-                        bidirectional: rel.bidirectional,
-                    });
+                // Create pending relationships after entity is created using Promise.allSettled
+                if (pendingRelationships.length > 0) {
+                    const relationshipResults = await Promise.allSettled(
+                        pendingRelationships.map((rel) =>
+                            createRelationship.mutateAsync({
+                                campaignId,
+                                sourceEntityId: newEntity.id,
+                                targetEntityId: rel.targetEntityId,
+                                relationshipType: rel.relationshipType,
+                                description: rel.description,
+                                bidirectional: rel.bidirectional,
+                            })
+                        )
+                    );
+                    const failures = relationshipResults.filter(
+                        (r) => r.status === 'rejected'
+                    );
+                    if (failures.length > 0) {
+                        console.warn(`${failures.length} relationship(s) failed to create`);
+                    }
                 }
 
                 // Clear pending relationships
@@ -439,7 +451,7 @@ export default function EntityEditor() {
     // Build breadcrumbs
     const breadcrumbs = useMemo(
         () => [
-            { label: 'Campaigns', path: '/campaigns' },
+            { label: 'Home', path: '/' },
             {
                 label: campaign?.name ?? 'Campaign',
                 path: `/campaigns/${campaignId}/entities`,
@@ -579,10 +591,10 @@ export default function EntityEditor() {
                     </Box>
 
                     <Box sx={{ mb: 3 }}>
-                        <RichTextEditor
+                        <MarkdownEditor
                             label="Description"
                             value={formData.description}
-                            onChange={(html) => updateField('description', html)}
+                            onChange={(md) => updateField('description', md)}
                             placeholder="Describe this entity..."
                             error={!!formErrors.description}
                             helperText={formErrors.description}

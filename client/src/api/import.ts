@@ -18,7 +18,7 @@ import type { ImportResult } from '../types';
  * Input for Google Docs import.
  */
 export interface GoogleDocsImportInput {
-    campaignId: string;
+    campaignId: number;
     documentUrl: string;
 }
 
@@ -26,7 +26,7 @@ export interface GoogleDocsImportInput {
  * Input for file upload import.
  */
 export interface FileUploadImportInput {
-    campaignId: string;
+    campaignId: number;
     file: File;
 }
 
@@ -37,7 +37,7 @@ export const importApi = {
     /**
      * Import content from an Evernote .enex file.
      */
-    async importEvernote(campaignId: string, file: File): Promise<ImportResult> {
+    async importEvernote(campaignId: number, file: File): Promise<ImportResult> {
         return apiClient.upload<ImportResult>(
             `/campaigns/${campaignId}/import/evernote`,
             file
@@ -58,7 +58,7 @@ export const importApi = {
     /**
      * Import content from uploaded files (text, markdown, docx, pdf).
      */
-    async importFile(campaignId: string, file: File): Promise<ImportResult> {
+    async importFile(campaignId: number, file: File): Promise<ImportResult> {
         return apiClient.upload<ImportResult>(
             `/campaigns/${campaignId}/import/file`,
             file
@@ -68,7 +68,7 @@ export const importApi = {
     /**
      * Import multiple files at once.
      */
-    async importFiles(campaignId: string, files: File[]): Promise<ImportResult[]> {
+    async importFiles(campaignId: number, files: File[]): Promise<ImportResult[]> {
         const results = await Promise.all(
             files.map((file) => importApi.importFile(campaignId, file))
         );

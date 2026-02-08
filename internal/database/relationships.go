@@ -15,11 +15,10 @@ import (
 	"fmt"
 
 	"github.com/antonypegg/imagineer/internal/models"
-	"github.com/google/uuid"
 )
 
 // ListRelationshipsByCampaign retrieves all relationships for a campaign.
-func (db *DB) ListRelationshipsByCampaign(ctx context.Context, campaignID uuid.UUID) ([]models.Relationship, error) {
+func (db *DB) ListRelationshipsByCampaign(ctx context.Context, campaignID int64) ([]models.Relationship, error) {
 	query := `
         SELECT r.id, r.campaign_id, r.source_entity_id, r.target_entity_id,
                r.relationship_type, r.tone, r.description, r.bidirectional,
@@ -41,10 +40,10 @@ func (db *DB) ListRelationshipsByCampaign(ctx context.Context, campaignID uuid.U
 	var relationships []models.Relationship
 	for rows.Next() {
 		var r models.Relationship
-		var seID uuid.UUID
+		var seID int64
 		var seName string
 		var seType models.EntityType
-		var teID uuid.UUID
+		var teID int64
 		var teName string
 		var teType models.EntityType
 
@@ -81,7 +80,7 @@ func (db *DB) ListRelationshipsByCampaign(ctx context.Context, campaignID uuid.U
 }
 
 // GetRelationship retrieves a relationship by ID.
-func (db *DB) GetRelationship(ctx context.Context, id uuid.UUID) (*models.Relationship, error) {
+func (db *DB) GetRelationship(ctx context.Context, id int64) (*models.Relationship, error) {
 	query := `
         SELECT id, campaign_id, source_entity_id, target_entity_id,
                relationship_type, tone, description, bidirectional,
@@ -103,20 +102,18 @@ func (db *DB) GetRelationship(ctx context.Context, id uuid.UUID) (*models.Relati
 }
 
 // CreateRelationship creates a new relationship.
-func (db *DB) CreateRelationship(ctx context.Context, campaignID uuid.UUID, req models.CreateRelationshipRequest) (*models.Relationship, error) {
-	id := uuid.New()
-
+func (db *DB) CreateRelationship(ctx context.Context, campaignID int64, req models.CreateRelationshipRequest) (*models.Relationship, error) {
 	query := `
-        INSERT INTO relationships (id, campaign_id, source_entity_id, target_entity_id,
+        INSERT INTO relationships (campaign_id, source_entity_id, target_entity_id,
                                    relationship_type, tone, description, bidirectional, strength)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING id, campaign_id, source_entity_id, target_entity_id,
                   relationship_type, tone, description, bidirectional,
                   strength, created_at, updated_at`
 
 	var r models.Relationship
 	err := db.QueryRow(ctx, query,
-		id, campaignID, req.SourceEntityID, req.TargetEntityID,
+		campaignID, req.SourceEntityID, req.TargetEntityID,
 		req.RelationshipType, req.Tone, req.Description, req.Bidirectional, req.Strength,
 	).Scan(
 		&r.ID, &r.CampaignID, &r.SourceEntityID, &r.TargetEntityID,
@@ -131,7 +128,7 @@ func (db *DB) CreateRelationship(ctx context.Context, campaignID uuid.UUID, req 
 }
 
 // UpdateRelationship updates an existing relationship.
-func (db *DB) UpdateRelationship(ctx context.Context, id uuid.UUID, req models.UpdateRelationshipRequest) (*models.Relationship, error) {
+func (db *DB) UpdateRelationship(ctx context.Context, id int64, req models.UpdateRelationshipRequest) (*models.Relationship, error) {
 	// First get the existing relationship
 	existing, err := db.GetRelationship(ctx, id)
 	if err != nil {
@@ -189,7 +186,7 @@ func (db *DB) UpdateRelationship(ctx context.Context, id uuid.UUID, req models.U
 }
 
 // DeleteRelationship deletes a relationship by ID.
-func (db *DB) DeleteRelationship(ctx context.Context, id uuid.UUID) error {
+func (db *DB) DeleteRelationship(ctx context.Context, id int64) error {
 	query := `DELETE FROM relationships WHERE id = $1`
 	result, err := db.Pool.Exec(ctx, query, id)
 	if err != nil {
@@ -214,7 +211,7 @@ func (db *DB) CountRelationships(ctx context.Context) (int, error) {
 }
 
 // GetEntityRelationships retrieves all relationships for a specific entity.
-func (db *DB) GetEntityRelationships(ctx context.Context, entityID uuid.UUID) ([]models.Relationship, error) {
+func (db *DB) GetEntityRelationships(ctx context.Context, entityID int64) ([]models.Relationship, error) {
 	query := `
         SELECT r.id, r.campaign_id, r.source_entity_id, r.target_entity_id,
                r.relationship_type, r.tone, r.description, r.bidirectional,
@@ -236,10 +233,10 @@ func (db *DB) GetEntityRelationships(ctx context.Context, entityID uuid.UUID) ([
 	var relationships []models.Relationship
 	for rows.Next() {
 		var r models.Relationship
-		var seID uuid.UUID
+		var seID int64
 		var seName string
 		var seType models.EntityType
-		var teID uuid.UUID
+		var teID int64
 		var teName string
 		var teType models.EntityType
 

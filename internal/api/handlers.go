@@ -16,12 +16,12 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/antonypegg/imagineer/internal/auth"
 	"github.com/antonypegg/imagineer/internal/database"
 	"github.com/antonypegg/imagineer/internal/models"
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 )
 
 // Handler provides HTTP handlers for the API.
@@ -53,25 +53,26 @@ func respondError(w http.ResponseWriter, status int, message string) {
 	})
 }
 
-// parseUUID parses a UUID from the URL parameter named by param.
-// It returns the parsed uuid.UUID, or an error if the parameter is missing or not a valid UUID.
-func parseUUID(r *http.Request, param string) (uuid.UUID, error) {
-	return uuid.Parse(chi.URLParam(r, param))
+// parseInt64 parses an int64 from the URL parameter named by param.
+// It returns the parsed int64, or an error if the parameter is missing or
+// not a valid integer.
+func parseInt64(r *http.Request, param string) (int64, error) {
+	return strconv.ParseInt(chi.URLParam(r, param), 10, 64)
 }
 
 // verifyCampaignOwnership checks if the authenticated user owns the campaign.
 // Returns the user ID if successful, or writes an error response and returns
-// uuid.Nil if verification fails.
-func (h *Handler) verifyCampaignOwnership(w http.ResponseWriter, r *http.Request, campaignID uuid.UUID) (uuid.UUID, bool) {
+// 0 if verification fails.
+func (h *Handler) verifyCampaignOwnership(w http.ResponseWriter, r *http.Request, campaignID int64) (int64, bool) {
 	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
 		respondError(w, http.StatusUnauthorized, "Authentication required")
-		return uuid.Nil, false
+		return 0, false
 	}
 
 	if err := h.db.VerifyCampaignOwnership(r.Context(), campaignID, userID); err != nil {
 		respondError(w, http.StatusNotFound, "Campaign not found")
-		return uuid.Nil, false
+		return 0, false
 	}
 
 	return userID, true
@@ -79,7 +80,7 @@ func (h *Handler) verifyCampaignOwnership(w http.ResponseWriter, r *http.Request
 
 // isUserCampaignOwner checks if the given user ID matches the campaign's owner.
 // This is used to determine if GM-only content (like gm_notes) should be visible.
-func (h *Handler) isUserCampaignOwner(ctx context.Context, campaignID uuid.UUID, userID uuid.UUID) bool {
+func (h *Handler) isUserCampaignOwner(ctx context.Context, campaignID int64, userID int64) bool {
 	err := h.db.VerifyCampaignOwnership(ctx, campaignID, userID)
 	return err == nil
 }
@@ -122,7 +123,7 @@ func (h *Handler) ListGameSystems(w http.ResponseWriter, r *http.Request) {
 
 // GetGameSystem handles GET /api/game-systems/{id}
 func (h *Handler) GetGameSystem(w http.ResponseWriter, r *http.Request) {
-	id, err := parseUUID(r, "id")
+	id, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid game system ID")
 		return
@@ -218,7 +219,7 @@ func (h *Handler) GetCampaign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := parseUUID(r, "id")
+	id, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -243,7 +244,7 @@ func (h *Handler) UpdateCampaign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := parseUUID(r, "id")
+	id, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -274,7 +275,7 @@ func (h *Handler) DeleteCampaign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := parseUUID(r, "id")
+	id, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -293,7 +294,7 @@ func (h *Handler) DeleteCampaign(w http.ResponseWriter, r *http.Request) {
 // Verifies the user owns the campaign before listing entities.
 // GM notes are only visible to the campaign owner (GM).
 func (h *Handler) ListEntities(w http.ResponseWriter, r *http.Request) {
-	campaignID, err := parseUUID(r, "id")
+	campaignID, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -335,7 +336,7 @@ func (h *Handler) ListEntities(w http.ResponseWriter, r *http.Request) {
 // CreateEntity handles POST /api/campaigns/:id/entities
 // Verifies the user owns the campaign before creating an entity.
 func (h *Handler) CreateEntity(w http.ResponseWriter, r *http.Request) {
-	campaignID, err := parseUUID(r, "id")
+	campaignID, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -376,7 +377,7 @@ func (h *Handler) CreateEntity(w http.ResponseWriter, r *http.Request) {
 // Verifies the user owns the entity's campaign before returning the entity.
 // GM notes are only visible to the campaign owner (GM).
 func (h *Handler) GetEntity(w http.ResponseWriter, r *http.Request) {
-	id, err := parseUUID(r, "id")
+	id, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid entity ID")
 		return
@@ -405,7 +406,7 @@ func (h *Handler) GetEntity(w http.ResponseWriter, r *http.Request) {
 // UpdateEntity handles PUT /api/entities/:id
 // Verifies the user owns the entity's campaign before updating the entity.
 func (h *Handler) UpdateEntity(w http.ResponseWriter, r *http.Request) {
-	id, err := parseUUID(r, "id")
+	id, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid entity ID")
 		return
@@ -443,7 +444,7 @@ func (h *Handler) UpdateEntity(w http.ResponseWriter, r *http.Request) {
 // DeleteEntity handles DELETE /api/entities/:id
 // Verifies the user owns the entity's campaign before deleting the entity.
 func (h *Handler) DeleteEntity(w http.ResponseWriter, r *http.Request) {
-	id, err := parseUUID(r, "id")
+	id, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid entity ID")
 		return
@@ -475,7 +476,7 @@ func (h *Handler) DeleteEntity(w http.ResponseWriter, r *http.Request) {
 // Verifies the user owns the campaign before searching entities.
 // GM notes are only visible to the campaign owner (GM).
 func (h *Handler) SearchEntities(w http.ResponseWriter, r *http.Request) {
-	campaignID, err := parseUUID(r, "id")
+	campaignID, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -517,7 +518,7 @@ func (h *Handler) SearchEntities(w http.ResponseWriter, r *http.Request) {
 // ListRelationships handles GET /api/campaigns/:id/relationships
 // Verifies the user owns the campaign before listing relationships.
 func (h *Handler) ListRelationships(w http.ResponseWriter, r *http.Request) {
-	campaignID, err := parseUUID(r, "id")
+	campaignID, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -545,7 +546,7 @@ func (h *Handler) ListRelationships(w http.ResponseWriter, r *http.Request) {
 // CreateRelationship handles POST /api/campaigns/:id/relationships
 // Verifies the user owns the campaign before creating a relationship.
 func (h *Handler) CreateRelationship(w http.ResponseWriter, r *http.Request) {
-	campaignID, err := parseUUID(r, "id")
+	campaignID, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -562,12 +563,12 @@ func (h *Handler) CreateRelationship(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.SourceEntityID == uuid.Nil {
+	if req.SourceEntityID == 0 {
 		respondError(w, http.StatusBadRequest, "Source entity ID is required")
 		return
 	}
 
-	if req.TargetEntityID == uuid.Nil {
+	if req.TargetEntityID == 0 {
 		respondError(w, http.StatusBadRequest, "Target entity ID is required")
 		return
 	}
@@ -590,7 +591,7 @@ func (h *Handler) CreateRelationship(w http.ResponseWriter, r *http.Request) {
 // GetRelationship handles GET /api/campaigns/{campaignId}/relationships/{id}
 // Verifies the user owns the campaign before getting the relationship.
 func (h *Handler) GetRelationship(w http.ResponseWriter, r *http.Request) {
-	campaignID, err := parseUUID(r, "id")
+	campaignID, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -601,7 +602,7 @@ func (h *Handler) GetRelationship(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	relationshipID, err := parseUUID(r, "relationshipId")
+	relationshipID, err := parseInt64(r, "relationshipId")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid relationship ID")
 		return
@@ -626,7 +627,7 @@ func (h *Handler) GetRelationship(w http.ResponseWriter, r *http.Request) {
 // UpdateRelationship handles PUT /api/campaigns/{campaignId}/relationships/{id}
 // Verifies the user owns the campaign before updating the relationship.
 func (h *Handler) UpdateRelationship(w http.ResponseWriter, r *http.Request) {
-	campaignID, err := parseUUID(r, "id")
+	campaignID, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -637,7 +638,7 @@ func (h *Handler) UpdateRelationship(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	relationshipID, err := parseUUID(r, "relationshipId")
+	relationshipID, err := parseInt64(r, "relationshipId")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid relationship ID")
 		return
@@ -675,7 +676,7 @@ func (h *Handler) UpdateRelationship(w http.ResponseWriter, r *http.Request) {
 // DeleteRelationship handles DELETE /api/campaigns/{campaignId}/relationships/{id}
 // Verifies the user owns the campaign before deleting the relationship.
 func (h *Handler) DeleteRelationship(w http.ResponseWriter, r *http.Request) {
-	campaignID, err := parseUUID(r, "id")
+	campaignID, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -686,7 +687,7 @@ func (h *Handler) DeleteRelationship(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	relationshipID, err := parseUUID(r, "relationshipId")
+	relationshipID, err := parseInt64(r, "relationshipId")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid relationship ID")
 		return
@@ -717,7 +718,7 @@ func (h *Handler) DeleteRelationship(w http.ResponseWriter, r *http.Request) {
 // GetEntityRelationships handles GET /api/campaigns/{campaignId}/entities/{entityId}/relationships
 // Verifies the user owns the campaign before getting entity relationships.
 func (h *Handler) GetEntityRelationships(w http.ResponseWriter, r *http.Request) {
-	campaignID, err := parseUUID(r, "id")
+	campaignID, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -728,7 +729,7 @@ func (h *Handler) GetEntityRelationships(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	entityID, err := parseUUID(r, "entityId")
+	entityID, err := parseInt64(r, "entityId")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid entity ID")
 		return
@@ -764,7 +765,7 @@ func (h *Handler) GetEntityRelationships(w http.ResponseWriter, r *http.Request)
 // ListTimelineEvents handles GET /api/campaigns/:id/timeline
 // Verifies the user owns the campaign before listing timeline events.
 func (h *Handler) ListTimelineEvents(w http.ResponseWriter, r *http.Request) {
-	campaignID, err := parseUUID(r, "id")
+	campaignID, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -792,7 +793,7 @@ func (h *Handler) ListTimelineEvents(w http.ResponseWriter, r *http.Request) {
 // CreateTimelineEvent handles POST /api/campaigns/:id/timeline
 // Verifies the user owns the campaign before creating a timeline event.
 func (h *Handler) CreateTimelineEvent(w http.ResponseWriter, r *http.Request) {
-	campaignID, err := parseUUID(r, "id")
+	campaignID, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -827,7 +828,7 @@ func (h *Handler) CreateTimelineEvent(w http.ResponseWriter, r *http.Request) {
 // GetTimelineEvent handles GET /api/campaigns/{campaignId}/timeline/{id}
 // Verifies the user owns the campaign before getting the timeline event.
 func (h *Handler) GetTimelineEvent(w http.ResponseWriter, r *http.Request) {
-	campaignID, err := parseUUID(r, "id")
+	campaignID, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -838,7 +839,7 @@ func (h *Handler) GetTimelineEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	eventID, err := parseUUID(r, "eventId")
+	eventID, err := parseInt64(r, "eventId")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid timeline event ID")
 		return
@@ -863,7 +864,7 @@ func (h *Handler) GetTimelineEvent(w http.ResponseWriter, r *http.Request) {
 // UpdateTimelineEvent handles PUT /api/campaigns/{campaignId}/timeline/{id}
 // Verifies the user owns the campaign before updating the timeline event.
 func (h *Handler) UpdateTimelineEvent(w http.ResponseWriter, r *http.Request) {
-	campaignID, err := parseUUID(r, "id")
+	campaignID, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -874,7 +875,7 @@ func (h *Handler) UpdateTimelineEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	eventID, err := parseUUID(r, "eventId")
+	eventID, err := parseInt64(r, "eventId")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid timeline event ID")
 		return
@@ -912,7 +913,7 @@ func (h *Handler) UpdateTimelineEvent(w http.ResponseWriter, r *http.Request) {
 // DeleteTimelineEvent handles DELETE /api/campaigns/{campaignId}/timeline/{id}
 // Verifies the user owns the campaign before deleting the timeline event.
 func (h *Handler) DeleteTimelineEvent(w http.ResponseWriter, r *http.Request) {
-	campaignID, err := parseUUID(r, "id")
+	campaignID, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -923,7 +924,7 @@ func (h *Handler) DeleteTimelineEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	eventID, err := parseUUID(r, "eventId")
+	eventID, err := parseInt64(r, "eventId")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid timeline event ID")
 		return
@@ -954,7 +955,7 @@ func (h *Handler) DeleteTimelineEvent(w http.ResponseWriter, r *http.Request) {
 // GetEntityTimelineEvents handles GET /api/campaigns/{campaignId}/entities/{entityId}/timeline
 // Verifies the user owns the campaign before getting entity timeline events.
 func (h *Handler) GetEntityTimelineEvents(w http.ResponseWriter, r *http.Request) {
-	campaignID, err := parseUUID(r, "id")
+	campaignID, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -965,7 +966,7 @@ func (h *Handler) GetEntityTimelineEvents(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	entityID, err := parseUUID(r, "entityId")
+	entityID, err := parseInt64(r, "entityId")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid entity ID")
 		return
@@ -1025,7 +1026,7 @@ func (h *Handler) GetDashboardStats(w http.ResponseWriter, r *http.Request) {
 // GetCampaignStats handles GET /api/campaigns/{campaignId}/stats
 // Verifies the user owns the campaign before getting stats.
 func (h *Handler) GetCampaignStats(w http.ResponseWriter, r *http.Request) {
-	campaignID, err := parseUUID(r, "id")
+	campaignID, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -1049,7 +1050,7 @@ func (h *Handler) GetCampaignStats(w http.ResponseWriter, r *http.Request) {
 // ListRelationshipTypes handles GET /api/campaigns/{id}/relationship-types
 // Returns all relationship types available for a campaign (system defaults + custom).
 func (h *Handler) ListRelationshipTypes(w http.ResponseWriter, r *http.Request) {
-	campaignID, err := parseUUID(r, "id")
+	campaignID, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -1077,7 +1078,7 @@ func (h *Handler) ListRelationshipTypes(w http.ResponseWriter, r *http.Request) 
 // CreateRelationshipType handles POST /api/campaigns/{id}/relationship-types
 // Creates a custom relationship type for a campaign.
 func (h *Handler) CreateRelationshipType(w http.ResponseWriter, r *http.Request) {
-	campaignID, err := parseUUID(r, "id")
+	campaignID, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -1133,7 +1134,7 @@ func (h *Handler) CreateRelationshipType(w http.ResponseWriter, r *http.Request)
 // DeleteRelationshipType handles DELETE /api/campaigns/{campaignId}/relationship-types/{id}
 // Deletes a custom relationship type. System defaults cannot be deleted.
 func (h *Handler) DeleteRelationshipType(w http.ResponseWriter, r *http.Request) {
-	campaignID, err := parseUUID(r, "id")
+	campaignID, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -1144,7 +1145,7 @@ func (h *Handler) DeleteRelationshipType(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	typeID, err := parseUUID(r, "typeId")
+	typeID, err := parseInt64(r, "typeId")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid relationship type ID")
 		return
@@ -1294,7 +1295,7 @@ func (h *Handler) UpdateUserSettings(w http.ResponseWriter, r *http.Request) {
 // ListPlayerCharacters handles GET /api/campaigns/{id}/player-characters
 // Returns all player characters for a campaign.
 func (h *Handler) ListPlayerCharacters(w http.ResponseWriter, r *http.Request) {
-	campaignID, err := parseUUID(r, "id")
+	campaignID, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -1322,7 +1323,7 @@ func (h *Handler) ListPlayerCharacters(w http.ResponseWriter, r *http.Request) {
 // CreatePlayerCharacter handles POST /api/campaigns/{id}/player-characters
 // Creates a new player character in a campaign.
 func (h *Handler) CreatePlayerCharacter(w http.ResponseWriter, r *http.Request) {
-	campaignID, err := parseUUID(r, "id")
+	campaignID, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -1362,7 +1363,7 @@ func (h *Handler) CreatePlayerCharacter(w http.ResponseWriter, r *http.Request) 
 // GetPlayerCharacter handles GET /api/campaigns/{id}/player-characters/{pcId}
 // Returns a specific player character.
 func (h *Handler) GetPlayerCharacter(w http.ResponseWriter, r *http.Request) {
-	campaignID, err := parseUUID(r, "id")
+	campaignID, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -1373,7 +1374,7 @@ func (h *Handler) GetPlayerCharacter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pcID, err := parseUUID(r, "pcId")
+	pcID, err := parseInt64(r, "pcId")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid player character ID")
 		return
@@ -1398,7 +1399,7 @@ func (h *Handler) GetPlayerCharacter(w http.ResponseWriter, r *http.Request) {
 // UpdatePlayerCharacter handles PUT /api/campaigns/{id}/player-characters/{pcId}
 // Updates a player character.
 func (h *Handler) UpdatePlayerCharacter(w http.ResponseWriter, r *http.Request) {
-	campaignID, err := parseUUID(r, "id")
+	campaignID, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -1409,7 +1410,7 @@ func (h *Handler) UpdatePlayerCharacter(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	pcID, err := parseUUID(r, "pcId")
+	pcID, err := parseInt64(r, "pcId")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid player character ID")
 		return
@@ -1447,7 +1448,7 @@ func (h *Handler) UpdatePlayerCharacter(w http.ResponseWriter, r *http.Request) 
 // DeletePlayerCharacter handles DELETE /api/campaigns/{id}/player-characters/{pcId}
 // Deletes a player character.
 func (h *Handler) DeletePlayerCharacter(w http.ResponseWriter, r *http.Request) {
-	campaignID, err := parseUUID(r, "id")
+	campaignID, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return
@@ -1458,7 +1459,7 @@ func (h *Handler) DeletePlayerCharacter(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	pcID, err := parseUUID(r, "pcId")
+	pcID, err := parseInt64(r, "pcId")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid player character ID")
 		return
@@ -1484,4 +1485,752 @@ func (h *Handler) DeletePlayerCharacter(w http.ResponseWriter, r *http.Request) 
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ListChapters handles GET /api/campaigns/{id}/chapters
+// Returns all chapters for a campaign ordered by sort_order.
+func (h *Handler) ListChapters(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseInt64(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+		return
+	}
+
+	chapters, err := h.db.ListChaptersByCampaign(r.Context(), campaignID)
+	if err != nil {
+		log.Printf("Error listing chapters: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to list chapters")
+		return
+	}
+
+	if chapters == nil {
+		chapters = []models.Chapter{}
+	}
+
+	respondJSON(w, http.StatusOK, chapters)
+}
+
+// GetChapter handles GET /api/campaigns/{id}/chapters/{chapterId}
+// Returns a specific chapter.
+func (h *Handler) GetChapter(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseInt64(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+		return
+	}
+
+	chapterID, err := parseInt64(r, "chapterId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid chapter ID")
+		return
+	}
+
+	chapter, err := h.db.GetChapter(r.Context(), chapterID)
+	if err != nil {
+		log.Printf("Error getting chapter: %v", err)
+		respondError(w, http.StatusNotFound, "Chapter not found")
+		return
+	}
+
+	// Verify the chapter belongs to the specified campaign
+	if chapter.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Chapter not found")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, chapter)
+}
+
+// CreateChapter handles POST /api/campaigns/{id}/chapters
+// Creates a new chapter in a campaign.
+func (h *Handler) CreateChapter(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseInt64(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+		return
+	}
+
+	var req models.CreateChapterRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if req.Title == "" {
+		respondError(w, http.StatusBadRequest, "Title is required")
+		return
+	}
+
+	chapter, err := h.db.CreateChapter(r.Context(), campaignID, req)
+	if err != nil {
+		log.Printf("Error creating chapter: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to create chapter")
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, chapter)
+}
+
+// UpdateChapter handles PUT /api/campaigns/{id}/chapters/{chapterId}
+// Updates a chapter.
+func (h *Handler) UpdateChapter(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseInt64(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+		return
+	}
+
+	chapterID, err := parseInt64(r, "chapterId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid chapter ID")
+		return
+	}
+
+	// Verify the chapter exists and belongs to the specified campaign
+	existing, err := h.db.GetChapter(r.Context(), chapterID)
+	if err != nil {
+		log.Printf("Error getting chapter: %v", err)
+		respondError(w, http.StatusNotFound, "Chapter not found")
+		return
+	}
+
+	if existing.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Chapter not found")
+		return
+	}
+
+	var req models.UpdateChapterRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	chapter, err := h.db.UpdateChapter(r.Context(), chapterID, req)
+	if err != nil {
+		log.Printf("Error updating chapter: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to update chapter")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, chapter)
+}
+
+// DeleteChapter handles DELETE /api/campaigns/{id}/chapters/{chapterId}
+// Deletes a chapter.
+func (h *Handler) DeleteChapter(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseInt64(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+		return
+	}
+
+	chapterID, err := parseInt64(r, "chapterId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid chapter ID")
+		return
+	}
+
+	// Verify the chapter exists and belongs to the specified campaign
+	existing, err := h.db.GetChapter(r.Context(), chapterID)
+	if err != nil {
+		log.Printf("Error getting chapter: %v", err)
+		respondError(w, http.StatusNotFound, "Chapter not found")
+		return
+	}
+
+	if existing.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Chapter not found")
+		return
+	}
+
+	if err := h.db.DeleteChapter(r.Context(), chapterID); err != nil {
+		log.Printf("Error deleting chapter: %v", err)
+		respondError(w, http.StatusNotFound, "Chapter not found")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ListSessions handles GET /api/campaigns/{id}/sessions
+// Returns all sessions for a campaign.
+func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseInt64(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+		return
+	}
+
+	sessions, err := h.db.ListSessionsByCampaign(r.Context(), campaignID)
+	if err != nil {
+		log.Printf("Error listing sessions: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to list sessions")
+		return
+	}
+
+	if sessions == nil {
+		sessions = []models.Session{}
+	}
+
+	respondJSON(w, http.StatusOK, sessions)
+}
+
+// ListSessionsByChapter handles GET /api/campaigns/{id}/chapters/{chapterId}/sessions
+// Returns all sessions for a specific chapter.
+func (h *Handler) ListSessionsByChapter(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseInt64(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+		return
+	}
+
+	chapterID, err := parseInt64(r, "chapterId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid chapter ID")
+		return
+	}
+
+	// Verify the chapter exists and belongs to the specified campaign
+	chapter, err := h.db.GetChapter(r.Context(), chapterID)
+	if err != nil {
+		log.Printf("Error getting chapter: %v", err)
+		respondError(w, http.StatusNotFound, "Chapter not found")
+		return
+	}
+
+	if chapter.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Chapter not found")
+		return
+	}
+
+	sessions, err := h.db.ListSessionsByChapter(r.Context(), chapterID)
+	if err != nil {
+		log.Printf("Error listing sessions by chapter: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to list sessions")
+		return
+	}
+
+	if sessions == nil {
+		sessions = []models.Session{}
+	}
+
+	respondJSON(w, http.StatusOK, sessions)
+}
+
+// GetSession handles GET /api/campaigns/{id}/sessions/{sessionId}
+// Returns a specific session.
+func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseInt64(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+		return
+	}
+
+	sessionID, err := parseInt64(r, "sessionId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid session ID")
+		return
+	}
+
+	session, err := h.db.GetSession(r.Context(), sessionID)
+	if err != nil {
+		log.Printf("Error getting session: %v", err)
+		respondError(w, http.StatusNotFound, "Session not found")
+		return
+	}
+
+	// Verify the session belongs to the specified campaign
+	if session.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Session not found")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, session)
+}
+
+// CreateSession handles POST /api/campaigns/{id}/sessions
+// Creates a new session in a campaign.
+func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseInt64(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+		return
+	}
+
+	var req models.CreateSessionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// If a chapter ID is provided, verify it belongs to this campaign
+	if req.ChapterID != nil {
+		chapter, err := h.db.GetChapter(r.Context(), *req.ChapterID)
+		if err != nil {
+			log.Printf("Error getting chapter: %v", err)
+			respondError(w, http.StatusBadRequest, "Invalid chapter ID")
+			return
+		}
+		if chapter.CampaignID != campaignID {
+			respondError(w, http.StatusBadRequest, "Chapter does not belong to this campaign")
+			return
+		}
+	}
+
+	session, err := h.db.CreateSession(r.Context(), campaignID, req)
+	if err != nil {
+		log.Printf("Error creating session: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to create session")
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, session)
+}
+
+// UpdateSession handles PUT /api/campaigns/{id}/sessions/{sessionId}
+// Updates a session.
+func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseInt64(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+		return
+	}
+
+	sessionID, err := parseInt64(r, "sessionId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid session ID")
+		return
+	}
+
+	// Verify the session exists and belongs to the specified campaign
+	existing, err := h.db.GetSession(r.Context(), sessionID)
+	if err != nil {
+		log.Printf("Error getting session: %v", err)
+		respondError(w, http.StatusNotFound, "Session not found")
+		return
+	}
+
+	if existing.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Session not found")
+		return
+	}
+
+	var req models.UpdateSessionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// If a chapter ID is provided, verify it belongs to this campaign
+	if req.ChapterID != nil {
+		chapter, err := h.db.GetChapter(r.Context(), *req.ChapterID)
+		if err != nil {
+			log.Printf("Error getting chapter: %v", err)
+			respondError(w, http.StatusBadRequest, "Invalid chapter ID")
+			return
+		}
+		if chapter.CampaignID != campaignID {
+			respondError(w, http.StatusBadRequest, "Chapter does not belong to this campaign")
+			return
+		}
+	}
+
+	session, err := h.db.UpdateSession(r.Context(), sessionID, req)
+	if err != nil {
+		log.Printf("Error updating session: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to update session")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, session)
+}
+
+// DeleteSession handles DELETE /api/campaigns/{id}/sessions/{sessionId}
+// Deletes a session.
+func (h *Handler) DeleteSession(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseInt64(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+		return
+	}
+
+	sessionID, err := parseInt64(r, "sessionId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid session ID")
+		return
+	}
+
+	// Verify the session exists and belongs to the specified campaign
+	existing, err := h.db.GetSession(r.Context(), sessionID)
+	if err != nil {
+		log.Printf("Error getting session: %v", err)
+		respondError(w, http.StatusNotFound, "Session not found")
+		return
+	}
+
+	if existing.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Session not found")
+		return
+	}
+
+	if err := h.db.DeleteSession(r.Context(), sessionID); err != nil {
+		log.Printf("Error deleting session: %v", err)
+		respondError(w, http.StatusNotFound, "Session not found")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ListChapterEntities handles GET /api/campaigns/{id}/chapters/{chapterId}/entities
+// Returns all entities linked to a chapter.
+func (h *Handler) ListChapterEntities(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseInt64(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	userID, ok := h.verifyCampaignOwnership(w, r, campaignID)
+	if !ok {
+		return
+	}
+
+	chapterID, err := parseInt64(r, "chapterId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid chapter ID")
+		return
+	}
+
+	// Verify the chapter belongs to the specified campaign
+	chapter, err := h.db.GetChapter(r.Context(), chapterID)
+	if err != nil {
+		log.Printf("Error getting chapter: %v", err)
+		respondError(w, http.StatusNotFound, "Chapter not found")
+		return
+	}
+
+	if chapter.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Chapter not found")
+		return
+	}
+
+	links, err := h.db.ListChapterEntities(r.Context(), chapterID)
+	if err != nil {
+		log.Printf("Error listing chapter entities: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to list chapter entities")
+		return
+	}
+
+	if links == nil {
+		links = []models.ChapterEntity{}
+	}
+
+	// Filter GM notes from linked entities for non-owners
+	isGM := h.isUserCampaignOwner(r.Context(), campaignID, userID)
+	for i := range links {
+		if links[i].Entity != nil {
+			filterEntityGMNotes(links[i].Entity, isGM)
+		}
+	}
+
+	respondJSON(w, http.StatusOK, links)
+}
+
+// CreateChapterEntity handles POST /api/campaigns/{id}/chapters/{chapterId}/entities
+// Links an entity to a chapter.
+func (h *Handler) CreateChapterEntity(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseInt64(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+		return
+	}
+
+	chapterID, err := parseInt64(r, "chapterId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid chapter ID")
+		return
+	}
+
+	// Verify the chapter belongs to the specified campaign
+	chapter, err := h.db.GetChapter(r.Context(), chapterID)
+	if err != nil {
+		log.Printf("Error getting chapter: %v", err)
+		respondError(w, http.StatusNotFound, "Chapter not found")
+		return
+	}
+
+	if chapter.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Chapter not found")
+		return
+	}
+
+	var req models.CreateChapterEntityRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if req.EntityID == 0 {
+		respondError(w, http.StatusBadRequest, "Entity ID is required")
+		return
+	}
+
+	// Verify the entity exists and belongs to the same campaign
+	entity, err := h.db.GetEntity(r.Context(), req.EntityID)
+	if err != nil {
+		log.Printf("Error getting entity: %v", err)
+		respondError(w, http.StatusBadRequest, "Entity not found")
+		return
+	}
+
+	if entity.CampaignID != campaignID {
+		respondError(w, http.StatusBadRequest, "Entity does not belong to this campaign")
+		return
+	}
+
+	link, err := h.db.CreateChapterEntity(r.Context(), chapterID, req)
+	if err != nil {
+		log.Printf("Error creating chapter entity: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to link entity to chapter")
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, link)
+}
+
+// UpdateChapterEntity handles PUT /api/campaigns/{id}/chapters/{chapterId}/entities/{linkId}
+// Updates a chapter-entity link (e.g., change mention_type).
+func (h *Handler) UpdateChapterEntity(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseInt64(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+		return
+	}
+
+	chapterID, err := parseInt64(r, "chapterId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid chapter ID")
+		return
+	}
+
+	// Verify the chapter belongs to the specified campaign
+	chapter, err := h.db.GetChapter(r.Context(), chapterID)
+	if err != nil {
+		log.Printf("Error getting chapter: %v", err)
+		respondError(w, http.StatusNotFound, "Chapter not found")
+		return
+	}
+
+	if chapter.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Chapter not found")
+		return
+	}
+
+	linkID, err := parseInt64(r, "linkId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid link ID")
+		return
+	}
+
+	// Verify the link exists and belongs to the specified chapter
+	existingLink, err := h.db.GetChapterEntity(r.Context(), linkID)
+	if err != nil {
+		log.Printf("Error getting chapter entity: %v", err)
+		respondError(w, http.StatusNotFound, "Chapter entity link not found")
+		return
+	}
+
+	if existingLink.ChapterID != chapterID {
+		respondError(w, http.StatusNotFound, "Chapter entity link not found")
+		return
+	}
+
+	var req models.UpdateChapterEntityRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	link, err := h.db.UpdateChapterEntity(r.Context(), linkID, req)
+	if err != nil {
+		log.Printf("Error updating chapter entity: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to update chapter entity link")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, link)
+}
+
+// DeleteChapterEntity handles DELETE /api/campaigns/{id}/chapters/{chapterId}/entities/{linkId}
+// Removes an entity link from a chapter.
+func (h *Handler) DeleteChapterEntity(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseInt64(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+		return
+	}
+
+	chapterID, err := parseInt64(r, "chapterId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid chapter ID")
+		return
+	}
+
+	// Verify the chapter belongs to the specified campaign
+	chapter, err := h.db.GetChapter(r.Context(), chapterID)
+	if err != nil {
+		log.Printf("Error getting chapter: %v", err)
+		respondError(w, http.StatusNotFound, "Chapter not found")
+		return
+	}
+
+	if chapter.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Chapter not found")
+		return
+	}
+
+	linkID, err := parseInt64(r, "linkId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid link ID")
+		return
+	}
+
+	// Verify the link exists and belongs to the specified chapter
+	existingLink, err := h.db.GetChapterEntity(r.Context(), linkID)
+	if err != nil {
+		log.Printf("Error getting chapter entity: %v", err)
+		respondError(w, http.StatusNotFound, "Chapter entity link not found")
+		return
+	}
+
+	if existingLink.ChapterID != chapterID {
+		respondError(w, http.StatusNotFound, "Chapter entity link not found")
+		return
+	}
+
+	if err := h.db.DeleteChapterEntity(r.Context(), linkID); err != nil {
+		log.Printf("Error deleting chapter entity: %v", err)
+		respondError(w, http.StatusNotFound, "Chapter entity link not found")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// SearchCampaignContent handles GET /api/campaigns/{id}/search
+// Performs hybrid vector+BM25 search across all campaign content.
+func (h *Handler) SearchCampaignContent(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseInt64(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+		return
+	}
+
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		respondError(w, http.StatusBadRequest, "Query parameter 'q' is required")
+		return
+	}
+
+	limit := 10
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+
+	if !h.db.IsVectorizationAvailable(r.Context()) {
+		respondError(w, http.StatusServiceUnavailable,
+			"Semantic search is not available. The vectorizer extension is not installed.")
+		return
+	}
+
+	results, err := h.db.SearchCampaignContent(r.Context(), campaignID, query, limit)
+	if err != nil {
+		log.Printf("Error searching campaign content: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to search campaign content")
+		return
+	}
+
+	if results == nil {
+		results = []models.SearchResult{}
+	}
+
+	respondJSON(w, http.StatusOK, results)
 }

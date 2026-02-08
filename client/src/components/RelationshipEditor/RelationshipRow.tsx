@@ -33,8 +33,10 @@ export interface RelationshipRowProps {
     relationship: Relationship | PendingRelationship;
     /** The current entity name for display in natural sentences. */
     currentEntityName?: string;
+    /** The resolved target entity name for existing relationships. */
+    targetEntityName?: string;
     /** Map of relationship type IDs/names to their definitions. */
-    relationshipTypeMap?: Map<string, RelationshipType>;
+    relationshipTypeMap?: Map<string | number, RelationshipType>;
     /** If true, the relationship is pending (not yet saved). */
     isPending?: boolean;
     /** Callback fired when the edit button is clicked. */
@@ -89,15 +91,18 @@ function formatRelationshipType(type: string): string {
 export default function RelationshipRow({
     relationship,
     currentEntityName = 'This entity',
+    targetEntityName,
     relationshipTypeMap,
     isPending = false,
     onEdit,
     onDelete,
     readOnly = false,
 }: RelationshipRowProps) {
+    // For pending relationships, use embedded targetEntityName
+    // For existing relationships, use prop or fall back to ID
     const targetName = isPendingRelationship(relationship)
         ? relationship.targetEntityName
-        : relationship.targetEntityId; // For existing relationships, this should be resolved by the parent
+        : targetEntityName ?? relationship.targetEntityId;
 
     const bidirectional = relationship.bidirectional;
     const relationshipType = relationship.relationshipType;

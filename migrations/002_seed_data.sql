@@ -1,8 +1,19 @@
--- Seed initial game systems from schema definitions
--- This migration populates the game_systems table with the three initial systems
+/*-------------------------------------------------------------------------
+ *
+ * Imagineer - TTRPG Campaign Intelligence Platform
+ *
+ * Copyright (c) 2025 - 2026
+ * This software is released under The MIT License
+ *
+ *-------------------------------------------------------------------------
+ */
 
--- Enable trigram extension for fuzzy name matching
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
+-- Seed Data Migration
+-- Populates game systems and default relationship types
+
+-- ============================================
+-- Game Systems
+-- ============================================
 
 -- Call of Cthulhu 7th Edition
 INSERT INTO game_systems (name, code, attribute_schema, skill_schema, dice_conventions) VALUES (
@@ -146,4 +157,60 @@ INSERT INTO game_systems (name, code, attribute_schema, skill_schema, dice_conve
     }'
 );
 
-INSERT INTO schema_migrations (version) VALUES ('002_seed_game_systems');
+-- ============================================
+-- Default Relationship Types
+-- System-wide defaults (campaign_id = NULL)
+-- ============================================
+
+-- Ownership relationships (asymmetric)
+INSERT INTO relationship_types (campaign_id, name, inverse_name, is_symmetric, display_label, inverse_display_label, description) VALUES
+(NULL, 'owns', 'owned_by', false, 'Owns', 'Is owned by', 'Entity possesses or controls another entity'),
+(NULL, 'owned_by', 'owns', false, 'Is owned by', 'Owns', 'Inverse of owns relationship');
+
+-- Employment relationships (asymmetric)
+INSERT INTO relationship_types (campaign_id, name, inverse_name, is_symmetric, display_label, inverse_display_label, description) VALUES
+(NULL, 'employs', 'employed_by', false, 'Employs', 'Is employed by', 'Entity employs another as worker or servant'),
+(NULL, 'employed_by', 'employs', false, 'Is employed by', 'Employs', 'Inverse of employs relationship'),
+(NULL, 'works_for', 'employs', false, 'Works for', 'Employs', 'Alias for employed_by relationship');
+
+-- Management relationships (asymmetric)
+INSERT INTO relationship_types (campaign_id, name, inverse_name, is_symmetric, display_label, inverse_display_label, description) VALUES
+(NULL, 'reports_to', 'manages', false, 'Reports to', 'Manages', 'Entity reports to another in organizational hierarchy'),
+(NULL, 'manages', 'reports_to', false, 'Manages', 'Reports to', 'Entity manages or supervises another');
+
+-- Family relationships (asymmetric)
+INSERT INTO relationship_types (campaign_id, name, inverse_name, is_symmetric, display_label, inverse_display_label, description) VALUES
+(NULL, 'parent_of', 'child_of', false, 'Parent of', 'Child of', 'Entity is parent of another'),
+(NULL, 'child_of', 'parent_of', false, 'Child of', 'Parent of', 'Entity is child of another');
+
+-- Location relationships (asymmetric)
+INSERT INTO relationship_types (campaign_id, name, inverse_name, is_symmetric, display_label, inverse_display_label, description) VALUES
+(NULL, 'located_at', 'contains', false, 'Located at', 'Contains', 'Entity is physically located at another location'),
+(NULL, 'contains', 'located_at', false, 'Contains', 'Located at', 'Location contains another entity');
+
+-- Membership relationships (asymmetric)
+INSERT INTO relationship_types (campaign_id, name, inverse_name, is_symmetric, display_label, inverse_display_label, description) VALUES
+(NULL, 'member_of', 'has_member', false, 'Member of', 'Has member', 'Entity is member of organization or faction'),
+(NULL, 'has_member', 'member_of', false, 'Has member', 'Member of', 'Organization has entity as member');
+
+-- Creation relationships (asymmetric)
+INSERT INTO relationship_types (campaign_id, name, inverse_name, is_symmetric, display_label, inverse_display_label, description) VALUES
+(NULL, 'created', 'created_by', false, 'Created', 'Created by', 'Entity created or made another entity'),
+(NULL, 'created_by', 'created', false, 'Created by', 'Created', 'Entity was created by another');
+
+-- Political relationships (asymmetric)
+INSERT INTO relationship_types (campaign_id, name, inverse_name, is_symmetric, display_label, inverse_display_label, description) VALUES
+(NULL, 'rules', 'ruled_by', false, 'Rules', 'Ruled by', 'Entity has political authority over another'),
+(NULL, 'ruled_by', 'rules', false, 'Ruled by', 'Rules', 'Entity is under political authority of another');
+
+-- Social relationships (symmetric)
+INSERT INTO relationship_types (campaign_id, name, inverse_name, is_symmetric, display_label, inverse_display_label, description) VALUES
+(NULL, 'knows', 'knows', true, 'Knows', 'Knows', 'Entity is acquainted with another'),
+(NULL, 'friend_of', 'friend_of', true, 'Friend of', 'Friend of', 'Entity has friendly relationship with another'),
+(NULL, 'enemy_of', 'enemy_of', true, 'Enemy of', 'Enemy of', 'Entity has hostile relationship with another'),
+(NULL, 'allied_with', 'allied_with', true, 'Allied with', 'Allied with', 'Entity has alliance or partnership with another');
+
+-- ============================================
+-- Record migration
+-- ============================================
+INSERT INTO schema_migrations (version) VALUES ('002_seed_data');

@@ -97,8 +97,8 @@ interface TimelineFormData {
     eventDate: string;
     eventTime: string;
     datePrecision: DatePrecision;
-    entityIds: string[];
-    sessionId: string;
+    entityIds: number[];
+    sessionId: number | undefined;
     isPlayerKnown: boolean;
     sourceDocument: string;
 }
@@ -112,7 +112,7 @@ const DEFAULT_FORM_DATA: TimelineFormData = {
     eventTime: '',
     datePrecision: 'exact',
     entityIds: [],
-    sessionId: '',
+    sessionId: undefined,
     isPlayerKnown: true,
     sourceDocument: '',
 };
@@ -165,7 +165,8 @@ function formatDate(dateString: string): string {
 }
 
 export default function Timeline() {
-    const { id: campaignId } = useParams<{ id: string }>();
+    const { id } = useParams<{ id: string }>();
+    const campaignId = id ? Number(id) : undefined;
 
     // Pagination state
     const [page, setPage] = useState(1);
@@ -188,7 +189,7 @@ export default function Timeline() {
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
     // Selected event for view/edit/delete
-    const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+    const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
 
     // Form state
     const [formData, setFormData] = useState<TimelineFormData>(DEFAULT_FORM_DATA);
@@ -200,7 +201,7 @@ export default function Timeline() {
         isLoading: eventsLoading,
         error: eventsError,
     } = useTimelineEvents({
-        campaignId: campaignId ?? '',
+        campaignId: campaignId ?? 0,
         page,
         pageSize,
         isPlayerKnown: playerKnownFilter === '' ? undefined : playerKnownFilter,
@@ -212,7 +213,7 @@ export default function Timeline() {
     const {
         data: entities,
     } = useEntities({
-        campaignId: campaignId ?? '',
+        campaignId: campaignId ?? 0,
         pageSize: 100, // Load a reasonable amount for the selector
     });
 
@@ -221,8 +222,8 @@ export default function Timeline() {
         data: selectedEvent,
         isLoading: selectedEventLoading,
     } = useTimelineEvent(
-        campaignId ?? '',
-        selectedEventId ?? '',
+        campaignId ?? 0,
+        selectedEventId ?? 0,
         { enabled: !!selectedEventId && (viewDialogOpen || editDialogOpen) }
     );
 
@@ -254,7 +255,7 @@ export default function Timeline() {
 
     // Create entity lookup map for displaying entity names
     const entityMap = useMemo(() => {
-        const map = new Map<string, Entity>();
+        const map = new Map<number, Entity>();
         if (entities) {
             for (const entity of entities) {
                 map.set(entity.id, entity);
@@ -291,7 +292,7 @@ export default function Timeline() {
                 eventTime: formData.eventTime.trim() || undefined,
                 datePrecision: formData.datePrecision,
                 entityIds: formData.entityIds.length > 0 ? formData.entityIds : undefined,
-                sessionId: formData.sessionId.trim() || undefined,
+                sessionId: formData.sessionId ?? undefined,
                 isPlayerKnown: formData.isPlayerKnown,
                 sourceDocument: formData.sourceDocument.trim() || undefined,
             });
@@ -317,7 +318,7 @@ export default function Timeline() {
                     eventTime: formData.eventTime.trim() || undefined,
                     datePrecision: formData.datePrecision,
                     entityIds: formData.entityIds,
-                    sessionId: formData.sessionId.trim() || undefined,
+                    sessionId: formData.sessionId ?? undefined,
                     isPlayerKnown: formData.isPlayerKnown,
                     sourceDocument: formData.sourceDocument.trim() || undefined,
                 },
@@ -362,7 +363,7 @@ export default function Timeline() {
             eventTime: event.eventTime ?? '',
             datePrecision: event.datePrecision,
             entityIds: event.entityIds ?? [],
-            sessionId: event.sessionId ?? '',
+            sessionId: event.sessionId ?? undefined,
             isPlayerKnown: event.isPlayerKnown,
             sourceDocument: event.sourceDocument ?? '',
         });
@@ -692,7 +693,7 @@ export default function Timeline() {
                                                             return (
                                                                 <Chip
                                                                     key={entityId}
-                                                                    label={entity?.name ?? entityId.slice(0, 8)}
+                                                                    label={entity?.name ?? String(entityId)}
                                                                     size="small"
                                                                     variant="outlined"
                                                                 />
@@ -966,7 +967,7 @@ export default function Timeline() {
                                             return (
                                                 <Chip
                                                     key={entityId}
-                                                    label={entity?.name ?? entityId}
+                                                    label={entity?.name ?? String(entityId)}
                                                     size="small"
                                                 />
                                             );

@@ -12,13 +12,11 @@ package models
 
 import (
 	"time"
-
-	"github.com/google/uuid"
 )
 
 // User represents a user account authenticated via Google OAuth.
 type User struct {
-	ID        uuid.UUID `json:"id"`
+	ID        int64     `json:"id"`
 	GoogleID  string    `json:"googleId"`
 	Email     string    `json:"email"`
 	Name      string    `json:"name"`

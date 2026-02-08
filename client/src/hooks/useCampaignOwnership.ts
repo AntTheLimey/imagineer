@@ -43,7 +43,7 @@ export interface CampaignOwnershipResult {
  * @param campaignId - The ID of the campaign to check ownership for
  * @returns CampaignOwnershipResult with isOwner, isLoading, and campaign data
  */
-export function useCampaignOwnership(campaignId: string): CampaignOwnershipResult {
+export function useCampaignOwnership(campaignId: number): CampaignOwnershipResult {
     const { user, isAuthenticated } = useAuth();
     const { data: campaign, isLoading: campaignLoading } = useCampaign(campaignId, {
         enabled: !!campaignId,
@@ -68,8 +68,10 @@ export function useCampaignOwnership(campaignId: string): CampaignOwnershipResul
             };
         }
 
-        // Check if user ID matches campaign owner ID
-        const isOwner = campaign.ownerId === user.id;
+        // Check if user ID matches campaign owner ID.
+        // The backend sends user.id as a string (from OAuth), while
+        // campaign.ownerId is a number, so we convert for comparison.
+        const isOwner = campaign.ownerId === Number(user.id);
 
         return {
             isOwner,
@@ -92,7 +94,7 @@ export function useCampaignOwnership(campaignId: string): CampaignOwnershipResul
  * @returns true if the user is the campaign owner, false otherwise
  */
 export function isCampaignOwner(
-    userId: string | undefined,
+    userId: number | undefined,
     campaign: Campaign | undefined
 ): boolean {
     if (!userId || !campaign || !campaign.ownerId) {

@@ -13,9 +13,8 @@ package auth
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"strings"
-
-	"github.com/google/uuid"
 )
 
 // contextKey is a custom type for context keys to avoid collisions.
@@ -128,18 +127,18 @@ func GetUserFromContext(ctx context.Context) (*JWTClaims, bool) {
 	return claims, ok
 }
 
-// GetUserIDFromContext retrieves the user ID from the request context.
-// GetUserIDFromContext retrieves the user's UUID from the request context's JWT claims.
-// It returns the parsed UUID and true if claims are present and the UserID is a valid UUID; otherwise it returns uuid.Nil and false.
-func GetUserIDFromContext(ctx context.Context) (uuid.UUID, bool) {
+// GetUserIDFromContext retrieves the user's ID from the request context's
+// JWT claims. It returns the parsed ID and true if claims are present and
+// the UserID is a valid int64; otherwise it returns 0 and false.
+func GetUserIDFromContext(ctx context.Context) (int64, bool) {
 	claims, ok := GetUserFromContext(ctx)
 	if !ok {
-		return uuid.Nil, false
+		return 0, false
 	}
 
-	userID, err := uuid.Parse(claims.UserID)
+	userID, err := strconv.ParseInt(claims.UserID, 10, 64)
 	if err != nil {
-		return uuid.Nil, false
+		return 0, false
 	}
 
 	return userID, true

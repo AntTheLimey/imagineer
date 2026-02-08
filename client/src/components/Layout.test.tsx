@@ -15,7 +15,7 @@ import Layout from './Layout';
 // Mock MUI icons to avoid rendering SVGs in tests
 vi.mock('@mui/icons-material', () => ({
     Menu: () => <span data-testid="menu-icon">Menu</span>,
-    Dashboard: () => <span data-testid="dashboard-icon">Dashboard</span>,
+    Home: () => <span data-testid="home-icon">Home</span>,
     Folder: () => <span data-testid="folder-icon">Folder</span>,
     Upload: () => <span data-testid="upload-icon">Upload</span>,
     Logout: () => <span data-testid="logout-icon">Logout</span>,
@@ -93,13 +93,11 @@ describe('Layout', () => {
         );
 
         // Navigation items appear in both mobile and desktop drawers
-        const dashboardItems = screen.getAllByText('Dashboard');
+        const homeItems = screen.getAllByText('Home');
         const campaignsItems = screen.getAllByText('Campaigns');
-        const importItems = screen.getAllByText('Import');
 
-        expect(dashboardItems.length).toBeGreaterThan(0);
+        expect(homeItems.length).toBeGreaterThan(0);
         expect(campaignsItems.length).toBeGreaterThan(0);
-        expect(importItems.length).toBeGreaterThan(0);
     });
 
     it('should highlight the current navigation item based on route', () => {
@@ -119,7 +117,7 @@ describe('Layout', () => {
         expect(hasSelected).toBe(true);
     });
 
-    it('should highlight Dashboard when on root route', () => {
+    it('should highlight Home when on root route', () => {
         renderWithRouter(
             <Layout>
                 <div>Test Content</div>
@@ -127,8 +125,8 @@ describe('Layout', () => {
             { route: '/' }
         );
 
-        const dashboardButtons = screen.getAllByRole('button', { name: /dashboard/i });
-        const hasSelected = dashboardButtons.some(
+        const homeButtons = screen.getAllByRole('button', { name: /home/i });
+        const hasSelected = homeButtons.some(
             (button) => button.classList.contains('Mui-selected')
         );
         expect(hasSelected).toBe(true);
@@ -142,9 +140,8 @@ describe('Layout', () => {
         );
 
         // Check that our mocked icons are rendered
-        expect(screen.getAllByTestId('dashboard-icon').length).toBeGreaterThan(0);
+        expect(screen.getAllByTestId('home-icon').length).toBeGreaterThan(0);
         expect(screen.getAllByTestId('folder-icon').length).toBeGreaterThan(0);
-        expect(screen.getAllByTestId('upload-icon').length).toBeGreaterThan(0);
     });
 
     it('should render the mobile menu toggle button', () => {
