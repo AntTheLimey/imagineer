@@ -915,7 +915,6 @@ export default function Entities() {
                                     >
                                         <MarkdownRenderer
                                             content={dialogEntity.description}
-                                            campaignId={campaignId}
                                             onEntityClick={handleEntityClick}
                                         />
                                     </Box>

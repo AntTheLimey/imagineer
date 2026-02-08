@@ -215,7 +215,6 @@ export default function EntityPreviewPanel({
                         <MarkdownRenderer
                             content={entity.description}
                             maxLines={6}
-                            campaignId={campaignId}
                             onEntityClick={handleEntityClick}
                         />
                     </Box>

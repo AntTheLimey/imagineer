@@ -557,7 +557,6 @@ export default function CampaignOverview() {
                         >
                             <MarkdownRenderer
                                 content={campaign.description}
-                                campaignId={campaignId}
                                 onEntityClick={handleEntityClick}
                             />
                         </Box>

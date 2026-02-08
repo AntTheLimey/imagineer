@@ -13,9 +13,19 @@ package database
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 )
+
+// escapeLikePattern escapes SQL LIKE wildcard characters (% and _)
+// so they are treated as literals in LIKE expressions.
+func escapeLikePattern(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `%`, `\%`)
+	s = strings.ReplaceAll(s, `_`, `\_`)
+	return s
+}
 
 // PropagateEntityRename updates all wiki links throughout campaign content
 // when an entity is renamed. It replaces both [[Old Name]] and [[Old Name|
@@ -27,6 +37,11 @@ func PropagateEntityRename(ctx context.Context, tx pgx.Tx, campaignID int64, old
 	oldPiped := "[[" + oldName + "|"
 	newPiped := "[[" + newName + "|"
 
+	// Escape wildcards for LIKE patterns so that % and _ in entity
+	// names are matched literally rather than as SQL wildcards.
+	oldExactLike := "%" + escapeLikePattern("[["+oldName+"]]") + "%"
+	oldPipedLike := "%" + escapeLikePattern("[["+oldName+"|") + "%"
+
 	var totalUpdated int64
 
 	// 1. entities: description, gm_notes
@@ -35,9 +50,9 @@ func PropagateEntityRename(ctx context.Context, tx pgx.Tx, campaignID int64, old
 			description = replace(replace(description, $2, $3), $4, $5),
 			gm_notes = replace(replace(gm_notes, $2, $3), $4, $5)
 		WHERE campaign_id = $1
-			AND (description LIKE '%' || $6 || '%' OR description LIKE '%' || $7 || '%'
-				OR gm_notes LIKE '%' || $6 || '%' OR gm_notes LIKE '%' || $7 || '%')`,
-		campaignID, oldExact, newExact, oldPiped, newPiped, oldExact, oldPiped,
+			AND (description LIKE $6 ESCAPE '\' OR description LIKE $7 ESCAPE '\'
+				OR gm_notes LIKE $6 ESCAPE '\' OR gm_notes LIKE $7 ESCAPE '\')`,
+		campaignID, oldExact, newExact, oldPiped, newPiped, oldExactLike, oldPipedLike,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("failed to update entities: %w", err)
@@ -49,8 +64,8 @@ func PropagateEntityRename(ctx context.Context, tx pgx.Tx, campaignID int64, old
 		UPDATE chapters SET
 			overview = replace(replace(overview, $2, $3), $4, $5)
 		WHERE campaign_id = $1
-			AND (overview LIKE '%' || $6 || '%' OR overview LIKE '%' || $7 || '%')`,
-		campaignID, oldExact, newExact, oldPiped, newPiped, oldExact, oldPiped,
+			AND (overview LIKE $6 ESCAPE '\' OR overview LIKE $7 ESCAPE '\')`,
+		campaignID, oldExact, newExact, oldPiped, newPiped, oldExactLike, oldPipedLike,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("failed to update chapters: %w", err)
@@ -63,9 +78,9 @@ func PropagateEntityRename(ctx context.Context, tx pgx.Tx, campaignID int64, old
 			prep_notes = replace(replace(prep_notes, $2, $3), $4, $5),
 			actual_notes = replace(replace(actual_notes, $2, $3), $4, $5)
 		WHERE campaign_id = $1
-			AND (prep_notes LIKE '%' || $6 || '%' OR prep_notes LIKE '%' || $7 || '%'
-				OR actual_notes LIKE '%' || $6 || '%' OR actual_notes LIKE '%' || $7 || '%')`,
-		campaignID, oldExact, newExact, oldPiped, newPiped, oldExact, oldPiped,
+			AND (prep_notes LIKE $6 ESCAPE '\' OR prep_notes LIKE $7 ESCAPE '\'
+				OR actual_notes LIKE $6 ESCAPE '\' OR actual_notes LIKE $7 ESCAPE '\')`,
+		campaignID, oldExact, newExact, oldPiped, newPiped, oldExactLike, oldPipedLike,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("failed to update sessions: %w", err)
@@ -77,8 +92,8 @@ func PropagateEntityRename(ctx context.Context, tx pgx.Tx, campaignID int64, old
 		UPDATE campaigns SET
 			description = replace(replace(description, $2, $3), $4, $5)
 		WHERE id = $1
-			AND (description LIKE '%' || $6 || '%' OR description LIKE '%' || $7 || '%')`,
-		campaignID, oldExact, newExact, oldPiped, newPiped, oldExact, oldPiped,
+			AND (description LIKE $6 ESCAPE '\' OR description LIKE $7 ESCAPE '\')`,
+		campaignID, oldExact, newExact, oldPiped, newPiped, oldExactLike, oldPipedLike,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("failed to update campaigns: %w", err)
@@ -90,8 +105,8 @@ func PropagateEntityRename(ctx context.Context, tx pgx.Tx, campaignID int64, old
 		UPDATE campaign_memories SET
 			content = replace(replace(content, $2, $3), $4, $5)
 		WHERE campaign_id = $1
-			AND (content LIKE '%' || $6 || '%' OR content LIKE '%' || $7 || '%')`,
-		campaignID, oldExact, newExact, oldPiped, newPiped, oldExact, oldPiped,
+			AND (content LIKE $6 ESCAPE '\' OR content LIKE $7 ESCAPE '\')`,
+		campaignID, oldExact, newExact, oldPiped, newPiped, oldExactLike, oldPipedLike,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("failed to update campaign_memories: %w", err)
@@ -103,8 +118,8 @@ func PropagateEntityRename(ctx context.Context, tx pgx.Tx, campaignID int64, old
 		UPDATE timeline_events SET
 			description = replace(replace(description, $2, $3), $4, $5)
 		WHERE campaign_id = $1
-			AND (description LIKE '%' || $6 || '%' OR description LIKE '%' || $7 || '%')`,
-		campaignID, oldExact, newExact, oldPiped, newPiped, oldExact, oldPiped,
+			AND (description LIKE $6 ESCAPE '\' OR description LIKE $7 ESCAPE '\')`,
+		campaignID, oldExact, newExact, oldPiped, newPiped, oldExactLike, oldPipedLike,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("failed to update timeline_events: %w", err)
@@ -117,9 +132,9 @@ func PropagateEntityRename(ctx context.Context, tx pgx.Tx, campaignID int64, old
 			description = replace(replace(description, $2, $3), $4, $5),
 			background = replace(replace(background, $2, $3), $4, $5)
 		WHERE campaign_id = $1
-			AND (description LIKE '%' || $6 || '%' OR description LIKE '%' || $7 || '%'
-				OR background LIKE '%' || $6 || '%' OR background LIKE '%' || $7 || '%')`,
-		campaignID, oldExact, newExact, oldPiped, newPiped, oldExact, oldPiped,
+			AND (description LIKE $6 ESCAPE '\' OR description LIKE $7 ESCAPE '\'
+				OR background LIKE $6 ESCAPE '\' OR background LIKE $7 ESCAPE '\')`,
+		campaignID, oldExact, newExact, oldPiped, newPiped, oldExactLike, oldPipedLike,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("failed to update player_characters: %w", err)
@@ -131,8 +146,8 @@ func PropagateEntityRename(ctx context.Context, tx pgx.Tx, campaignID int64, old
 		UPDATE relationships SET
 			description = replace(replace(description, $2, $3), $4, $5)
 		WHERE campaign_id = $1
-			AND (description LIKE '%' || $6 || '%' OR description LIKE '%' || $7 || '%')`,
-		campaignID, oldExact, newExact, oldPiped, newPiped, oldExact, oldPiped,
+			AND (description LIKE $6 ESCAPE '\' OR description LIKE $7 ESCAPE '\')`,
+		campaignID, oldExact, newExact, oldPiped, newPiped, oldExactLike, oldPipedLike,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("failed to update relationships: %w", err)

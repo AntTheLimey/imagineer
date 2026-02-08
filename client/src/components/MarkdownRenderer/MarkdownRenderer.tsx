@@ -28,8 +28,6 @@ export interface MarkdownRendererProps {
      * truncated with an ellipsis after the specified number of lines.
      */
     maxLines?: number;
-    /** The campaign ID, used for entity link resolution. */
-    campaignId?: number;
     /**
      * Callback fired when a wiki link `[[Entity Name]]` is clicked.
      *
