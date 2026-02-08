@@ -317,6 +317,45 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Apply content fix for accepted/new_entity resolutions that have
+	// position offsets. This wraps the matched text in [[wiki link]]
+	// brackets within the source content.
+	if req.Resolution == "accepted" || req.Resolution == "new_entity" {
+		var posStart, posEnd *int
+		var matchedText, srcTable, srcField string
+		var srcID int64
+		err := h.db.QueryRow(r.Context(),
+			`SELECT i.position_start, i.position_end, i.matched_text,
+			        j.source_table, j.source_id, j.source_field
+			 FROM content_analysis_items i
+			 JOIN content_analysis_jobs j ON i.job_id = j.id
+			 WHERE i.id = $1`,
+			itemID,
+		).Scan(&posStart, &posEnd, &matchedText, &srcTable, &srcID, &srcField)
+		if err != nil {
+			log.Printf("Error fetching item details for content fix (item %d): %v",
+				itemID, err)
+		} else if posStart != nil && posEnd != nil {
+			// Determine the replacement text based on resolution type.
+			var replacement string
+			if req.Resolution == "new_entity" && req.EntityName != nil && *req.EntityName != "" {
+				replacement = "[[" + *req.EntityName + "]]"
+			} else {
+				replacement = "[[" + matchedText + "]]"
+			}
+
+			if fixErr := h.applyContentFix(
+				r.Context(), srcTable, srcID, srcField,
+				*posStart, *posEnd, matchedText, replacement,
+			); fixErr != nil {
+				// Content fix failure is non-fatal: log but still
+				// return success since the resolution itself succeeded.
+				log.Printf("Content fix failed for item %d: %v",
+					itemID, fixErr)
+			}
+		}
+	}
+
 	// Update the job's resolved count
 	jobID, err := h.getItemJobID(r.Context(), itemID)
 	if err != nil {
@@ -498,4 +537,103 @@ func (h *ContentAnalysisHandler) fetchSourceContent(
 	}
 
 	return content, nil
+}
+
+// applyContentFix modifies the source content at the specified position,
+// replacing the matched text with the given replacement string. It verifies
+// that the content has not changed since analysis before applying the fix.
+func (h *ContentAnalysisHandler) applyContentFix(
+	ctx context.Context,
+	sourceTable string,
+	sourceID int64,
+	sourceField string,
+	posStart int,
+	posEnd int,
+	matchedText string,
+	replacement string,
+) error {
+	// Build safe SQL queries based on table and field combination.
+	// Each combination uses a hardcoded query to prevent SQL injection.
+	var selectSQL, updateSQL string
+
+	switch sourceTable {
+	case "entities":
+		switch sourceField {
+		case "description":
+			selectSQL = "SELECT COALESCE(description, '') FROM entities WHERE id = $1"
+			updateSQL = "UPDATE entities SET description = $2, updated_at = NOW() WHERE id = $1"
+		case "gm_notes":
+			selectSQL = "SELECT COALESCE(gm_notes, '') FROM entities WHERE id = $1"
+			updateSQL = "UPDATE entities SET gm_notes = $2, updated_at = NOW() WHERE id = $1"
+		default:
+			return fmt.Errorf("unsupported field %q for table %q",
+				sourceField, sourceTable)
+		}
+	case "chapters":
+		switch sourceField {
+		case "overview":
+			selectSQL = "SELECT COALESCE(overview, '') FROM chapters WHERE id = $1"
+			updateSQL = "UPDATE chapters SET overview = $2, updated_at = NOW() WHERE id = $1"
+		default:
+			return fmt.Errorf("unsupported field %q for table %q",
+				sourceField, sourceTable)
+		}
+	case "sessions":
+		switch sourceField {
+		case "prep_notes":
+			selectSQL = "SELECT COALESCE(prep_notes, '') FROM sessions WHERE id = $1"
+			updateSQL = "UPDATE sessions SET prep_notes = $2, updated_at = NOW() WHERE id = $1"
+		case "actual_notes":
+			selectSQL = "SELECT COALESCE(actual_notes, '') FROM sessions WHERE id = $1"
+			updateSQL = "UPDATE sessions SET actual_notes = $2, updated_at = NOW() WHERE id = $1"
+		default:
+			return fmt.Errorf("unsupported field %q for table %q",
+				sourceField, sourceTable)
+		}
+	case "campaigns":
+		switch sourceField {
+		case "description":
+			selectSQL = "SELECT COALESCE(description, '') FROM campaigns WHERE id = $1"
+			updateSQL = "UPDATE campaigns SET description = $2, updated_at = NOW() WHERE id = $1"
+		default:
+			return fmt.Errorf("unsupported field %q for table %q",
+				sourceField, sourceTable)
+		}
+	default:
+		return fmt.Errorf("unsupported source table: %s", sourceTable)
+	}
+
+	// Fetch the current content.
+	var content string
+	if err := h.db.QueryRow(ctx, selectSQL, sourceID).Scan(&content); err != nil {
+		return fmt.Errorf("failed to fetch content from %s.%s: %w",
+			sourceTable, sourceField, err)
+	}
+
+	// Stale offset protection: verify the text at the recorded position
+	// still matches what the analysis detected.
+	if posStart < 0 || posEnd > len(content) || posStart > posEnd {
+		return fmt.Errorf(
+			"position offsets [%d:%d] are out of range for content of length %d",
+			posStart, posEnd, len(content))
+	}
+
+	currentText := content[posStart:posEnd]
+	if currentText != matchedText {
+		return fmt.Errorf(
+			"content has changed since analysis: expected %q at [%d:%d], found %q",
+			matchedText, posStart, posEnd, currentText)
+	}
+
+	// Build the new content by splicing in the replacement.
+	newContent := content[:posStart] + replacement + content[posEnd:]
+
+	// Update the source record with the new content.
+	err := h.db.Exec(ctx, updateSQL, sourceID, newContent)
+	if err != nil {
+		return fmt.Errorf("failed to update content in %s.%s: %w",
+			sourceTable, sourceField, err)
+	}
+
+	return nil
 }

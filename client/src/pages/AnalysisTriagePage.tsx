@@ -13,7 +13,7 @@
  * content analysis items (wiki links, untagged mentions, misspellings).
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     Box,
@@ -34,6 +34,7 @@ import {
     InputLabel,
     Stack,
     Alert,
+    Tooltip,
 } from '@mui/material';
 import {
     Check,
@@ -159,6 +160,27 @@ export default function AnalysisTriagePage() {
         ? items.filter((item) => item.resolution !== 'pending').length
         : 0;
     const totalCount = items ? items.length : 0;
+    const allResolved = resolvedCount === totalCount && totalCount > 0;
+
+    /**
+     * Build the return path based on the job's source table and ID.
+     */
+    const getReturnPath = useCallback(() => {
+        const base = `/campaigns/${campaignId}`;
+        if (!job) return `${base}/overview`;
+        switch (job.sourceTable) {
+            case 'campaigns':
+                return `${base}/overview`;
+            case 'entities':
+                return `${base}/entities/${job.sourceId}/edit`;
+            case 'chapters':
+                return `${base}/chapters/${job.sourceId}/edit`;
+            case 'sessions':
+                return `${base}/sessions`;
+            default:
+                return `${base}/overview`;
+        }
+    }, [campaignId, job]);
 
     if (Number.isNaN(numericCampaignId) || Number.isNaN(numericJobId)) {
         return (
@@ -296,20 +318,22 @@ export default function AnalysisTriagePage() {
                     <Chip
                         label={`${resolvedCount}/${totalCount} resolved`}
                         size="small"
-                        color={
-                            resolvedCount === totalCount
-                                ? 'success'
-                                : 'default'
-                        }
+                        color={allResolved ? 'success' : 'default'}
                     />
+                    <Button
+                        variant="contained"
+                        size="small"
+                        color={allResolved ? 'success' : 'primary'}
+                        onClick={() => navigate(getReturnPath())}
+                    >
+                        {allResolved
+                            ? 'All resolved \u2014 Done'
+                            : 'Done'}
+                    </Button>
                     <Button
                         variant="outlined"
                         size="small"
-                        onClick={() =>
-                            navigate(
-                                `/campaigns/${campaignId}/overview`
-                            )
-                        }
+                        onClick={() => navigate(getReturnPath())}
                     >
                         Skip for now
                     </Button>
@@ -475,50 +499,53 @@ export default function AnalysisTriagePage() {
                                                             ml: 1,
                                                         }}
                                                     >
-                                                        <IconButton
-                                                            size="small"
-                                                            color="success"
-                                                            title="Accept"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleResolve(
-                                                                    item.id,
-                                                                    'accepted'
-                                                                );
-                                                            }}
-                                                        >
-                                                            <Check fontSize="small" />
-                                                        </IconButton>
-                                                        <IconButton
-                                                            size="small"
-                                                            color="primary"
-                                                            title="New entity"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleSelectItem(
-                                                                    item
-                                                                );
-                                                                setShowNewEntityForm(
-                                                                    true
-                                                                );
-                                                            }}
-                                                        >
-                                                            <AddCircle fontSize="small" />
-                                                        </IconButton>
-                                                        <IconButton
-                                                            size="small"
-                                                            color="error"
-                                                            title="Dismiss"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleResolve(
-                                                                    item.id,
-                                                                    'dismissed'
-                                                                );
-                                                            }}
-                                                        >
-                                                            <Close fontSize="small" />
-                                                        </IconButton>
+                                                        <Tooltip title="Accept — link to matched entity">
+                                                            <IconButton
+                                                                size="small"
+                                                                color="success"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleResolve(
+                                                                        item.id,
+                                                                        'accepted'
+                                                                    );
+                                                                }}
+                                                            >
+                                                                <Check fontSize="small" />
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                        <Tooltip title="Create new entity from this text">
+                                                            <IconButton
+                                                                size="small"
+                                                                color="primary"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleSelectItem(
+                                                                        item
+                                                                    );
+                                                                    setShowNewEntityForm(
+                                                                        true
+                                                                    );
+                                                                }}
+                                                            >
+                                                                <AddCircle fontSize="small" />
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                        <Tooltip title="Dismiss — ignore this detection">
+                                                            <IconButton
+                                                                size="small"
+                                                                color="error"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleResolve(
+                                                                        item.id,
+                                                                        'dismissed'
+                                                                    );
+                                                                }}
+                                                            >
+                                                                <Close fontSize="small" />
+                                                            </IconButton>
+                                                        </Tooltip>
                                                     </Box>
                                                 )}
                                             </ListItemButton>

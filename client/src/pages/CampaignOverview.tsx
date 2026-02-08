@@ -31,7 +31,6 @@ import {
     Paper,
     Select,
     Skeleton,
-    Snackbar,
     TextField,
     Tooltip,
     Typography,
@@ -92,13 +91,6 @@ export default function CampaignOverview() {
         genre: '',
         imageStylePrompt: '',
     });
-
-    // Analysis snackbar state
-    const [analysisSnackbar, setAnalysisSnackbar] = useState<{
-        open: boolean;
-        jobId: number;
-        count: number;
-    }>({ open: false, jobId: 0, count: 0 });
 
     // Fetch campaign data
     const {
@@ -201,18 +193,16 @@ export default function CampaignOverview() {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const analysisResult = (result as any)?._analysis;
             if (analysisResult?.pendingCount > 0) {
-                setAnalysisSnackbar({
-                    open: true,
-                    jobId: analysisResult.jobId,
-                    count: analysisResult.pendingCount,
-                });
+                setEditingField(null);
+                navigate(`/campaigns/${campaignId}/analysis/${analysisResult.jobId}`);
+                return;
             }
 
             setEditingField(null);
         } catch (error) {
             console.error('Failed to save field:', error);
         }
-    }, [campaignId, editingField, formData, updateCampaign]);
+    }, [campaignId, editingField, formData, updateCampaign, navigate]);
 
     /**
      * Toggle full edit mode.
@@ -261,18 +251,16 @@ export default function CampaignOverview() {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const analysisResult = (result as any)?._analysis;
             if (analysisResult?.pendingCount > 0) {
-                setAnalysisSnackbar({
-                    open: true,
-                    jobId: analysisResult.jobId,
-                    count: analysisResult.pendingCount,
-                });
+                setIsEditing(false);
+                navigate(`/campaigns/${campaignId}/analysis/${analysisResult.jobId}`);
+                return;
             }
 
             setIsEditing(false);
         } catch (error) {
             console.error('Failed to save campaign:', error);
         }
-    }, [campaignId, formData, updateCampaign]);
+    }, [campaignId, formData, updateCampaign, navigate]);
 
     /**
      * Update form field.
@@ -351,7 +339,7 @@ export default function CampaignOverview() {
                     {updateCampaign.isPending ? (
                         <CircularProgress size={20} />
                     ) : isEditing ? (
-                        'Save Changes'
+                        'Save & Analyze'
                     ) : (
                         'Edit Campaign'
                     )}
@@ -368,7 +356,7 @@ export default function CampaignOverview() {
             {/* Cancel button when in edit mode */}
             {isEditing && (
                 <Alert severity="info" sx={{ mb: 2 }}>
-                    You are in edit mode. Make your changes and click "Save Changes" to save.
+                    You are in edit mode. Make your changes and click "Save & Analyze" to save.
                     <Button
                         size="small"
                         onClick={handleToggleEdit}
@@ -680,25 +668,6 @@ export default function CampaignOverview() {
                 </Box>
             </Box>
 
-            {/* Analysis results snackbar */}
-            <Snackbar
-                open={analysisSnackbar.open}
-                autoHideDuration={10000}
-                onClose={() => setAnalysisSnackbar(prev => ({ ...prev, open: false }))}
-                message={`Analysis found ${analysisSnackbar.count} item${analysisSnackbar.count === 1 ? '' : 's'} to review`}
-                action={
-                    <Button
-                        color="warning"
-                        size="small"
-                        onClick={() => {
-                            setAnalysisSnackbar(prev => ({ ...prev, open: false }));
-                            navigate(`/campaigns/${campaignId}/analysis/${analysisSnackbar.jobId}`);
-                        }}
-                    >
-                        Review Now
-                    </Button>
-                }
-            />
         </Box>
     );
 }

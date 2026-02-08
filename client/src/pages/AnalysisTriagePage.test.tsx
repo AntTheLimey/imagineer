@@ -205,4 +205,43 @@ describe('AnalysisTriagePage', () => {
             screen.getByRole('button', { name: /skip for now/i })
         ).toBeInTheDocument();
     });
+
+    it('"Done" button is present with pending items', () => {
+        mockUseAnalysisJob.mockReturnValue({
+            data: mockJob,
+            isLoading: false,
+        } as unknown as ReturnType<typeof useAnalysisJob>);
+        mockUseAnalysisItems.mockReturnValue({
+            data: mockItems,
+            isLoading: false,
+        } as unknown as ReturnType<typeof useAnalysisItems>);
+
+        renderPage();
+
+        expect(
+            screen.getByRole('button', { name: /^Done$/i })
+        ).toBeInTheDocument();
+    });
+
+    it('"Done" button shows "All resolved" when every item is resolved', () => {
+        mockUseAnalysisJob.mockReturnValue({
+            data: mockJob,
+            isLoading: false,
+        } as unknown as ReturnType<typeof useAnalysisJob>);
+
+        const resolvedItems = mockItems.map((item) => ({
+            ...item,
+            resolution: 'accepted' as const,
+        }));
+        mockUseAnalysisItems.mockReturnValue({
+            data: resolvedItems,
+            isLoading: false,
+        } as unknown as ReturnType<typeof useAnalysisItems>);
+
+        renderPage();
+
+        expect(
+            screen.getByRole('button', { name: /all resolved/i })
+        ).toBeInTheDocument();
+    });
 });
