@@ -22,7 +22,7 @@ export type ContentGenService = 'anthropic' | 'openai' | 'gemini';
 /**
  * Embedding service options.
  */
-export type EmbeddingService = 'voyage' | 'openai' | 'gemini';
+export type EmbeddingService = 'ollama' | 'voyage' | 'openai' | 'gemini';
 
 /**
  * Image generation service options.
@@ -34,12 +34,12 @@ export type ImageGenService = 'openai' | 'stability';
  * API keys are masked, showing only last 4 characters.
  */
 export interface UserSettingsResponse {
-    content_gen_service: ContentGenService | null;
-    content_gen_api_key: string | null;
-    embedding_service: EmbeddingService | null;
-    embedding_api_key: string | null;
-    image_gen_service: ImageGenService | null;
-    image_gen_api_key: string | null;
+    contentGenService: ContentGenService | null;
+    contentGenApiKey: string | null;
+    embeddingService: EmbeddingService | null;
+    embeddingApiKey: string | null;
+    imageGenService: ImageGenService | null;
+    imageGenApiKey: string | null;
 }
 
 /**
@@ -48,12 +48,12 @@ export interface UserSettingsResponse {
  * Do not send API key fields if they still contain masked values.
  */
 export interface UserSettingsUpdateRequest {
-    content_gen_service?: ContentGenService | null;
-    content_gen_api_key?: string;
-    embedding_service?: EmbeddingService | null;
-    embedding_api_key?: string;
-    image_gen_service?: ImageGenService | null;
-    image_gen_api_key?: string;
+    contentGenService?: ContentGenService | null;
+    contentGenApiKey?: string;
+    embeddingService?: EmbeddingService | null;
+    embeddingApiKey?: string;
+    imageGenService?: ImageGenService | null;
+    imageGenApiKey?: string;
 }
 
 /**

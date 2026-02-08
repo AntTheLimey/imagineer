@@ -273,7 +273,7 @@ tell application "Evernote"
 	repeat with nb in notebooks
 		set nbName to name of nb
 		set nbCount to count of notes of nb
-		set end of nbList to (nbName & "||" & nbCount)
+		set end of nbList to (nbName & (ASCII character 31) & nbCount)
 	end repeat
 	set AppleScript's text item delimiters to (ASCII character 30)
 	return nbList as string

@@ -18,10 +18,10 @@ import type { Relationship, RelationshipTone } from '../types';
  * Parameters for listing relationships.
  */
 export interface ListRelationshipsParams {
-    campaignId: string;
+    campaignId: number;
     page?: number;
     pageSize?: number;
-    entityId?: string; // Filter by source or target entity
+    entityId?: number; // Filter by source or target entity
     relationshipType?: string;
 }
 
@@ -29,9 +29,9 @@ export interface ListRelationshipsParams {
  * Input for creating a new relationship.
  */
 export interface CreateRelationshipInput {
-    campaignId: string;
-    sourceEntityId: string;
-    targetEntityId: string;
+    campaignId: number;
+    sourceEntityId: number;
+    targetEntityId: number;
     relationshipType: string;
     tone?: RelationshipTone;
     description?: string;
@@ -68,7 +68,7 @@ export const relationshipsApi = {
     /**
      * Get a single relationship by ID.
      */
-    get(campaignId: string, relationshipId: string): Promise<Relationship> {
+    get(campaignId: number, relationshipId: number): Promise<Relationship> {
         return apiClient.get<Relationship>(
             `/campaigns/${campaignId}/relationships/${relationshipId}`
         );
@@ -89,8 +89,8 @@ export const relationshipsApi = {
      * Update an existing relationship.
      */
     update(
-        campaignId: string,
-        relationshipId: string,
+        campaignId: number,
+        relationshipId: number,
         input: UpdateRelationshipInput
     ): Promise<Relationship> {
         return apiClient.put<Relationship>(
@@ -102,7 +102,7 @@ export const relationshipsApi = {
     /**
      * Delete a relationship.
      */
-    delete(campaignId: string, relationshipId: string): Promise<void> {
+    delete(campaignId: number, relationshipId: number): Promise<void> {
         return apiClient.delete<void>(
             `/campaigns/${campaignId}/relationships/${relationshipId}`
         );
@@ -111,7 +111,7 @@ export const relationshipsApi = {
     /**
      * Get all relationships for a specific entity.
      */
-    getForEntity(campaignId: string, entityId: string): Promise<Relationship[]> {
+    getForEntity(campaignId: number, entityId: number): Promise<Relationship[]> {
         return apiClient.get<Relationship[]>(
             `/campaigns/${campaignId}/entities/${entityId}/relationships`
         );

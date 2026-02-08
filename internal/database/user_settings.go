@@ -15,13 +15,12 @@ import (
 	"fmt"
 
 	"github.com/antonypegg/imagineer/internal/models"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
 // GetUserSettings retrieves user settings by user ID.
 // Returns nil if no settings exist for the user.
-func (db *DB) GetUserSettings(ctx context.Context, userID uuid.UUID) (*models.UserSettings, error) {
+func (db *DB) GetUserSettings(ctx context.Context, userID int64) (*models.UserSettings, error) {
 	query := `
         SELECT user_id, content_gen_service, content_gen_api_key,
                embedding_service, embedding_api_key,
@@ -65,7 +64,7 @@ func (db *DB) GetUserSettings(ctx context.Context, userID uuid.UUID) (*models.Us
 // UpdateUserSettings updates or creates user settings using UPSERT with COALESCE.
 // Uses database-side COALESCE to atomically merge updates, preventing race conditions.
 // NULL values in the request preserve existing values in the database.
-func (db *DB) UpdateUserSettings(ctx context.Context, userID uuid.UUID, req models.UpdateUserSettingsRequest) (*models.UserSettings, error) {
+func (db *DB) UpdateUserSettings(ctx context.Context, userID int64, req models.UpdateUserSettingsRequest) (*models.UserSettings, error) {
 	// Convert request LLMService pointers to strings for database
 	var contentGenService, embeddingService, imageGenService *string
 	var contentGenAPIKey, embeddingAPIKey, imageGenAPIKey *string

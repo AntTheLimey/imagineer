@@ -15,10 +15,10 @@ package consistency
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/antonypegg/imagineer/internal/agents"
 	"github.com/antonypegg/imagineer/internal/database"
-	"github.com/google/uuid"
 )
 
 // ConsistencyIssue represents a detected inconsistency in campaign data.
@@ -30,7 +30,7 @@ type ConsistencyIssue struct {
 	Severity agents.Severity `json:"severity"`
 
 	// EntityID references the primary entity involved.
-	EntityID *uuid.UUID `json:"entityId,omitempty"`
+	EntityID *int64 `json:"entityId,omitempty"`
 
 	// EntityName is the name of the primary entity involved.
 	EntityName string `json:"entityName,omitempty"`
@@ -42,13 +42,13 @@ type ConsistencyIssue struct {
 	Suggestion string `json:"suggestion"`
 
 	// RelatedIDs contains IDs of other entities related to this issue.
-	RelatedIDs []uuid.UUID `json:"relatedIds,omitempty"`
+	RelatedIDs []int64 `json:"relatedIds,omitempty"`
 }
 
 // CheckerResult contains the output of a consistency check.
 type CheckerResult struct {
 	// CampaignID identifies the campaign that was checked.
-	CampaignID uuid.UUID `json:"campaignId"`
+	CampaignID int64 `json:"campaignId"`
 
 	// Issues contains all detected inconsistencies.
 	Issues []ConsistencyIssue `json:"issues"`
@@ -86,7 +86,7 @@ func (c *Checker) Description() string {
 }
 
 // Run executes the consistency checker with the given parameters.
-// Required params: "campaign_id" (uuid.UUID or string)
+// Required params: "campaign_id" (int64 or string)
 // Optional params: "entity_type" (string) to filter checks to specific entity types
 func (c *Checker) Run(ctx context.Context, params map[string]any) (agents.Result, error) {
 	// Parse campaign_id parameter
@@ -185,28 +185,30 @@ func (c *Checker) Run(ctx context.Context, params map[string]any) (agents.Result
 }
 
 // parseCampaignID extracts and validates the campaign_id parameter.
-func parseCampaignID(params map[string]any) (uuid.UUID, error) {
+func parseCampaignID(params map[string]any) (int64, error) {
 	raw, ok := params["campaign_id"]
 	if !ok {
-		return uuid.Nil, fmt.Errorf("campaign_id parameter is required")
+		return 0, fmt.Errorf("campaign_id parameter is required")
 	}
 
 	switch v := raw.(type) {
-	case uuid.UUID:
+	case int64:
 		return v, nil
+	case float64:
+		return int64(v), nil
 	case string:
-		id, err := uuid.Parse(v)
+		id, err := strconv.ParseInt(v, 10, 64)
 		if err != nil {
-			return uuid.Nil, fmt.Errorf("invalid campaign_id: %w", err)
+			return 0, fmt.Errorf("invalid campaign_id: %w", err)
 		}
 		return id, nil
 	default:
-		return uuid.Nil, fmt.Errorf("campaign_id must be a UUID or string")
+		return 0, fmt.Errorf("campaign_id must be a number or string")
 	}
 }
 
 // checkOrphanedEntities finds entities with no relationships or timeline references.
-func (c *Checker) checkOrphanedEntities(ctx context.Context, campaignID uuid.UUID, entityTypeFilter *string) ([]ConsistencyIssue, error) {
+func (c *Checker) checkOrphanedEntities(ctx context.Context, campaignID int64, entityTypeFilter *string) ([]ConsistencyIssue, error) {
 	orphans, err := c.db.FindOrphanedEntities(ctx, campaignID, entityTypeFilter)
 	if err != nil {
 		return nil, err
@@ -228,7 +230,7 @@ func (c *Checker) checkOrphanedEntities(ctx context.Context, campaignID uuid.UUI
 }
 
 // checkDuplicateNames finds entities with very similar names.
-func (c *Checker) checkDuplicateNames(ctx context.Context, campaignID uuid.UUID) ([]ConsistencyIssue, error) {
+func (c *Checker) checkDuplicateNames(ctx context.Context, campaignID int64) ([]ConsistencyIssue, error) {
 	duplicates, err := c.db.FindDuplicateNames(ctx, campaignID, 0.7)
 	if err != nil {
 		return nil, err
@@ -243,7 +245,7 @@ func (c *Checker) checkDuplicateNames(ctx context.Context, campaignID uuid.UUID)
 			EntityName:  dup.Name1,
 			Description: fmt.Sprintf("Entities '%s' and '%s' have very similar names (%.0f%% similarity)", dup.Name1, dup.Name2, dup.Similarity*100),
 			Suggestion:  "These entities may be duplicates. Consider merging.",
-			RelatedIDs:  []uuid.UUID{dup.EntityID2},
+			RelatedIDs:  []int64{dup.EntityID2},
 		}
 		issues = append(issues, issue)
 	}
@@ -252,7 +254,7 @@ func (c *Checker) checkDuplicateNames(ctx context.Context, campaignID uuid.UUID)
 }
 
 // checkTimelineConflicts finds entities appearing in multiple events at the same time.
-func (c *Checker) checkTimelineConflicts(ctx context.Context, campaignID uuid.UUID) ([]ConsistencyIssue, error) {
+func (c *Checker) checkTimelineConflicts(ctx context.Context, campaignID int64) ([]ConsistencyIssue, error) {
 	conflicts, err := c.db.FindTimelineConflicts(ctx, campaignID)
 	if err != nil {
 		return nil, err
@@ -276,7 +278,7 @@ func (c *Checker) checkTimelineConflicts(ctx context.Context, campaignID uuid.UU
 }
 
 // checkInvalidReferences finds relationships or events referencing non-existent entities.
-func (c *Checker) checkInvalidReferences(ctx context.Context, campaignID uuid.UUID) ([]ConsistencyIssue, error) {
+func (c *Checker) checkInvalidReferences(ctx context.Context, campaignID int64) ([]ConsistencyIssue, error) {
 	invalidRefs, err := c.db.FindMissingRelationshipTargets(ctx, campaignID)
 	if err != nil {
 		return nil, err
@@ -288,7 +290,7 @@ func (c *Checker) checkInvalidReferences(ctx context.Context, campaignID uuid.UU
 			Type:        "invalid_reference",
 			Severity:    agents.SeverityCritical,
 			EntityID:    &ref.RelationshipID,
-			Description: fmt.Sprintf("Relationship references missing entity (ID: %s)", ref.MissingEntityID),
+			Description: fmt.Sprintf("Relationship references missing entity (ID: %d)", ref.MissingEntityID),
 			Suggestion:  "Reference points to missing entity. Update or remove.",
 		}
 		issues = append(issues, issue)
@@ -298,7 +300,7 @@ func (c *Checker) checkInvalidReferences(ctx context.Context, campaignID uuid.UU
 }
 
 // checkSessionsWithoutDiscoveries finds completed sessions with no discoveries.
-func (c *Checker) checkSessionsWithoutDiscoveries(ctx context.Context, campaignID uuid.UUID) ([]ConsistencyIssue, error) {
+func (c *Checker) checkSessionsWithoutDiscoveries(ctx context.Context, campaignID int64) ([]ConsistencyIssue, error) {
 	sessions, err := c.db.FindSessionsWithoutEntities(ctx, campaignID)
 	if err != nil {
 		return nil, err

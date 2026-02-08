@@ -29,9 +29,9 @@ export const relationshipKeys = {
     list: (params: ListRelationshipsParams) =>
         [...relationshipKeys.lists(), params] as const,
     details: () => [...relationshipKeys.all, 'detail'] as const,
-    detail: (campaignId: string, relationshipId: string) =>
+    detail: (campaignId: number, relationshipId: number) =>
         [...relationshipKeys.details(), campaignId, relationshipId] as const,
-    forEntity: (campaignId: string, entityId: string) =>
+    forEntity: (campaignId: number, entityId: number) =>
         [...relationshipKeys.all, 'entity', campaignId, entityId] as const,
 };
 
@@ -50,8 +50,8 @@ export function useRelationships(params: ListRelationshipsParams) {
  * Hook to fetch a single relationship by ID.
  */
 export function useRelationship(
-    campaignId: string,
-    relationshipId: string,
+    campaignId: number,
+    relationshipId: number,
     options?: { enabled?: boolean }
 ) {
     return useQuery({
@@ -65,8 +65,8 @@ export function useRelationship(
  * Hook to fetch all relationships for a specific entity.
  */
 export function useEntityRelationships(
-    campaignId: string,
-    entityId: string,
+    campaignId: number,
+    entityId: number,
     options?: { enabled?: boolean }
 ) {
     return useQuery({
@@ -92,7 +92,7 @@ export function useCreateRelationship() {
                 predicate: (query) => {
                     const key = query.queryKey as unknown[];
                     if (key.length >= 3 && typeof key[2] === 'object' && key[2] !== null) {
-                        const params = key[2] as { campaignId?: string };
+                        const params = key[2] as { campaignId?: number };
                         return params.campaignId === data.campaignId;
                     }
                     return false;
@@ -121,8 +121,8 @@ export function useUpdateRelationship() {
             relationshipId,
             input,
         }: {
-            campaignId: string;
-            relationshipId: string;
+            campaignId: number;
+            relationshipId: number;
             input: UpdateRelationshipInput;
         }) => relationshipsApi.update(campaignId, relationshipId, input),
         onSuccess: (data: Relationship) => {
@@ -137,7 +137,7 @@ export function useUpdateRelationship() {
                 predicate: (query) => {
                     const key = query.queryKey as unknown[];
                     if (key.length >= 3 && typeof key[2] === 'object' && key[2] !== null) {
-                        const params = key[2] as { campaignId?: string };
+                        const params = key[2] as { campaignId?: number };
                         return params.campaignId === data.campaignId;
                     }
                     return false;
@@ -165,12 +165,12 @@ export function useDeleteRelationship() {
             campaignId,
             relationshipId,
         }: {
-            campaignId: string;
-            relationshipId: string;
+            campaignId: number;
+            relationshipId: number;
         }) => relationshipsApi.delete(campaignId, relationshipId),
         onSuccess: (
             _data: void,
-            variables: { campaignId: string; relationshipId: string }
+            variables: { campaignId: number; relationshipId: number }
         ) => {
             // Remove from cache
             queryClient.removeQueries({
@@ -185,7 +185,7 @@ export function useDeleteRelationship() {
                 predicate: (query) => {
                     const key = query.queryKey as unknown[];
                     if (key.length >= 3 && typeof key[2] === 'object' && key[2] !== null) {
-                        const params = key[2] as { campaignId?: string };
+                        const params = key[2] as { campaignId?: number };
                         return params.campaignId === variables.campaignId;
                     }
                     return false;

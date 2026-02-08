@@ -138,3 +138,10 @@ export {
     useDeleteSession,
     sessionKeys,
 } from './useSessions';
+
+// Entity detection hooks
+export { useEntityDetection } from './useEntityDetection';
+export type {
+    UseEntityDetectionOptions,
+    UseEntityDetectionReturn,
+} from './useEntityDetection';

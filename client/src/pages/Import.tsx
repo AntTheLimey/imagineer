@@ -181,7 +181,7 @@ export default function Import() {
 
         try {
             const result = await importEvernote.mutateAsync({
-                campaignId: selectedCampaignId,
+                campaignId: Number(selectedCampaignId),
                 file: evernoteFile,
             });
             setImportResult(result);
@@ -198,7 +198,7 @@ export default function Import() {
 
         try {
             const result = await importGoogleDocs.mutateAsync({
-                campaignId: selectedCampaignId,
+                campaignId: Number(selectedCampaignId),
                 documentUrl: googleDocsUrl,
             });
             setImportResult(result);
@@ -215,7 +215,7 @@ export default function Import() {
 
         try {
             const results = await importFiles.mutateAsync({
-                campaignId: selectedCampaignId,
+                campaignId: Number(selectedCampaignId),
                 files: uploadFiles,
             });
             // Aggregate multiple results into one summary
@@ -321,7 +321,7 @@ export default function Import() {
                                 Please select a campaign above to import from Evernote.
                             </Alert>
                         ) : (
-                            <EvernoteImport campaignId={selectedCampaignId} />
+                            <EvernoteImport campaignId={Number(selectedCampaignId)} />
                         )}
                     </TabPanel>
 

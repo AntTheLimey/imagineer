@@ -30,7 +30,7 @@ export interface EntityPreviewPanelProps {
     /** The entity to preview, or null if no entity is selected. */
     entity: Entity | null;
     /** The campaign ID for relationship queries. */
-    campaignId: string;
+    campaignId: number;
     /** Callback fired when the Edit button is clicked. */
     onEdit: () => void;
     /** Callback fired when the Delete button is clicked. */
@@ -102,7 +102,7 @@ export default function EntityPreviewPanel({
     // Fetch relationships for the selected entity
     const { data: relationships } = useEntityRelationships(
         campaignId,
-        entity?.id ?? '',
+        entity?.id ?? 0,
         { enabled: !!entity }
     );
 

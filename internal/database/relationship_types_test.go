@@ -15,7 +15,6 @@ import (
 	"testing"
 
 	"github.com/antonypegg/imagineer/internal/models"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -25,7 +24,7 @@ import (
 func TestRelationshipType_Structure(t *testing.T) {
 	tests := []struct {
 		name       string
-		campaignID *uuid.UUID
+		campaignID *int64
 		wantNil    bool
 	}{
 		{
@@ -35,7 +34,7 @@ func TestRelationshipType_Structure(t *testing.T) {
 		},
 		{
 			name:       "campaign-specific type",
-			campaignID: func() *uuid.UUID { id := uuid.New(); return &id }(),
+			campaignID: func() *int64 { id := int64(42); return &id }(),
 			wantNil:    false,
 		},
 	}
@@ -43,7 +42,7 @@ func TestRelationshipType_Structure(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rt := models.RelationshipType{
-				ID:                  uuid.New(),
+				ID:                  1,
 				CampaignID:          tt.campaignID,
 				Name:                "test_type",
 				InverseName:         "inverse_test_type",
@@ -73,14 +72,14 @@ func TestRelationshipType_JSONMarshal(t *testing.T) {
 	}{
 		{
 			name:        "system default type",
-			jsonData:    `{"id":"550e8400-e29b-41d4-a716-446655440000","name":"knows","inverseName":"knows","isSymmetric":true,"displayLabel":"Knows","inverseDisplayLabel":"Knows"}`,
+			jsonData:    `{"id":1,"name":"knows","inverseName":"knows","isSymmetric":true,"displayLabel":"Knows","inverseDisplayLabel":"Knows"}`,
 			wantName:    "knows",
 			wantSymm:    true,
 			wantCampNil: true,
 		},
 		{
 			name:        "asymmetric type",
-			jsonData:    `{"id":"550e8400-e29b-41d4-a716-446655440001","campaignId":"550e8400-e29b-41d4-a716-446655440002","name":"owns","inverseName":"owned_by","isSymmetric":false,"displayLabel":"Owns","inverseDisplayLabel":"Is owned by"}`,
+			jsonData:    `{"id":2,"campaignId":3,"name":"owns","inverseName":"owned_by","isSymmetric":false,"displayLabel":"Owns","inverseDisplayLabel":"Is owned by"}`,
 			wantName:    "owns",
 			wantSymm:    false,
 			wantCampNil: false,
@@ -108,10 +107,10 @@ func TestRelationshipType_JSONMarshal(t *testing.T) {
 // marshaled and unmarshaled without losing data.
 func TestRelationshipType_RoundTrip(t *testing.T) {
 	description := "A test relationship type"
-	campaignID := uuid.New()
+	campaignID := int64(42)
 
 	original := models.RelationshipType{
-		ID:                  uuid.New(),
+		ID:                  1,
 		CampaignID:          &campaignID,
 		Name:                "custom_type",
 		InverseName:         "inverse_custom_type",

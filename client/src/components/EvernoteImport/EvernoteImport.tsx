@@ -35,7 +35,7 @@ import NotesList from './NotesList';
 import ImportProgress from './ImportProgress';
 
 export interface EvernoteImportProps {
-    campaignId: string;
+    campaignId: number;
 }
 
 type ImportStep = 'status' | 'notebooks' | 'notes' | 'results';

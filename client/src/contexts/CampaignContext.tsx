@@ -27,7 +27,7 @@ const CAMPAIGN_STORAGE_KEY = 'imagineer_current_campaign_id';
  */
 interface CampaignContextValue {
     /** ID of the currently selected campaign */
-    currentCampaignId: string | null;
+    currentCampaignId: number | null;
     /** Full campaign object for the current campaign */
     currentCampaign: Campaign | null;
     /** Whether the campaign data is currently loading */
@@ -41,7 +41,7 @@ interface CampaignContextValue {
     /** Whether campaigns list is loading */
     campaignsLoading: boolean;
     /** Set the current campaign by ID (persists to localStorage) */
-    setCurrentCampaignId: (id: string | null) => void;
+    setCurrentCampaignId: (id: number | null) => void;
     /** Clear the current campaign selection */
     clearCurrentCampaign: () => void;
     /** Get the most recently created campaign */
@@ -67,11 +67,15 @@ interface CampaignProviderProps {
  */
 export function CampaignProvider({ children }: CampaignProviderProps) {
     const [currentCampaignId, setCurrentCampaignIdState] = useState<
-        string | null
+        number | null
     >(() => {
         // Initialize from localStorage
         const stored = localStorage.getItem(CAMPAIGN_STORAGE_KEY);
-        return stored ?? null;
+        if (stored) {
+            const parsed = Number(stored);
+            return Number.isNaN(parsed) ? null : parsed;
+        }
+        return null;
     });
 
     // Track whether we've completed initial validation
@@ -88,7 +92,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
         data: currentCampaign,
         isLoading,
         error,
-    } = useCampaign(currentCampaignId ?? '', {
+    } = useCampaign(currentCampaignId ?? 0, {
         enabled: !!currentCampaignId,
     });
 
@@ -114,7 +118,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     // Persist campaign ID to localStorage when it changes
     useEffect(() => {
         if (currentCampaignId) {
-            localStorage.setItem(CAMPAIGN_STORAGE_KEY, currentCampaignId);
+            localStorage.setItem(CAMPAIGN_STORAGE_KEY, String(currentCampaignId));
         } else {
             localStorage.removeItem(CAMPAIGN_STORAGE_KEY);
         }
@@ -123,7 +127,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     /**
      * Set the current campaign by ID.
      */
-    const setCurrentCampaignId = useCallback((id: string | null) => {
+    const setCurrentCampaignId = useCallback((id: number | null) => {
         setCurrentCampaignIdState(id);
     }, []);
 

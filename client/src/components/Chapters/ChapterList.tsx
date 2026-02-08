@@ -50,11 +50,11 @@ import type { Chapter } from '../../types';
  */
 export interface ChapterListProps {
     /** The campaign ID to list chapters for. */
-    campaignId: string;
+    campaignId: number;
     /** The currently selected chapter ID. */
-    selectedChapterId?: string;
+    selectedChapterId?: number;
     /** Callback fired when a chapter is selected. */
-    onSelectChapter: (chapterId: string) => void;
+    onSelectChapter: (chapterId: number) => void;
     /** Optional callback to open the create chapter dialog. */
     onCreateChapter?: () => void;
     /** Optional callback to open the edit chapter dialog. */
@@ -68,7 +68,7 @@ interface ChapterListItemProps {
     /** The chapter to display. */
     chapter: Chapter;
     /** The campaign ID. */
-    campaignId: string;
+    campaignId: number;
     /** Whether this chapter is selected. */
     isSelected: boolean;
     /** Whether this chapter is expanded. */
@@ -240,7 +240,7 @@ export default function ChapterList({
     onCreateChapter,
     onEditChapter,
 }: ChapterListProps) {
-    const [expandedChapterId, setExpandedChapterId] = useState<string | null>(
+    const [expandedChapterId, setExpandedChapterId] = useState<number | null>(
         null
     );
     const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -256,7 +256,7 @@ export default function ChapterList({
     /**
      * Handles toggling the expanded state of a chapter.
      */
-    const handleToggleExpand = useCallback((chapterId: string) => {
+    const handleToggleExpand = useCallback((chapterId: number) => {
         setExpandedChapterId((prev) =>
             prev === chapterId ? null : chapterId
         );

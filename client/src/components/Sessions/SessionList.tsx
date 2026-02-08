@@ -47,13 +47,13 @@ import SessionStageIndicator from './SessionStageIndicator';
  */
 export interface SessionListProps {
     /** The campaign ID. */
-    campaignId: string;
+    campaignId: number;
     /** The chapter ID to list sessions for. */
-    chapterId: string;
+    chapterId: number;
     /** The currently selected session ID. */
-    selectedSessionId?: string;
+    selectedSessionId?: number;
     /** Callback fired when a session is selected. */
-    onSelectSession: (sessionId: string) => void;
+    onSelectSession: (sessionId: number) => void;
     /** Optional callback to open the create session dialog. */
     onCreateSession?: () => void;
     /** Optional callback to open the edit session dialog. */

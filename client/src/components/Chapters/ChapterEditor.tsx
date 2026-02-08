@@ -41,9 +41,9 @@ import type { Chapter } from '../../types';
  */
 export interface ChapterEditorProps {
     /** The campaign ID. */
-    campaignId: string;
+    campaignId: number;
     /** The chapter ID to edit (if undefined, creates a new chapter). */
-    chapterId?: string;
+    chapterId?: number;
     /** Callback fired when the chapter is successfully saved. */
     onSave?: (chapter: Chapter) => void;
     /** Callback fired when the user cancels editing. */
@@ -120,7 +120,7 @@ export default function ChapterEditor({
         data: existingChapter,
         isLoading: isLoadingChapter,
         error: fetchError,
-    } = useChapter(campaignId, chapterId ?? '', {
+    } = useChapter(campaignId, chapterId ?? 0, {
         enabled: isEditMode && open,
     });
 

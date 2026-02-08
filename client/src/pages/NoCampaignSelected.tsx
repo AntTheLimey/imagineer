@@ -182,7 +182,15 @@ export default function NoCampaignSelected() {
                                         )}
                                     </CardContent>
                                     <CardActions>
-                                        <Button size="small">Open Campaign</Button>
+                                        <Button
+                                            size="small"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleCampaignClick(campaign);
+                                            }}
+                                        >
+                                            Open Campaign
+                                        </Button>
                                     </CardActions>
                                 </Card>
                             </Grid>

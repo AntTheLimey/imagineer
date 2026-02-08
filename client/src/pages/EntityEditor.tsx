@@ -162,31 +162,33 @@ function formatRelativeTime(isoString: string): string {
  * @returns The React element for the Entity Editor page
  */
 export default function EntityEditor() {
-    const { campaignId, entityId } = useParams<{
+    const params = useParams<{
         campaignId: string;
         entityId?: string;
     }>();
+    const campaignId = params.campaignId ? Number(params.campaignId) : undefined;
+    const entityId = params.entityId && params.entityId !== 'new' ? Number(params.entityId) : undefined;
     const navigate = useNavigate();
 
-    const isNewEntity = !entityId || entityId === 'new';
+    const isNewEntity = !entityId;
     const draftKey = isNewEntity
         ? `entity-new-${campaignId}`
         : `entity-${entityId}`;
 
     // Fetch campaign for breadcrumbs
-    const { data: campaign } = useCampaign(campaignId ?? '', {
+    const { data: campaign } = useCampaign(campaignId ?? 0, {
         enabled: !!campaignId,
     });
 
     // Check if current user is the campaign owner (GM)
-    const { isOwner: isGM } = useCampaignOwnership(campaignId ?? '');
+    const { isOwner: isGM } = useCampaignOwnership(campaignId ?? 0);
 
     // Fetch existing entity if editing
     const {
         data: existingEntity,
         isLoading: entityLoading,
         error: entityError,
-    } = useEntity(campaignId ?? '', entityId ?? '', {
+    } = useEntity(campaignId ?? 0, entityId ?? 0, {
         enabled: !isNewEntity && !!campaignId && !!entityId,
     });
 
@@ -208,7 +210,7 @@ export default function EntityEditor() {
         });
 
     // Track the last hydrated entity ID to detect route changes
-    const lastHydratedEntityIdRef = useRef<string | undefined>(undefined);
+    const lastHydratedEntityIdRef = useRef<number | undefined>(undefined);
 
     // Autosave
     const { lastSaved } = useAutosave({
@@ -220,7 +222,7 @@ export default function EntityEditor() {
 
     // Similar entities for duplicate detection (new entities only)
     const { data: similarEntities } = useSimilarEntities(
-        campaignId ?? '',
+        campaignId ?? 0,
         formData.name,
         { enabled: isNewEntity && formData.name.length >= 2 }
     );

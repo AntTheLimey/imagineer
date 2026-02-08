@@ -54,7 +54,7 @@ export type CampaignNavItem =
  */
 interface CampaignNavProps {
     /** The campaign ID for navigation */
-    campaignId: string;
+    campaignId: number;
     /** Currently active navigation item */
     activeItem: CampaignNavItem;
     /** Callback when a navigation item is selected */

@@ -31,10 +31,10 @@ describe('useCampaignOwnership', () => {
     const mockUseCampaign = CampaignsHooks.useCampaign as ReturnType<typeof vi.fn>;
 
     const mockCampaign: Campaign = {
-        id: 'campaign-123',
+        id: 1,
         name: 'Test Campaign',
-        systemId: 'system-1',
-        ownerId: 'user-123',
+        systemId: 1,
+        ownerId: 123,
         description: 'A test campaign',
         settings: {},
         createdAt: '2025-01-01T00:00:00Z',
@@ -42,7 +42,7 @@ describe('useCampaignOwnership', () => {
     };
 
     const mockUser = {
-        id: 'user-123',
+        id: '123',
         email: 'test@example.com',
         name: 'Test User',
     };
@@ -87,7 +87,7 @@ describe('useCampaignOwnership', () => {
         });
 
         const { result } = renderHook(
-            () => useCampaignOwnership('campaign-123'),
+            () => useCampaignOwnership(1),
             { wrapper: createWrapper() }
         );
 
@@ -101,7 +101,7 @@ describe('useCampaignOwnership', () => {
 
     it('should return isOwner false when user is not campaign owner', async () => {
         mockUseAuth.mockReturnValue({
-            user: { ...mockUser, id: 'different-user' },
+            user: { ...mockUser, id: '999' },
             isAuthenticated: true,
             token: 'test-token',
             isLoading: false,
@@ -116,7 +116,7 @@ describe('useCampaignOwnership', () => {
         });
 
         const { result } = renderHook(
-            () => useCampaignOwnership('campaign-123'),
+            () => useCampaignOwnership(1),
             { wrapper: createWrapper() }
         );
 
@@ -144,7 +144,7 @@ describe('useCampaignOwnership', () => {
         });
 
         const { result } = renderHook(
-            () => useCampaignOwnership('campaign-123'),
+            () => useCampaignOwnership(1),
             { wrapper: createWrapper() }
         );
 
@@ -168,7 +168,7 @@ describe('useCampaignOwnership', () => {
         });
 
         const { result } = renderHook(
-            () => useCampaignOwnership('campaign-123'),
+            () => useCampaignOwnership(1),
             { wrapper: createWrapper() }
         );
 
@@ -198,7 +198,7 @@ describe('useCampaignOwnership', () => {
         });
 
         const { result } = renderHook(
-            () => useCampaignOwnership('campaign-123'),
+            () => useCampaignOwnership(1),
             { wrapper: createWrapper() }
         );
 
@@ -212,10 +212,10 @@ describe('useCampaignOwnership', () => {
 
 describe('isCampaignOwner', () => {
     const mockCampaign: Campaign = {
-        id: 'campaign-123',
+        id: 1,
         name: 'Test Campaign',
-        systemId: 'system-1',
-        ownerId: 'user-123',
+        systemId: 1,
+        ownerId: 123,
         description: 'A test campaign',
         settings: {},
         createdAt: '2025-01-01T00:00:00Z',
@@ -223,11 +223,11 @@ describe('isCampaignOwner', () => {
     };
 
     it('should return true when userId matches campaign ownerId', () => {
-        expect(isCampaignOwner('user-123', mockCampaign)).toBe(true);
+        expect(isCampaignOwner(123, mockCampaign)).toBe(true);
     });
 
     it('should return false when userId does not match campaign ownerId', () => {
-        expect(isCampaignOwner('different-user', mockCampaign)).toBe(false);
+        expect(isCampaignOwner(999, mockCampaign)).toBe(false);
     });
 
     it('should return false when userId is undefined', () => {
@@ -235,7 +235,7 @@ describe('isCampaignOwner', () => {
     });
 
     it('should return false when campaign is undefined', () => {
-        expect(isCampaignOwner('user-123', undefined)).toBe(false);
+        expect(isCampaignOwner(123, undefined)).toBe(false);
     });
 
     it('should return false when campaign has no ownerId', () => {
@@ -243,6 +243,6 @@ describe('isCampaignOwner', () => {
             ...mockCampaign,
             ownerId: undefined,
         };
-        expect(isCampaignOwner('user-123', campaignWithoutOwner)).toBe(false);
+        expect(isCampaignOwner(123, campaignWithoutOwner)).toBe(false);
     });
 });

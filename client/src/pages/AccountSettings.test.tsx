@@ -77,21 +77,21 @@ vi.mock('@mui/icons-material', () => ({
 }));
 
 const mockSettings: UserSettingsResponse = {
-    content_gen_service: 'anthropic',
-    content_gen_api_key: '****abc1',
-    embedding_service: 'voyage',
-    embedding_api_key: '****xyz2',
-    image_gen_service: 'openai',
-    image_gen_api_key: '****def3',
+    contentGenService: 'anthropic',
+    contentGenApiKey: '****abc1',
+    embeddingService: 'voyage',
+    embeddingApiKey: '****xyz2',
+    imageGenService: 'openai',
+    imageGenApiKey: '****def3',
 };
 
 const emptySettings: UserSettingsResponse = {
-    content_gen_service: null,
-    content_gen_api_key: null,
-    embedding_service: null,
-    embedding_api_key: null,
-    image_gen_service: null,
-    image_gen_api_key: null,
+    contentGenService: null,
+    contentGenApiKey: null,
+    embeddingService: null,
+    embeddingApiKey: null,
+    imageGenService: null,
+    imageGenApiKey: null,
 };
 
 function renderWithRouter(component: React.ReactNode) {
@@ -347,6 +347,29 @@ describe('AccountSettings', () => {
         await user.click(backButton);
 
         expect(mockNavigate).toHaveBeenCalledWith('/');
+    });
+
+    it('should hide embedding API key input when Ollama is selected', () => {
+        const ollamaSettings: UserSettingsResponse = {
+            ...mockSettings,
+            embeddingService: 'ollama',
+            embeddingApiKey: null,
+        };
+
+        vi.mocked(useUserSettings).mockReturnValue({
+            data: ollamaSettings,
+            isLoading: false,
+            error: null,
+        } as unknown as ReturnType<typeof useUserSettings>);
+
+        renderWithRouter(<AccountSettings />);
+
+        // Should only have 2 API key password inputs (not 3)
+        const passwordInputs = document.querySelectorAll('input[type="password"]');
+        expect(passwordInputs.length).toBe(2);
+
+        // Should show the "no API key required" message
+        expect(screen.getByText(/no API key required/i)).toBeInTheDocument();
     });
 
     it('should show breadcrumbs', () => {

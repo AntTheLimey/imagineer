@@ -184,12 +184,13 @@ function parseTypeParam(typeParam: string | null): EntityType | 'all' {
  * @returns The JSX element for the entities management interface for the current campaign.
  */
 export default function Entities() {
-    const { id: campaignId } = useParams<{ id: string }>();
+    const { id } = useParams<{ id: string }>();
+    const campaignId = id ? Number(id) : undefined;
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
 
     // Check if current user is the campaign owner (GM)
-    const { isOwner: isGM } = useCampaignOwnership(campaignId ?? '');
+    const { isOwner: isGM } = useCampaignOwnership(campaignId ?? 0);
 
     // Pagination state
     const [page, setPage] = useState(0);
@@ -219,7 +220,7 @@ export default function Entities() {
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
     // Selected entity for view/edit/delete dialogs
-    const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
+    const [selectedEntityId, setSelectedEntityId] = useState<number | null>(null);
 
     // Form state
     const [formData, setFormData] = useState<EntityFormData>(DEFAULT_FORM_DATA);
@@ -231,7 +232,7 @@ export default function Entities() {
         isLoading: entitiesLoading,
         error: entitiesError,
     } = useEntities({
-        campaignId: campaignId ?? '',
+        campaignId: campaignId ?? 0,
         page: page + 1,
         pageSize: rowsPerPage,
         entityType: typeFilter === 'all' ? undefined : typeFilter,
@@ -242,8 +243,8 @@ export default function Entities() {
         data: dialogEntity,
         isLoading: dialogEntityLoading,
     } = useEntity(
-        campaignId ?? '',
-        selectedEntityId ?? '',
+        campaignId ?? 0,
+        selectedEntityId ?? 0,
         { enabled: !!selectedEntityId && (viewDialogOpen || editDialogOpen) }
     );
 
@@ -251,7 +252,7 @@ export default function Entities() {
     const {
         data: similarEntities,
     } = useSimilarEntities(
-        campaignId ?? '',
+        campaignId ?? 0,
         formData.name,
         { enabled: createDialogOpen && formData.name.length >= 2 }
     );
@@ -386,7 +387,7 @@ export default function Entities() {
     };
 
     // Navigate to full-screen entity editor for editing
-    const navigateToEditor = (entityId: string) => {
+    const navigateToEditor = (entityId: number) => {
         if (!campaignId) {
             return;
         }

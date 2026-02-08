@@ -46,7 +46,7 @@ export interface NoteSummary {
  * Request body for importing notes from a notebook.
  */
 export interface EvernoteLocalImportRequest {
-    campaignId: string;
+    campaignId: number;
     notebookName: string;
     autoDetectEntities: boolean;
 }

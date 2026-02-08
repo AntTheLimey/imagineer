@@ -25,9 +25,9 @@ import type { Chapter } from '../types';
 export const chapterKeys = {
     all: ['chapters'] as const,
     lists: () => [...chapterKeys.all, 'list'] as const,
-    list: (campaignId: string) => [...chapterKeys.lists(), campaignId] as const,
+    list: (campaignId: number) => [...chapterKeys.lists(), campaignId] as const,
     details: () => [...chapterKeys.all, 'detail'] as const,
-    detail: (campaignId: string, chapterId: string) =>
+    detail: (campaignId: number, chapterId: number) =>
         [...chapterKeys.details(), campaignId, chapterId] as const,
 };
 
@@ -36,7 +36,7 @@ export const chapterKeys = {
  *
  * @returns The query result containing the campaign's chapters and React Query metadata (status, error, etc.).
  */
-export function useChapters(campaignId: string) {
+export function useChapters(campaignId: number) {
     return useQuery({
         queryKey: chapterKeys.list(campaignId),
         queryFn: () => chaptersApi.list(campaignId),
@@ -52,8 +52,8 @@ export function useChapters(campaignId: string) {
  * @returns The React Query result for the requested chapter
  */
 export function useChapter(
-    campaignId: string,
-    chapterId: string,
+    campaignId: number,
+    chapterId: number,
     options?: { enabled?: boolean }
 ) {
     return useQuery({
@@ -68,7 +68,7 @@ export function useChapter(
  *
  * The mutation expects an object with `campaignId` and `input` (CreateChapterInput). On successful creation it invalidates the chapter list cache for the affected campaign.
  *
- * @returns A mutation result whose mutate function accepts `{ campaignId: string; input: CreateChapterInput }`.
+ * @returns A mutation result whose mutate function accepts `{ campaignId: number; input: CreateChapterInput }`.
  */
 export function useCreateChapter() {
     const queryClient = useQueryClient();
@@ -78,7 +78,7 @@ export function useCreateChapter() {
             campaignId,
             input,
         }: {
-            campaignId: string;
+            campaignId: number;
             input: CreateChapterInput;
         }) => chaptersApi.create(campaignId, input),
         onSuccess: (data: Chapter) => {
@@ -106,8 +106,8 @@ export function useUpdateChapter() {
             chapterId,
             input,
         }: {
-            campaignId: string;
-            chapterId: string;
+            campaignId: number;
+            chapterId: number;
             input: UpdateChapterInput;
         }) => chaptersApi.update(campaignId, chapterId, input),
         onSuccess: (data: Chapter) => {
@@ -129,7 +129,7 @@ export function useUpdateChapter() {
  *
  * On success the specific chapter detail is removed from the cache and the campaign's chapter list is invalidated.
  *
- * @returns A mutation object whose `mutate`/`mutateAsync` function accepts `{ campaignId: string; chapterId: string }` to delete the specified chapter.
+ * @returns A mutation object whose `mutate`/`mutateAsync` function accepts `{ campaignId: number; chapterId: number }` to delete the specified chapter.
  */
 export function useDeleteChapter() {
     const queryClient = useQueryClient();
@@ -139,12 +139,12 @@ export function useDeleteChapter() {
             campaignId,
             chapterId,
         }: {
-            campaignId: string;
-            chapterId: string;
+            campaignId: number;
+            chapterId: number;
         }) => chaptersApi.delete(campaignId, chapterId),
         onSuccess: (
             _data: void,
-            variables: { campaignId: string; chapterId: string }
+            variables: { campaignId: number; chapterId: number }
         ) => {
             // Remove from cache
             queryClient.removeQueries({

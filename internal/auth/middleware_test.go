@@ -16,7 +16,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -74,7 +73,7 @@ func testHandler(called *bool, userID *string) http.HandlerFunc {
 }
 
 func TestAuthMiddleware_ValidToken(t *testing.T) {
-	expectedUserID := uuid.New().String()
+	expectedUserID := "42"
 	token := createValidToken(t, expectedUserID)
 
 	var handlerCalled bool
@@ -223,7 +222,7 @@ func TestAuthMiddleware_MalformedToken(t *testing.T) {
 }
 
 func TestOptionalAuthMiddleware_ValidToken(t *testing.T) {
-	expectedUserID := uuid.New().String()
+	expectedUserID := "42"
 	token := createValidToken(t, expectedUserID)
 
 	var handlerCalled bool
@@ -339,7 +338,7 @@ func TestOptionalAuthMiddleware_InvalidFormat(t *testing.T) {
 }
 
 func TestGetUserFromContext_WithClaims(t *testing.T) {
-	expectedUserID := uuid.New().String()
+	expectedUserID := "42"
 	token := createValidToken(t, expectedUserID)
 
 	middleware := AuthMiddleware(testSecret)
@@ -383,13 +382,13 @@ func TestGetUserFromContext_WithoutClaims(t *testing.T) {
 	assert.Nil(t, gotClaims)
 }
 
-func TestGetUserIDFromContext_ValidUUID(t *testing.T) {
-	expectedUserID := uuid.New()
-	token := createValidToken(t, expectedUserID.String())
+func TestGetUserIDFromContext_ValidID(t *testing.T) {
+	expectedUserID := int64(42)
+	token := createValidToken(t, "42")
 
 	middleware := AuthMiddleware(testSecret)
 
-	var gotUserID uuid.UUID
+	var gotUserID int64
 	var gotOK bool
 
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -407,13 +406,13 @@ func TestGetUserIDFromContext_ValidUUID(t *testing.T) {
 	assert.Equal(t, expectedUserID, gotUserID)
 }
 
-func TestGetUserIDFromContext_InvalidUUID(t *testing.T) {
-	// Create token with non-UUID user ID
-	token := createValidToken(t, "not-a-uuid")
+func TestGetUserIDFromContext_InvalidID(t *testing.T) {
+	// Create token with non-numeric user ID
+	token := createValidToken(t, "not-a-number")
 
 	middleware := AuthMiddleware(testSecret)
 
-	var gotUserID uuid.UUID
+	var gotUserID int64
 	var gotOK bool
 
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -428,11 +427,11 @@ func TestGetUserIDFromContext_InvalidUUID(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	assert.False(t, gotOK)
-	assert.Equal(t, uuid.Nil, gotUserID)
+	assert.Equal(t, int64(0), gotUserID)
 }
 
 func TestGetUserIDFromContext_NoClaims(t *testing.T) {
-	var gotUserID uuid.UUID
+	var gotUserID int64
 	var gotOK bool
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -446,5 +445,5 @@ func TestGetUserIDFromContext_NoClaims(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	assert.False(t, gotOK)
-	assert.Equal(t, uuid.Nil, gotUserID)
+	assert.Equal(t, int64(0), gotUserID)
 }

@@ -188,7 +188,8 @@ function aggregateResults(results: ImportResult[]): ImportResult {
  * @returns The Campaign Import page component
  */
 export default function CampaignImport() {
-    const { id: campaignId } = useParams<{ id: string }>();
+    const { id } = useParams<{ id: string }>();
+    const campaignId = id ? Number(id) : undefined;
 
     const [tab, setTab] = useState(0);
     const [evernoteFile, setEvernoteFile] = useState<File | null>(null);
@@ -197,7 +198,7 @@ export default function CampaignImport() {
     const [importResult, setImportResult] = useState<ImportResult | null>(null);
 
     // Fetch campaign for display
-    const { data: campaign } = useCampaign(campaignId ?? '', {
+    const { data: campaign } = useCampaign(campaignId ?? 0, {
         enabled: !!campaignId,
     });
 

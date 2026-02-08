@@ -61,9 +61,9 @@ export interface AddRelationshipDialogProps {
     /** Callback fired when a relationship is saved. */
     onSave: (relationship: PendingRelationship) => void;
     /** The campaign ID for entity search. */
-    campaignId: string;
+    campaignId: number;
     /** Entity IDs to exclude from selection. */
-    excludeEntityIds: string[];
+    excludeEntityIds: number[];
     /** The current entity name for preview. */
     currentEntityName?: string;
     /** Existing relationship data for editing (optional). */
@@ -140,7 +140,8 @@ export default function AddRelationshipDialog({
      */
     const selectedType = useMemo(() => {
         if (!relationshipTypes || !selectedTypeId) return null;
-        return relationshipTypes.find((t) => t.id === selectedTypeId) ?? null;
+        const numericId = Number(selectedTypeId);
+        return relationshipTypes.find((t) => t.id === numericId) ?? null;
     }, [relationshipTypes, selectedTypeId]);
 
     /**
@@ -200,7 +201,7 @@ export default function AddRelationshipDialog({
                             t.inverseName === existingRelationship.relationshipType
                     );
                     if (matchingType) {
-                        setSelectedTypeId(matchingType.id);
+                        setSelectedTypeId(String(matchingType.id));
                         // Set direction based on which name matched
                         if (matchingType.inverseName === existingRelationship.relationshipType) {
                             setDirection('incoming');
@@ -346,7 +347,7 @@ export default function AddRelationshipDialog({
                 campaignId,
                 input,
             });
-            setSelectedTypeId(newType.id);
+            setSelectedTypeId(String(newType.id));
             setCustomTypeDialogOpen(false);
             resetCustomTypeForm();
         } catch (err) {
@@ -449,7 +450,7 @@ export default function AddRelationshipDialog({
                                     label="Relationship Type"
                                 >
                                     {relationshipTypes?.map((type) => (
-                                        <MenuItem key={type.id} value={type.id}>
+                                        <MenuItem key={type.id} value={String(type.id)}>
                                             <ListItemText
                                                 primary={getDisplayLabel(type)}
                                                 secondary={

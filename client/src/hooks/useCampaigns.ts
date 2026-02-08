@@ -28,7 +28,7 @@ export const campaignKeys = {
     lists: () => [...campaignKeys.all, 'list'] as const,
     list: (params?: ListCampaignsParams) => [...campaignKeys.lists(), params] as const,
     details: () => [...campaignKeys.all, 'detail'] as const,
-    detail: (id: string) => [...campaignKeys.details(), id] as const,
+    detail: (id: number) => [...campaignKeys.details(), id] as const,
 };
 
 /**
@@ -44,7 +44,7 @@ export function useCampaigns(params?: ListCampaignsParams) {
 /**
  * Hook to fetch a single campaign by ID.
  */
-export function useCampaign(id: string, options?: { enabled?: boolean }) {
+export function useCampaign(id: number, options?: { enabled?: boolean }) {
     return useQuery({
         queryKey: campaignKeys.detail(id),
         queryFn: () => campaignsApi.get(id),
@@ -74,7 +74,7 @@ export function useUpdateCampaign() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: ({ id, input }: { id: string; input: UpdateCampaignInput }) =>
+        mutationFn: ({ id, input }: { id: number; input: UpdateCampaignInput }) =>
             campaignsApi.update(id, input),
         onSuccess: (data: Campaign) => {
             // Update the specific campaign in cache
@@ -92,8 +92,8 @@ export function useDeleteCampaign() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: (id: string) => campaignsApi.delete(id),
-        onSuccess: (_data: void, id: string) => {
+        mutationFn: (id: number) => campaignsApi.delete(id),
+        onSuccess: (_data: void, id: number) => {
             // Remove from cache
             queryClient.removeQueries({ queryKey: campaignKeys.detail(id) });
             // Invalidate lists to refetch

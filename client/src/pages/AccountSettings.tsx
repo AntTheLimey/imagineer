@@ -102,6 +102,7 @@ const CONTENT_GEN_SERVICES: { value: ContentGenService; label: string }[] = [
  * Service options for embedding generation.
  */
 const EMBEDDING_SERVICES: { value: EmbeddingService; label: string }[] = [
+    { value: 'ollama', label: 'Ollama (Local)' },
     { value: 'voyage', label: 'Voyage AI' },
     { value: 'openai', label: 'OpenAI' },
     { value: 'gemini', label: 'Google (Gemini)' },
@@ -212,12 +213,12 @@ export default function AccountSettings() {
     useEffect(() => {
         if (settings) {
             setFormData({
-                contentGenService: settings.content_gen_service ?? '',
-                contentGenApiKey: settings.content_gen_api_key ?? '',
-                embeddingService: settings.embedding_service ?? '',
-                embeddingApiKey: settings.embedding_api_key ?? '',
-                imageGenService: settings.image_gen_service ?? '',
-                imageGenApiKey: settings.image_gen_api_key ?? '',
+                contentGenService: settings.contentGenService ?? '',
+                contentGenApiKey: settings.contentGenApiKey ?? '',
+                embeddingService: settings.embeddingService ?? '',
+                embeddingApiKey: settings.embeddingApiKey ?? '',
+                imageGenService: settings.imageGenService ?? '',
+                imageGenApiKey: settings.imageGenApiKey ?? '',
             });
             // Reset modified state since we just loaded fresh data
             setApiKeyModified(DEFAULT_API_KEY_MODIFIED);
@@ -252,7 +253,7 @@ export default function AccountSettings() {
         if (formData.contentGenService && !formData.contentGenApiKey) {
             errors.contentGenApiKey = 'API key is required when a service is selected';
         }
-        if (formData.embeddingService && !formData.embeddingApiKey) {
+        if (formData.embeddingService && formData.embeddingService !== 'ollama' && !formData.embeddingApiKey) {
             errors.embeddingApiKey = 'API key is required when a service is selected';
         }
         if (formData.imageGenService && !formData.imageGenApiKey) {
@@ -270,6 +271,7 @@ export default function AccountSettings() {
         }
         if (
             formData.embeddingService &&
+            formData.embeddingService !== 'ollama' &&
             apiKeyModified.embeddingApiKey &&
             !formData.embeddingApiKey.trim()
         ) {
@@ -294,20 +296,20 @@ export default function AccountSettings() {
         const request: UserSettingsUpdateRequest = {};
 
         // Always include service selections (even if clearing)
-        request.content_gen_service = formData.contentGenService || null;
-        request.embedding_service = formData.embeddingService || null;
-        request.image_gen_service = formData.imageGenService || null;
+        request.contentGenService = formData.contentGenService || null;
+        request.embeddingService = formData.embeddingService || null;
+        request.imageGenService = formData.imageGenService || null;
 
         // Only include API keys if they were actually modified
         // (not if they still contain masked values)
         if (apiKeyModified.contentGenApiKey && !isMaskedValue(formData.contentGenApiKey)) {
-            request.content_gen_api_key = formData.contentGenApiKey;
+            request.contentGenApiKey = formData.contentGenApiKey;
         }
         if (apiKeyModified.embeddingApiKey && !isMaskedValue(formData.embeddingApiKey)) {
-            request.embedding_api_key = formData.embeddingApiKey;
+            request.embeddingApiKey = formData.embeddingApiKey;
         }
         if (apiKeyModified.imageGenApiKey && !isMaskedValue(formData.imageGenApiKey)) {
-            request.image_gen_api_key = formData.imageGenApiKey;
+            request.imageGenApiKey = formData.imageGenApiKey;
         }
 
         return request;
@@ -515,13 +517,19 @@ export default function AccountSettings() {
                         </FormHelperText>
                     </FormControl>
 
-                    <ApiKeyInput
-                        label="API Key"
-                        value={formData.embeddingApiKey}
-                        onChange={(value) => updateField('embeddingApiKey', value)}
-                        error={formErrors.embeddingApiKey}
-                        helperText="Enter your API key for the selected service"
-                    />
+                    {formData.embeddingService === 'ollama' ? (
+                        <Typography variant="body2" color="text.secondary">
+                            Ollama runs locally -- no API key required.
+                        </Typography>
+                    ) : (
+                        <ApiKeyInput
+                            label="API Key"
+                            value={formData.embeddingApiKey}
+                            onChange={(value) => updateField('embeddingApiKey', value)}
+                            error={formErrors.embeddingApiKey}
+                            helperText="Enter your API key for the selected service"
+                        />
+                    )}
                 </Paper>
 
                 {/* Image Generation Section */}

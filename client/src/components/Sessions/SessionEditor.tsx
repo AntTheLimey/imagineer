@@ -46,11 +46,11 @@ import type { Session } from '../../types';
  */
 export interface SessionEditorProps {
     /** The campaign ID. */
-    campaignId: string;
+    campaignId: number;
     /** Pre-selected chapter ID (optional). */
-    chapterId?: string;
+    chapterId?: number;
     /** The session ID to edit (if undefined, creates a new session). */
-    sessionId?: string;
+    sessionId?: number;
     /** Whether the dialog is open. */
     open: boolean;
     /** Callback fired when the dialog should close. */
@@ -137,7 +137,7 @@ export default function SessionEditor({
         data: existingSession,
         isLoading: isLoadingSession,
         error: fetchError,
-    } = useSession(campaignId, sessionId ?? '', {
+    } = useSession(campaignId, sessionId ?? 0, {
         enabled: isEditMode && open,
     });
 
@@ -157,7 +157,7 @@ export default function SessionEditor({
     const resetForm = useCallback(() => {
         setFormData({
             ...initialFormData,
-            chapterId: preselectedChapterId ?? '',
+            chapterId: preselectedChapterId ? String(preselectedChapterId) : '',
         });
         setError(null);
     }, [preselectedChapterId]);
@@ -169,7 +169,7 @@ export default function SessionEditor({
         if (isEditMode && existingSession) {
             setFormData({
                 title: existingSession.title ?? '',
-                chapterId: existingSession.chapterId ?? '',
+                chapterId: existingSession.chapterId ? String(existingSession.chapterId) : '',
                 plannedDate: formatDateForInput(existingSession.plannedDate),
             });
         } else if (!isEditMode && open) {
@@ -210,7 +210,7 @@ export default function SessionEditor({
         try {
             const input = {
                 title: formData.title.trim() || undefined,
-                chapterId: formData.chapterId || undefined,
+                chapterId: formData.chapterId ? Number(formData.chapterId) : undefined,
                 plannedDate: formData.plannedDate || undefined,
             };
 
@@ -344,7 +344,7 @@ export default function SessionEditor({
                                 {sortedChapters.map((chapter) => (
                                     <MenuItem
                                         key={chapter.id}
-                                        value={chapter.id}
+                                        value={String(chapter.id)}
                                     >
                                         {chapter.title}
                                     </MenuItem>

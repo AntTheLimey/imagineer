@@ -15,21 +15,21 @@ import { CampaignProvider, useCampaignContext } from './CampaignContext';
 
 // Mock campaigns data for tests
 const mockCampaigns = [
-    { id: 'campaign-1', name: 'Campaign 1', systemId: 'coc7', createdAt: '2024-01-01' },
-    { id: 'campaign-2', name: 'Campaign 2', systemId: 'coc7', createdAt: '2024-01-02' },
-    { id: 'stored-campaign-id', name: 'Stored Campaign', systemId: 'coc7', createdAt: '2024-01-03' },
-    { id: 'existing-id', name: 'Existing Campaign', systemId: 'coc7', createdAt: '2024-01-04' },
-    { id: 'to-remove', name: 'To Remove', systemId: 'coc7', createdAt: '2024-01-05' },
+    { id: 1, name: 'Campaign 1', systemId: 1, createdAt: '2024-01-01' },
+    { id: 2, name: 'Campaign 2', systemId: 1, createdAt: '2024-01-02' },
+    { id: 3, name: 'Stored Campaign', systemId: 1, createdAt: '2024-01-03' },
+    { id: 4, name: 'Existing Campaign', systemId: 1, createdAt: '2024-01-04' },
+    { id: 5, name: 'To Remove', systemId: 1, createdAt: '2024-01-05' },
 ];
 
 // Mock the hooks
 vi.mock('../hooks', () => ({
-    useCampaign: vi.fn((id: string, options?: { enabled?: boolean }) => {
+    useCampaign: vi.fn((id: number, options?: { enabled?: boolean }) => {
         if (!options?.enabled || !id) {
             return { data: null, isLoading: false, error: null };
         }
         return {
-            data: { id, name: `Campaign ${id}`, systemId: 'coc7' },
+            data: { id, name: `Campaign ${id}`, systemId: 1 },
             isLoading: false,
             error: null,
         };
@@ -82,7 +82,7 @@ describe('CampaignContext', () => {
 
         it('should initialize from localStorage if campaign ID is stored and valid', async () => {
             // Use a campaign ID that exists in mockCampaigns
-            localStorage.setItem(STORAGE_KEY, 'stored-campaign-id');
+            localStorage.setItem(STORAGE_KEY, '3');
 
             const { result } = renderHook(() => useCampaignContext(), {
                 wrapper: createWrapper(),
@@ -93,12 +93,12 @@ describe('CampaignContext', () => {
                 expect(result.current.isInitializing).toBe(false);
             });
 
-            expect(result.current.currentCampaignId).toBe('stored-campaign-id');
+            expect(result.current.currentCampaignId).toBe(3);
         });
 
         it('should clear invalid campaign ID from localStorage', async () => {
             // Use a campaign ID that does NOT exist in mockCampaigns
-            localStorage.setItem(STORAGE_KEY, 'invalid-campaign-id');
+            localStorage.setItem(STORAGE_KEY, '999');
 
             const { result } = renderHook(() => useCampaignContext(), {
                 wrapper: createWrapper(),
@@ -127,10 +127,10 @@ describe('CampaignContext', () => {
             });
 
             act(() => {
-                result.current.setCurrentCampaignId('campaign-1');
+                result.current.setCurrentCampaignId(1);
             });
 
-            expect(result.current.currentCampaignId).toBe('campaign-1');
+            expect(result.current.currentCampaignId).toBe(1);
         });
 
         it('should persist campaign ID to localStorage', async () => {
@@ -144,18 +144,18 @@ describe('CampaignContext', () => {
             });
 
             act(() => {
-                result.current.setCurrentCampaignId('campaign-2');
+                result.current.setCurrentCampaignId(2);
             });
 
             await waitFor(() => {
-                expect(localStorage.getItem(STORAGE_KEY)).toBe('campaign-2');
+                expect(localStorage.getItem(STORAGE_KEY)).toBe('2');
             });
         });
     });
 
     describe('clearCurrentCampaign', () => {
         it('should clear the current campaign', async () => {
-            localStorage.setItem(STORAGE_KEY, 'existing-id');
+            localStorage.setItem(STORAGE_KEY, '4');
 
             const { result } = renderHook(() => useCampaignContext(), {
                 wrapper: createWrapper(),
@@ -174,7 +174,7 @@ describe('CampaignContext', () => {
         });
 
         it('should remove campaign ID from localStorage', async () => {
-            localStorage.setItem(STORAGE_KEY, 'to-remove');
+            localStorage.setItem(STORAGE_KEY, '5');
 
             const { result } = renderHook(() => useCampaignContext(), {
                 wrapper: createWrapper(),
@@ -207,8 +207,8 @@ describe('CampaignContext', () => {
             });
 
             const latest = result.current.getLatestCampaign();
-            // 'to-remove' has the latest createdAt date in mockCampaigns
-            expect(latest?.id).toBe('to-remove');
+            // id=5 (To Remove) has the latest createdAt date in mockCampaigns
+            expect(latest?.id).toBe(5);
         });
 
         it('should return latest campaign when campaigns exist', async () => {
@@ -225,8 +225,8 @@ describe('CampaignContext', () => {
             // Testing that it returns a campaign when campaigns exist (which it does)
             const latest = result.current.getLatestCampaign();
             expect(latest).not.toBeNull();
-            // Verify it returns the most recent one (to-remove has latest createdAt)
-            expect(latest?.id).toBe('to-remove');
+            // Verify it returns the most recent one (id=5 has latest createdAt)
+            expect(latest?.id).toBe(5);
         });
     });
 

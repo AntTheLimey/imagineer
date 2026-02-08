@@ -101,7 +101,7 @@ export function useImportEvernoteLocal() {
  */
 function invalidateCampaignData(
     queryClient: ReturnType<typeof useQueryClient>,
-    campaignId: string
+    campaignId: number
 ) {
     // Invalidate entities
     queryClient.invalidateQueries({
@@ -109,7 +109,7 @@ function invalidateCampaignData(
         predicate: (query) => {
             const key = query.queryKey as unknown[];
             if (key.length >= 3 && typeof key[2] === 'object' && key[2] !== null) {
-                const params = key[2] as { campaignId?: string };
+                const params = key[2] as { campaignId?: number };
                 return params.campaignId === campaignId;
             }
             return false;
@@ -122,7 +122,7 @@ function invalidateCampaignData(
         predicate: (query) => {
             const key = query.queryKey as unknown[];
             if (key.length >= 3 && typeof key[2] === 'object' && key[2] !== null) {
-                const params = key[2] as { campaignId?: string };
+                const params = key[2] as { campaignId?: number };
                 return params.campaignId === campaignId;
             }
             return false;
@@ -135,7 +135,7 @@ function invalidateCampaignData(
         predicate: (query) => {
             const key = query.queryKey as unknown[];
             if (key.length >= 3 && typeof key[2] === 'object' && key[2] !== null) {
-                const params = key[2] as { campaignId?: string };
+                const params = key[2] as { campaignId?: number };
                 return params.campaignId === campaignId;
             }
             return false;

@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/antonypegg/imagineer/internal/models"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -377,8 +376,8 @@ func TestFilterEntityGMNotes(t *testing.T) {
 		{
 			name: "GM sees gm_notes",
 			entity: models.Entity{
-				ID:         uuid.New(),
-				CampaignID: uuid.New(),
+				ID:         1,
+				CampaignID: 2,
 				EntityType: models.EntityTypeNPC,
 				Name:       "Test NPC",
 				GMNotes:    &gmNotes,
@@ -392,8 +391,8 @@ func TestFilterEntityGMNotes(t *testing.T) {
 		{
 			name: "non-GM gets empty gm_notes",
 			entity: models.Entity{
-				ID:         uuid.New(),
-				CampaignID: uuid.New(),
+				ID:         3,
+				CampaignID: 4,
 				EntityType: models.EntityTypeNPC,
 				Name:       "Test NPC",
 				GMNotes:    &gmNotes,
@@ -407,8 +406,8 @@ func TestFilterEntityGMNotes(t *testing.T) {
 		{
 			name: "non-GM with nil gm_notes stays nil",
 			entity: models.Entity{
-				ID:         uuid.New(),
-				CampaignID: uuid.New(),
+				ID:         5,
+				CampaignID: 6,
 				EntityType: models.EntityTypeLocation,
 				Name:       "Test Location",
 				GMNotes:    nil,
@@ -422,8 +421,8 @@ func TestFilterEntityGMNotes(t *testing.T) {
 		{
 			name: "GM with nil gm_notes stays nil",
 			entity: models.Entity{
-				ID:         uuid.New(),
-				CampaignID: uuid.New(),
+				ID:         7,
+				CampaignID: 8,
 				EntityType: models.EntityTypeLocation,
 				Name:       "Test Location",
 				GMNotes:    nil,
@@ -471,8 +470,8 @@ func TestFilterEntitiesGMNotes(t *testing.T) {
 			name: "GM sees all gm_notes",
 			entities: []models.Entity{
 				{
-					ID:         uuid.New(),
-					CampaignID: uuid.New(),
+					ID:         9,
+					CampaignID: 10,
 					EntityType: models.EntityTypeNPC,
 					Name:       "NPC 1",
 					GMNotes:    &gmNotes1,
@@ -480,8 +479,8 @@ func TestFilterEntitiesGMNotes(t *testing.T) {
 					UpdatedAt:  time.Now(),
 				},
 				{
-					ID:         uuid.New(),
-					CampaignID: uuid.New(),
+					ID:         11,
+					CampaignID: 12,
 					EntityType: models.EntityTypeNPC,
 					Name:       "NPC 2",
 					GMNotes:    &gmNotes2,
@@ -495,8 +494,8 @@ func TestFilterEntitiesGMNotes(t *testing.T) {
 			name: "non-GM gets no gm_notes",
 			entities: []models.Entity{
 				{
-					ID:         uuid.New(),
-					CampaignID: uuid.New(),
+					ID:         13,
+					CampaignID: 14,
 					EntityType: models.EntityTypeNPC,
 					Name:       "NPC 1",
 					GMNotes:    &gmNotes1,
@@ -504,8 +503,8 @@ func TestFilterEntitiesGMNotes(t *testing.T) {
 					UpdatedAt:  time.Now(),
 				},
 				{
-					ID:         uuid.New(),
-					CampaignID: uuid.New(),
+					ID:         15,
+					CampaignID: 16,
 					EntityType: models.EntityTypeNPC,
 					Name:       "NPC 2",
 					GMNotes:    &gmNotes2,
@@ -556,8 +555,8 @@ func TestFilterEntitiesGMNotes_MixedNotes(t *testing.T) {
 
 	entities := []models.Entity{
 		{
-			ID:         uuid.New(),
-			CampaignID: uuid.New(),
+			ID:         17,
+			CampaignID: 18,
 			EntityType: models.EntityTypeNPC,
 			Name:       "NPC with notes",
 			GMNotes:    &gmNotes,
@@ -565,8 +564,8 @@ func TestFilterEntitiesGMNotes_MixedNotes(t *testing.T) {
 			UpdatedAt:  time.Now(),
 		},
 		{
-			ID:         uuid.New(),
-			CampaignID: uuid.New(),
+			ID:         19,
+			CampaignID: 20,
 			EntityType: models.EntityTypeLocation,
 			Name:       "Location without notes",
 			GMNotes:    nil,

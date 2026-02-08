@@ -201,7 +201,8 @@ export default function AppShell({ children }: AppShellProps) {
     const navigate = useNavigate();
     const location = useLocation();
     const [searchParams] = useSearchParams();
-    const { id: routeCampaignId } = useParams<{ id: string }>();
+    const { id: routeCampaignIdParam } = useParams<{ id: string }>();
+    const routeCampaignId = routeCampaignIdParam ? Number(routeCampaignIdParam) : undefined;
 
     const { user, logout } = useAuth();
     const {
@@ -222,7 +223,7 @@ export default function AppShell({ children }: AppShellProps) {
     const [entitiesExpanded, setEntitiesExpanded] = useState(false);
 
     // Effective campaign ID: prefer route parameter over stored value
-    const effectiveCampaignId = routeCampaignId || currentCampaignId;
+    const effectiveCampaignId = routeCampaignId ?? currentCampaignId;
 
     // Check if we're on the entities page
     const isOnEntitiesPage = effectiveCampaignId
@@ -238,7 +239,7 @@ export default function AppShell({ children }: AppShellProps) {
 
     // Fetch entities for counts (only when campaign is selected)
     const { data: entities, isLoading: entitiesLoading } = useEntities({
-        campaignId: effectiveCampaignId ?? '',
+        campaignId: effectiveCampaignId ?? 0,
         pageSize: 1000,
     });
 
@@ -303,25 +304,26 @@ export default function AppShell({ children }: AppShellProps) {
     };
 
     const handleCampaignChange = (event: SelectChangeEvent<string>) => {
-        const campaignId = event.target.value;
+        const value = event.target.value;
 
-        if (campaignId === '__create__') {
+        if (value === '__create__') {
             // Navigate to create campaign page
             navigate('/campaigns/new');
             return;
         }
 
-        setCurrentCampaignId(campaignId || null);
+        const numericId = value ? Number(value) : null;
+        setCurrentCampaignId(numericId);
 
         // Navigate to campaign overview if a campaign is selected
-        if (campaignId) {
-            navigate(`/campaigns/${campaignId}/overview`);
+        if (numericId) {
+            navigate(`/campaigns/${numericId}/overview`);
         }
     };
 
     const handleNavItemClick = (item: NavItem) => {
         if (item.requiresCampaign && effectiveCampaignId) {
-            const path = item.path.replace(':id', effectiveCampaignId);
+            const path = item.path.replace(':id', String(effectiveCampaignId));
             navigate(path);
         }
         setMobileOpen(false);
@@ -340,7 +342,7 @@ export default function AppShell({ children }: AppShellProps) {
      */
     const isNavItemActive = (item: NavItem): boolean => {
         if (!effectiveCampaignId) return false;
-        const itemPath = item.path.replace(':id', effectiveCampaignId);
+        const itemPath = item.path.replace(':id', String(effectiveCampaignId));
         // For entities, only mark as active if we're on the base entities path
         // (not viewing a specific entity type via query param)
         if (item.id === 'entities') {
@@ -606,7 +608,7 @@ export default function AppShell({ children }: AppShellProps) {
                             />
                         ) : (
                             <Select
-                                value={effectiveCampaignId ?? ''}
+                                value={effectiveCampaignId ? String(effectiveCampaignId) : ''}
                                 onChange={handleCampaignChange}
                                 displayEmpty
                                 sx={{
@@ -619,7 +621,7 @@ export default function AppShell({ children }: AppShellProps) {
                                     <em>Select a campaign...</em>
                                 </MenuItem>
                                 {campaigns?.map((campaign) => (
-                                    <MenuItem key={campaign.id} value={campaign.id}>
+                                    <MenuItem key={campaign.id} value={String(campaign.id)}>
                                         {campaign.name}
                                     </MenuItem>
                                 ))}

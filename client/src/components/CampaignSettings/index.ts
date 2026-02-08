@@ -46,7 +46,7 @@ export function campaignToFormData(campaign: Campaign): CampaignSettingsData {
     return {
         name: campaign.name,
         description: campaign.description ?? '',
-        gameSystemId: campaign.systemId,
+        gameSystemId: String(campaign.systemId),
         genre: (campaign.settings?.genre as string) ?? '',
         imageStylePrompt: (campaign.settings?.imageStylePrompt as string) ?? '',
     };

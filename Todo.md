@@ -30,7 +30,8 @@ storage. Every MVP feature includes its AI component.
 - [ ] `[MVP-1]` Account settings page accessible from user menu
 - [ ] `[MVP-1]` LLM API key configuration with service selector:
   - Content generation: Anthropic, OpenAI, or Gemini
-  - Embedding generation: Anthropic Voyage, OpenAI, or Gemini
+  - Embedding generation: Ollama (local), Voyage, OpenAI, or
+    Gemini
   - Image generation: OpenAI DALL-E, Stability AI, or other
 - [ ] `[MVP-1]` Secure storage of API keys (encrypted in database)
 - [ ] `[MVP-1]` API key validation on save
@@ -90,6 +91,15 @@ storage. Every MVP feature includes its AI component.
   - Separate text content from JSONB for pgedge vectorizer chunking
   - Ensure all text entries can be chunked and embedded
   - Entity link metadata stored alongside text
+- [ ] `[MVP-1]` Convert rich text editor output to Markdown
+      before saving
+  - RichTextEditor currently saves HTML; convert to Markdown
+    for cleaner storage and vectorization
+  - HTML markup inflates token counts in embedding chunks
+    (discovered during campaign description vectorization)
+  - Markdown is more portable and produces better embeddings
+  - Investigate TipTap Markdown extensions or server-side
+    HTML-to-Markdown conversion
 
 ### AI Memory System
 
@@ -331,7 +341,7 @@ The layout is the UX framework into which all features fit.
 
 ### Search & Discovery
 
-- [ ] `[MVP-1]` Semantic search across all campaign elements (RAG-powered)
+- [x] `[MVP-1]` Semantic search across all campaign elements (RAG-powered)
 - [ ] `[MVP-2]` Filter by element type, date range, relationships
 - [ ] `[MVP-3]` Keyword and boolean search operators
 - [ ] Graph-based relationship search
@@ -340,23 +350,23 @@ The layout is the UX framework into which all features fit.
 
 #### pgedge_vectorizer Setup
 
-- [ ] `[MVP-1]` Configure pgedge_vectorizer in docker-compose.yml
+- [x] `[MVP-1]` Configure pgedge_vectorizer in docker-compose.yml
   - Add to shared_preload_libraries (already done)
   - Set pgedge_vectorizer.databases = 'imagineer'
-  - Configure provider (OpenAI initially)
+  - Configure provider (Ollama for local, OpenAI as alternative)
   - Set num_workers and batch_size
-- [ ] `[MVP-1]` Create API key management
+- [x] `[MVP-1]` Create API key management
   - Secure storage for embedding API keys
   - Environment variable injection into container
-- [ ] `[MVP-1]` Enable vectorization on campaign content tables:
-  - [ ] entities.description (hybrid strategy)
-  - [ ] entities.gm_notes (hybrid strategy)
-  - [ ] sessions.notes (hybrid strategy)
-  - [ ] timeline_events.description
+- [x] `[MVP-1]` Enable vectorization on campaign content tables:
+  - [x] entities.description (hybrid strategy)
+  - [x] entities.gm_notes (hybrid strategy)
+  - [x] sessions.notes (hybrid strategy)
+  - [x] timeline_events.description
 
 #### Hybrid Search
 
-- [ ] `[MVP-1]` Hybrid search API endpoint
+- [x] `[MVP-1]` Hybrid search API endpoint
   - Vector similarity via chunk tables
   - BM25 lexical via vchord_bm25
   - Combined scoring (configurable weights)
@@ -533,7 +543,7 @@ Features planned for after initial release.
   - [x] Create users table (id, google_id, email, name, avatar_url,
     created_at, updated_at)
   - [x] Add owner_id to campaigns table (FK to users)
-  - [x] Migration `003_add_users.sql` to add user support
+  - [x] User support added to schema migration
   - [x] Google OAuth integration (sign in / sign up)
   - [x] JWT token generation after successful OAuth
   - [x] Token refresh mechanism (basic implementation; full refresh endpoint
@@ -556,7 +566,7 @@ Features planned for after initial release.
   - Comprehensive unit tests
 - [x] Initial project setup
 - [x] Core data model implementation (SCHEMAS.md)
-- [x] Database migrations (001_initial_schema, 002_seed_game_systems)
+- [x] Database migrations squashed to 001_schema + 002_seed_data
 - [x] Game system schemas (CoC 7e, GURPS 4e, FitD)
 - [x] Docker Compose configuration (PostgreSQL + MCP Server)
 - [x] Migration runner script
@@ -587,3 +597,16 @@ Features planned for after initial release.
 - [x] Fix Tags input UX (autoSelect and onBlur for better capture)
 - [x] Campaigns auto-assigned to creator as GM/owner (was already implemented)
 - [x] Only owner can modify their campaigns (was already implemented)
+- [x] Campaign description vectorization (migration 003)
+  - campaigns.description vectorized with chunk_size=200
+  - search_campaign_content() updated with campaigns branch
+  - Fixed c.chunk -> c.content bug in search function
+- [x] Integration tests for embedding pipeline
+  - search_integration_test.go with build tag `integration`
+  - Tests: vectorization available, chunks created, search
+    results, campaign description search
+  - Makefile test-integration target added
+- [x] pgedge_vectorizer UUID primary key workaround
+  - Hotfix SQL patches enable_vectorization and
+    vectorization_trigger for UUID support
+  - All chunk tables rebuilt with UUID source_id columns

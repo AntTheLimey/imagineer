@@ -16,7 +16,7 @@
  */
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
     Alert,
     Box,
@@ -69,11 +69,11 @@ function SessionsView({
     onCreateSession,
     onEditSession,
 }: {
-    campaignId: string;
-    selectedChapterId?: string;
-    onSelectChapter: (id: string) => void;
-    selectedSessionId?: string;
-    onSelectSession: (id: string) => void;
+    campaignId: number;
+    selectedChapterId?: number;
+    onSelectChapter: (id: number) => void;
+    selectedSessionId?: number;
+    onSelectSession: (id: number) => void;
     onCreateChapter: () => void;
     onEditChapter: (chapter: Chapter) => void;
     onCreateSession: () => void;
@@ -137,23 +137,32 @@ function PlayerCharactersView() {
  * @returns The Campaign Dashboard page component
  */
 export default function CampaignDashboard() {
-    const { id: campaignId } = useParams<{ id: string }>();
+    const { id } = useParams<{ id: string }>();
+    const campaignId = id ? Number(id) : undefined;
     const navigate = useNavigate();
+    const location = useLocation();
+
+    // Determine initial nav item based on URL path
+    const getInitialNavItem = (): CampaignNavItem => {
+        if (location.pathname.endsWith('/sessions')) return 'sessions';
+        if (location.pathname.endsWith('/player-characters')) return 'player-characters';
+        return 'overview';
+    };
 
     // Active navigation item state
-    const [activeNavItem, setActiveNavItem] = useState<CampaignNavItem>('overview');
+    const [activeNavItem, setActiveNavItem] = useState<CampaignNavItem>(getInitialNavItem);
 
     // Form data state (managed here for proper dirty tracking)
     const [formData, setFormData] = useState<CampaignSettingsData | null>(null);
     const [isFormDirty, setIsFormDirty] = useState(false);
 
     // Sessions view state
-    const [selectedChapterId, setSelectedChapterId] = useState<string | undefined>();
-    const [selectedSessionId, setSelectedSessionId] = useState<string | undefined>();
+    const [selectedChapterId, setSelectedChapterId] = useState<number | undefined>();
+    const [selectedSessionId, setSelectedSessionId] = useState<number | undefined>();
     const [chapterEditorOpen, setChapterEditorOpen] = useState(false);
-    const [editingChapterId, setEditingChapterId] = useState<string | undefined>();
+    const [editingChapterId, setEditingChapterId] = useState<number | undefined>();
     const [sessionEditorOpen, setSessionEditorOpen] = useState(false);
-    const [editingSessionId, setEditingSessionId] = useState<string | undefined>();
+    const [editingSessionId, setEditingSessionId] = useState<number | undefined>();
 
     // Campaign context for keeping app-wide state updated
     const { setCurrentCampaignId } = useCampaignContext();
@@ -163,7 +172,7 @@ export default function CampaignDashboard() {
         data: campaign,
         isLoading: campaignLoading,
         error: campaignError,
-    } = useCampaign(campaignId ?? '', {
+    } = useCampaign(campaignId ?? 0, {
         enabled: !!campaignId,
     });
 
@@ -228,7 +237,7 @@ export default function CampaignDashboard() {
 
         try {
             const updatedCampaign = await updateCampaign.mutateAsync({
-                id: campaignId,
+                id: campaignId!,
                 input: {
                     name: formData.name.trim(),
                     description: formData.description.trim() || undefined,

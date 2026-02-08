@@ -15,7 +15,6 @@ import (
 	"fmt"
 
 	"github.com/antonypegg/imagineer/internal/models"
-	"github.com/google/uuid"
 )
 
 // ListGameSystems retrieves all game systems.
@@ -54,7 +53,7 @@ func (db *DB) ListGameSystems(ctx context.Context) ([]models.GameSystem, error) 
 }
 
 // GetGameSystem retrieves a game system by ID.
-func (db *DB) GetGameSystem(ctx context.Context, id uuid.UUID) (*models.GameSystem, error) {
+func (db *DB) GetGameSystem(ctx context.Context, id int64) (*models.GameSystem, error) {
 	query := `
         SELECT id, name, code, attribute_schema, skill_schema,
                character_sheet_template, dice_conventions, created_at

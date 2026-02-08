@@ -18,7 +18,7 @@ import type { Session, SessionStage, SessionStatus } from '../types';
  * Parameters for listing sessions.
  */
 export interface ListSessionsParams {
-    chapterId?: string;
+    chapterId?: number;
     status?: SessionStatus;
 }
 
@@ -26,7 +26,7 @@ export interface ListSessionsParams {
  * Input for creating a new session.
  */
 export interface CreateSessionInput {
-    chapterId?: string;
+    chapterId?: number;
     title?: string;
     sessionNumber?: number;
     plannedDate?: string;
@@ -39,7 +39,7 @@ export interface CreateSessionInput {
  * Input for updating an existing session.
  */
 export interface UpdateSessionInput {
-    chapterId?: string;
+    chapterId?: number;
     title?: string;
     sessionNumber?: number;
     plannedDate?: string;
@@ -49,7 +49,7 @@ export interface UpdateSessionInput {
     prepNotes?: string;
     plannedScenes?: unknown[];
     actualNotes?: string;
-    discoveries?: Array<{ entityId: string; howDiscovered: string }>;
+    discoveries?: Array<{ entityId: number; howDiscovered: string }>;
     playerDecisions?: unknown[];
     consequences?: unknown[];
 }
@@ -61,7 +61,7 @@ export const sessionsApi = {
     /**
      * List all sessions for a campaign with optional filtering.
      */
-    list(campaignId: string, params?: ListSessionsParams): Promise<Session[]> {
+    list(campaignId: number, params?: ListSessionsParams): Promise<Session[]> {
         return apiClient.get<Session[]>(
             `/campaigns/${campaignId}/sessions`,
             params ? { ...params } : undefined
@@ -71,7 +71,7 @@ export const sessionsApi = {
     /**
      * List all sessions for a specific chapter.
      */
-    listByChapter(campaignId: string, chapterId: string): Promise<Session[]> {
+    listByChapter(campaignId: number, chapterId: number): Promise<Session[]> {
         return apiClient.get<Session[]>(
             `/campaigns/${campaignId}/chapters/${chapterId}/sessions`
         );
@@ -80,7 +80,7 @@ export const sessionsApi = {
     /**
      * Get a single session by ID.
      */
-    get(campaignId: string, sessionId: string): Promise<Session> {
+    get(campaignId: number, sessionId: number): Promise<Session> {
         return apiClient.get<Session>(
             `/campaigns/${campaignId}/sessions/${sessionId}`
         );
@@ -89,7 +89,7 @@ export const sessionsApi = {
     /**
      * Create a new session.
      */
-    create(campaignId: string, input: CreateSessionInput): Promise<Session> {
+    create(campaignId: number, input: CreateSessionInput): Promise<Session> {
         return apiClient.post<Session>(
             `/campaigns/${campaignId}/sessions`,
             input
@@ -100,8 +100,8 @@ export const sessionsApi = {
      * Update an existing session.
      */
     update(
-        campaignId: string,
-        sessionId: string,
+        campaignId: number,
+        sessionId: number,
         input: UpdateSessionInput
     ): Promise<Session> {
         return apiClient.put<Session>(
@@ -113,7 +113,7 @@ export const sessionsApi = {
     /**
      * Delete a session.
      */
-    delete(campaignId: string, sessionId: string): Promise<void> {
+    delete(campaignId: number, sessionId: number): Promise<void> {
         return apiClient.delete<void>(
             `/campaigns/${campaignId}/sessions/${sessionId}`
         );

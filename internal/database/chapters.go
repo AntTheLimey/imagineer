@@ -15,11 +15,10 @@ import (
 	"fmt"
 
 	"github.com/antonypegg/imagineer/internal/models"
-	"github.com/google/uuid"
 )
 
 // ListChaptersByCampaign retrieves all chapters for a campaign ordered by sort_order.
-func (db *DB) ListChaptersByCampaign(ctx context.Context, campaignID uuid.UUID) ([]models.Chapter, error) {
+func (db *DB) ListChaptersByCampaign(ctx context.Context, campaignID int64) ([]models.Chapter, error) {
 	query := `
         SELECT id, campaign_id, title, overview, sort_order, created_at, updated_at
         FROM chapters
@@ -53,7 +52,7 @@ func (db *DB) ListChaptersByCampaign(ctx context.Context, campaignID uuid.UUID) 
 }
 
 // GetChapter retrieves a chapter by ID.
-func (db *DB) GetChapter(ctx context.Context, id uuid.UUID) (*models.Chapter, error) {
+func (db *DB) GetChapter(ctx context.Context, id int64) (*models.Chapter, error) {
 	query := `
         SELECT id, campaign_id, title, overview, sort_order, created_at, updated_at
         FROM chapters
@@ -75,18 +74,16 @@ func (db *DB) GetChapter(ctx context.Context, id uuid.UUID) (*models.Chapter, er
 // If SortOrder is not provided, it will be set to the next available value.
 // Uses a transaction with advisory lock to prevent race conditions when
 // auto-calculating sort_order for concurrent chapter creation requests.
-func (db *DB) CreateChapter(ctx context.Context, campaignID uuid.UUID, req models.CreateChapterRequest) (*models.Chapter, error) {
-	id := uuid.New()
-
+func (db *DB) CreateChapter(ctx context.Context, campaignID int64, req models.CreateChapterRequest) (*models.Chapter, error) {
 	// If sort_order is provided, we can skip the transaction
 	if req.SortOrder != nil {
 		query := `
-            INSERT INTO chapters (id, campaign_id, title, overview, sort_order)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO chapters (campaign_id, title, overview, sort_order)
+            VALUES ($1, $2, $3, $4)
             RETURNING id, campaign_id, title, overview, sort_order, created_at, updated_at`
 
 		var c models.Chapter
-		err := db.QueryRow(ctx, query, id, campaignID, req.Title, req.Overview, *req.SortOrder).Scan(
+		err := db.QueryRow(ctx, query, campaignID, req.Title, req.Overview, *req.SortOrder).Scan(
 			&c.ID, &c.CampaignID, &c.Title, &c.Overview, &c.SortOrder,
 			&c.CreatedAt, &c.UpdatedAt,
 		)
@@ -104,12 +101,7 @@ func (db *DB) CreateChapter(ctx context.Context, campaignID uuid.UUID, req model
 	defer tx.Rollback(ctx) //nolint:errcheck // Rollback is a no-op if already committed
 
 	// Acquire advisory lock on campaign_id to serialize sort_order calculation
-	// Using the first 8 bytes of the UUID as the lock key
-	lockKey := int64(campaignID[0])<<56 | int64(campaignID[1])<<48 |
-		int64(campaignID[2])<<40 | int64(campaignID[3])<<32 |
-		int64(campaignID[4])<<24 | int64(campaignID[5])<<16 |
-		int64(campaignID[6])<<8 | int64(campaignID[7])
-	_, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", lockKey)
+	_, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", campaignID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to acquire advisory lock: %w", err)
 	}
@@ -130,12 +122,12 @@ func (db *DB) CreateChapter(ctx context.Context, campaignID uuid.UUID, req model
 	}
 
 	query := `
-        INSERT INTO chapters (id, campaign_id, title, overview, sort_order)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO chapters (campaign_id, title, overview, sort_order)
+        VALUES ($1, $2, $3, $4)
         RETURNING id, campaign_id, title, overview, sort_order, created_at, updated_at`
 
 	var c models.Chapter
-	err = tx.QueryRow(ctx, query, id, campaignID, req.Title, req.Overview, sortOrder).Scan(
+	err = tx.QueryRow(ctx, query, campaignID, req.Title, req.Overview, sortOrder).Scan(
 		&c.ID, &c.CampaignID, &c.Title, &c.Overview, &c.SortOrder,
 		&c.CreatedAt, &c.UpdatedAt,
 	)
@@ -151,7 +143,7 @@ func (db *DB) CreateChapter(ctx context.Context, campaignID uuid.UUID, req model
 }
 
 // UpdateChapter updates an existing chapter.
-func (db *DB) UpdateChapter(ctx context.Context, id uuid.UUID, req models.UpdateChapterRequest) (*models.Chapter, error) {
+func (db *DB) UpdateChapter(ctx context.Context, id int64, req models.UpdateChapterRequest) (*models.Chapter, error) {
 	// First get the existing chapter
 	existing, err := db.GetChapter(ctx, id)
 	if err != nil {
@@ -193,7 +185,7 @@ func (db *DB) UpdateChapter(ctx context.Context, id uuid.UUID, req models.Update
 }
 
 // DeleteChapter deletes a chapter by ID.
-func (db *DB) DeleteChapter(ctx context.Context, id uuid.UUID) error {
+func (db *DB) DeleteChapter(ctx context.Context, id int64) error {
 	query := `DELETE FROM chapters WHERE id = $1`
 	result, err := db.Pool.Exec(ctx, query, id)
 	if err != nil {

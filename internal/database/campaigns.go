@@ -17,7 +17,6 @@ import (
 	"fmt"
 
 	"github.com/antonypegg/imagineer/internal/models"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -41,7 +40,7 @@ func (db *DB) ListCampaigns(ctx context.Context) ([]models.Campaign, error) {
 	var campaigns []models.Campaign
 	for rows.Next() {
 		var c models.Campaign
-		var gsID *uuid.UUID
+		var gsID *int64
 		var gsName, gsCode *string
 		var genre *string
 
@@ -79,7 +78,7 @@ func (db *DB) ListCampaigns(ctx context.Context) ([]models.Campaign, error) {
 
 // ListCampaignsByOwner retrieves all campaigns owned by a specific user.
 // This is the primary method for user-scoped campaign listing.
-func (db *DB) ListCampaignsByOwner(ctx context.Context, ownerID uuid.UUID) ([]models.Campaign, error) {
+func (db *DB) ListCampaignsByOwner(ctx context.Context, ownerID int64) ([]models.Campaign, error) {
 	query := `
         SELECT c.id, c.name, c.system_id, c.owner_id, c.description, c.settings,
                c.genre, c.image_style_prompt, c.created_at, c.updated_at,
@@ -98,7 +97,7 @@ func (db *DB) ListCampaignsByOwner(ctx context.Context, ownerID uuid.UUID) ([]mo
 	var campaigns []models.Campaign
 	for rows.Next() {
 		var c models.Campaign
-		var gsID *uuid.UUID
+		var gsID *int64
 		var gsName, gsCode *string
 		var genre *string
 
@@ -136,7 +135,7 @@ func (db *DB) ListCampaignsByOwner(ctx context.Context, ownerID uuid.UUID) ([]mo
 
 // GetCampaign retrieves a campaign by ID without ownership verification.
 // For user-scoped access, use GetCampaignByOwner instead.
-func (db *DB) GetCampaign(ctx context.Context, id uuid.UUID) (*models.Campaign, error) {
+func (db *DB) GetCampaign(ctx context.Context, id int64) (*models.Campaign, error) {
 	query := `
         SELECT c.id, c.name, c.system_id, c.owner_id, c.description, c.settings,
                c.genre, c.image_style_prompt, c.created_at, c.updated_at,
@@ -147,7 +146,7 @@ func (db *DB) GetCampaign(ctx context.Context, id uuid.UUID) (*models.Campaign, 
         WHERE c.id = $1`
 
 	var c models.Campaign
-	var gsID *uuid.UUID
+	var gsID *int64
 	var gsName, gsCode *string
 	var gsAttrSchema, gsSkillSchema, gsCharSheet, gsDice []byte
 	var gsCreatedAt *interface{}
@@ -186,7 +185,7 @@ func (db *DB) GetCampaign(ctx context.Context, id uuid.UUID) (*models.Campaign, 
 // GetCampaignByOwner retrieves a campaign by ID and verifies ownership.
 // Returns an error if the campaign doesn't exist or doesn't belong to the owner.
 // This is the primary method for user-scoped campaign access.
-func (db *DB) GetCampaignByOwner(ctx context.Context, id uuid.UUID, ownerID uuid.UUID) (*models.Campaign, error) {
+func (db *DB) GetCampaignByOwner(ctx context.Context, id int64, ownerID int64) (*models.Campaign, error) {
 	query := `
         SELECT c.id, c.name, c.system_id, c.owner_id, c.description, c.settings,
                c.genre, c.image_style_prompt, c.created_at, c.updated_at,
@@ -197,7 +196,7 @@ func (db *DB) GetCampaignByOwner(ctx context.Context, id uuid.UUID, ownerID uuid
         WHERE c.id = $1 AND c.owner_id = $2`
 
 	var c models.Campaign
-	var gsID *uuid.UUID
+	var gsID *int64
 	var gsName, gsCode *string
 	var gsAttrSchema, gsSkillSchema, gsCharSheet, gsDice []byte
 	var gsCreatedAt *interface{}
@@ -236,8 +235,6 @@ func (db *DB) GetCampaignByOwner(ctx context.Context, id uuid.UUID, ownerID uuid
 // CreateCampaign creates a new campaign without an owner.
 // For user-scoped creation, use CreateCampaignWithOwner instead.
 func (db *DB) CreateCampaign(ctx context.Context, req models.CreateCampaignRequest) (*models.Campaign, error) {
-	id := uuid.New()
-
 	settings := req.Settings
 	if settings == nil {
 		settings = json.RawMessage("{}")
@@ -251,13 +248,13 @@ func (db *DB) CreateCampaign(ctx context.Context, req models.CreateCampaignReque
 	}
 
 	query := `
-        INSERT INTO campaigns (id, name, system_id, description, settings, genre, image_style_prompt)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO campaigns (name, system_id, description, settings, genre, image_style_prompt)
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id, name, system_id, owner_id, description, settings, genre, image_style_prompt, created_at, updated_at`
 
 	var c models.Campaign
 	var retGenre *string
-	err := db.QueryRow(ctx, query, id, req.Name, req.SystemID, req.Description, settings, genreStr, req.ImageStylePrompt).Scan(
+	err := db.QueryRow(ctx, query, req.Name, req.SystemID, req.Description, settings, genreStr, req.ImageStylePrompt).Scan(
 		&c.ID, &c.Name, &c.SystemID, &c.OwnerID, &c.Description, &c.Settings,
 		&retGenre, &c.ImageStylePrompt, &c.CreatedAt, &c.UpdatedAt,
 	)
@@ -275,9 +272,7 @@ func (db *DB) CreateCampaign(ctx context.Context, req models.CreateCampaignReque
 
 // CreateCampaignWithOwner creates a new campaign with an owner.
 // This is the primary method for user-scoped campaign creation.
-func (db *DB) CreateCampaignWithOwner(ctx context.Context, req models.CreateCampaignRequest, ownerID uuid.UUID) (*models.Campaign, error) {
-	id := uuid.New()
-
+func (db *DB) CreateCampaignWithOwner(ctx context.Context, req models.CreateCampaignRequest, ownerID int64) (*models.Campaign, error) {
 	settings := req.Settings
 	if settings == nil {
 		settings = json.RawMessage("{}")
@@ -291,13 +286,13 @@ func (db *DB) CreateCampaignWithOwner(ctx context.Context, req models.CreateCamp
 	}
 
 	query := `
-        INSERT INTO campaigns (id, name, system_id, owner_id, description, settings, genre, image_style_prompt)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO campaigns (name, system_id, owner_id, description, settings, genre, image_style_prompt)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         RETURNING id, name, system_id, owner_id, description, settings, genre, image_style_prompt, created_at, updated_at`
 
 	var c models.Campaign
 	var retGenre *string
-	err := db.QueryRow(ctx, query, id, req.Name, req.SystemID, ownerID, req.Description, settings, genreStr, req.ImageStylePrompt).Scan(
+	err := db.QueryRow(ctx, query, req.Name, req.SystemID, ownerID, req.Description, settings, genreStr, req.ImageStylePrompt).Scan(
 		&c.ID, &c.Name, &c.SystemID, &c.OwnerID, &c.Description, &c.Settings,
 		&retGenre, &c.ImageStylePrompt, &c.CreatedAt, &c.UpdatedAt,
 	)
@@ -315,7 +310,7 @@ func (db *DB) CreateCampaignWithOwner(ctx context.Context, req models.CreateCamp
 
 // UpdateCampaign updates an existing campaign without ownership verification.
 // For user-scoped updates, use UpdateCampaignByOwner instead.
-func (db *DB) UpdateCampaign(ctx context.Context, id uuid.UUID, req models.UpdateCampaignRequest) (*models.Campaign, error) {
+func (db *DB) UpdateCampaign(ctx context.Context, id int64, req models.UpdateCampaignRequest) (*models.Campaign, error) {
 	// First get the existing campaign
 	existing, err := db.GetCampaign(ctx, id)
 	if err != nil {
@@ -387,7 +382,7 @@ func (db *DB) UpdateCampaign(ctx context.Context, id uuid.UUID, req models.Updat
 // UpdateCampaignByOwner updates an existing campaign with ownership verification.
 // Returns an error if the campaign doesn't exist or doesn't belong to the owner.
 // This is the primary method for user-scoped campaign updates.
-func (db *DB) UpdateCampaignByOwner(ctx context.Context, id uuid.UUID, ownerID uuid.UUID, req models.UpdateCampaignRequest) (*models.Campaign, error) {
+func (db *DB) UpdateCampaignByOwner(ctx context.Context, id int64, ownerID int64, req models.UpdateCampaignRequest) (*models.Campaign, error) {
 	// First verify the campaign exists and belongs to the owner
 	existing, err := db.GetCampaignByOwner(ctx, id, ownerID)
 	if err != nil {
@@ -458,7 +453,7 @@ func (db *DB) UpdateCampaignByOwner(ctx context.Context, id uuid.UUID, ownerID u
 
 // DeleteCampaign deletes a campaign by ID without ownership verification.
 // For user-scoped deletes, use DeleteCampaignByOwner instead.
-func (db *DB) DeleteCampaign(ctx context.Context, id uuid.UUID) error {
+func (db *DB) DeleteCampaign(ctx context.Context, id int64) error {
 	query := `DELETE FROM campaigns WHERE id = $1`
 	result, err := db.Pool.Exec(ctx, query, id)
 	if err != nil {
@@ -475,7 +470,7 @@ func (db *DB) DeleteCampaign(ctx context.Context, id uuid.UUID) error {
 // DeleteCampaignByOwner deletes a campaign by ID with ownership verification.
 // Returns an error if the campaign doesn't exist or doesn't belong to the owner.
 // This is the primary method for user-scoped campaign deletion.
-func (db *DB) DeleteCampaignByOwner(ctx context.Context, id uuid.UUID, ownerID uuid.UUID) error {
+func (db *DB) DeleteCampaignByOwner(ctx context.Context, id int64, ownerID int64) error {
 	query := `DELETE FROM campaigns WHERE id = $1 AND owner_id = $2`
 	result, err := db.Pool.Exec(ctx, query, id, ownerID)
 	if err != nil {
@@ -492,7 +487,7 @@ func (db *DB) DeleteCampaignByOwner(ctx context.Context, id uuid.UUID, ownerID u
 // VerifyCampaignOwnership checks if a campaign belongs to a specific user.
 // Returns nil if the campaign exists and belongs to the owner.
 // Returns an error if the campaign doesn't exist or doesn't belong to the owner.
-func (db *DB) VerifyCampaignOwnership(ctx context.Context, campaignID uuid.UUID, ownerID uuid.UUID) error {
+func (db *DB) VerifyCampaignOwnership(ctx context.Context, campaignID int64, ownerID int64) error {
 	query := `SELECT 1 FROM campaigns WHERE id = $1 AND owner_id = $2`
 	var exists int
 	err := db.QueryRow(ctx, query, campaignID, ownerID).Scan(&exists)
@@ -541,7 +536,7 @@ func (db *DB) GetRecentCampaigns(ctx context.Context, limit int) ([]models.Campa
 }
 
 // GetCampaignsByOwnerID retrieves all campaigns owned by a specific user.
-func (db *DB) GetCampaignsByOwnerID(ctx context.Context, ownerID uuid.UUID) ([]models.Campaign, error) {
+func (db *DB) GetCampaignsByOwnerID(ctx context.Context, ownerID int64) ([]models.Campaign, error) {
 	query := `
         SELECT c.id, c.name, c.system_id, c.owner_id, c.description, c.settings,
                c.genre, c.image_style_prompt, c.created_at, c.updated_at,
@@ -560,7 +555,7 @@ func (db *DB) GetCampaignsByOwnerID(ctx context.Context, ownerID uuid.UUID) ([]m
 	var campaigns []models.Campaign
 	for rows.Next() {
 		var c models.Campaign
-		var gsID *uuid.UUID
+		var gsID *int64
 		var gsName, gsCode *string
 		var genre *string
 

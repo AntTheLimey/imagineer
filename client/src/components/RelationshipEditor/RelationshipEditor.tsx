@@ -32,13 +32,13 @@ import type { Relationship, RelationshipType } from '../../types';
  */
 export interface PendingRelationship {
     /** The ID of the target entity. */
-    targetEntityId: string;
+    targetEntityId: number;
     /** The display name of the target entity. */
     targetEntityName: string;
     /** The type of relationship (e.g., "knows", "works_for"). */
     relationshipType: string;
     /** The ID of the relationship type definition. */
-    relationshipTypeId?: string;
+    relationshipTypeId?: number;
     /** Optional description of the relationship. */
     description?: string;
     /** If true, the relationship applies in both directions. */
@@ -52,9 +52,9 @@ export interface PendingRelationship {
  */
 export interface RelationshipEditorProps {
     /** The campaign ID. */
-    campaignId: string;
+    campaignId: number;
     /** The entity ID (undefined for new entities). */
-    entityId?: string;
+    entityId?: number;
     /** The entity name (for display in relationship previews). */
     entityName?: string;
     /** Callback fired when pending relationships change (for new entities). */
@@ -110,7 +110,7 @@ export default function RelationshipEditor({
         data: existingRelationships,
         isLoading,
         error,
-    } = useEntityRelationships(campaignId, entityId ?? '', {
+    } = useEntityRelationships(campaignId, entityId ?? 0, {
         enabled: !isNewEntity && !!entityId,
     });
 
@@ -119,7 +119,7 @@ export default function RelationshipEditor({
 
     // Create a lookup map for relationship types
     const relationshipTypeMap = useMemo(() => {
-        const map = new Map<string, RelationshipType>();
+        const map = new Map<string | number, RelationshipType>();
         relationshipTypes?.forEach((type) => {
             map.set(type.id, type);
             // Also map by name for legacy relationships
@@ -143,8 +143,8 @@ export default function RelationshipEditor({
     /**
      * Gets the list of entity IDs to exclude from selection.
      */
-    const getExcludeIds = useCallback((): string[] => {
-        const ids: string[] = [];
+    const getExcludeIds = useCallback((): number[] => {
+        const ids: number[] = [];
 
         // Exclude the current entity
         if (entityId) {
@@ -211,7 +211,7 @@ export default function RelationshipEditor({
     /**
      * Handles deleting an existing relationship.
      */
-    const handleDeleteExisting = async (relationshipId: string) => {
+    const handleDeleteExisting = async (relationshipId: number) => {
         if (!campaignId) return;
 
         try {
@@ -354,10 +354,10 @@ export default function RelationshipEditor({
  */
 interface RelationshipRowWithNameProps {
     relationship: Relationship;
-    campaignId: string;
-    currentEntityId?: string;
+    campaignId: number;
+    currentEntityId?: number;
     currentEntityName: string;
-    relationshipTypeMap: Map<string, RelationshipType>;
+    relationshipTypeMap: Map<string | number, RelationshipType>;
     readOnly?: boolean;
     onDelete?: () => void;
 }

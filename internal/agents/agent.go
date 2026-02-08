@@ -13,8 +13,6 @@ package agents
 
 import (
 	"context"
-
-	"github.com/google/uuid"
 )
 
 // Severity represents the importance level of an issue or suggestion.
@@ -76,10 +74,10 @@ type Suggestion struct {
 	Action string `json:"action"`
 
 	// EntityID references the entity this suggestion relates to, if any.
-	EntityID *uuid.UUID `json:"entityId,omitempty"`
+	EntityID *int64 `json:"entityId,omitempty"`
 
 	// RelatedIDs contains IDs of other entities related to this suggestion.
-	RelatedIDs []uuid.UUID `json:"relatedIds,omitempty"`
+	RelatedIDs []int64 `json:"relatedIds,omitempty"`
 }
 
 // Source represents the origin of retrieved content for attribution.
@@ -88,7 +86,7 @@ type Source struct {
 	Type string `json:"type"`
 
 	// EntityID references the entity this content came from, if applicable.
-	EntityID *uuid.UUID `json:"entityId,omitempty"`
+	EntityID *int64 `json:"entityId,omitempty"`
 
 	// EntityName is the human-readable name of the source entity.
 	EntityName string `json:"entityName,omitempty"`

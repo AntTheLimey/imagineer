@@ -32,8 +32,8 @@ vi.mock('../hooks', async () => {
         })),
         useGameSystems: vi.fn(() => ({
             data: [
-                { id: 'coc-7e', name: 'Call of Cthulhu 7th Edition' },
-                { id: 'gurps-4e', name: 'GURPS 4th Edition' },
+                { id: 1, name: 'Call of Cthulhu 7th Edition' },
+                { id: 2, name: 'GURPS 4th Edition' },
             ],
             isLoading: false,
             error: null,
@@ -59,7 +59,7 @@ function createWrapper() {
     return function Wrapper({ children }: { children: React.ReactNode }) {
         return (
             <QueryClientProvider client={queryClient}>
-                <MemoryRouter initialEntries={['/campaigns/test-campaign-id/dashboard']}>
+                <MemoryRouter initialEntries={['/campaigns/1/dashboard']}>
                     <CampaignProvider>
                         <DraftProvider>
                             <Routes>
@@ -108,9 +108,9 @@ describe('CampaignDashboard', () => {
     it('renders campaign settings when campaign is loaded', () => {
         vi.mocked(useCampaign).mockReturnValue({
             data: {
-                id: 'test-campaign-id',
+                id: 1,
                 name: 'Test Campaign',
-                systemId: 'coc-7e',
+                systemId: 1,
                 description: 'A test campaign',
                 settings: {},
                 createdAt: '2025-01-01T00:00:00Z',
@@ -130,9 +130,9 @@ describe('CampaignDashboard', () => {
     it('renders navigation items', () => {
         vi.mocked(useCampaign).mockReturnValue({
             data: {
-                id: 'test-campaign-id',
+                id: 1,
                 name: 'Test Campaign',
-                systemId: 'coc-7e',
+                systemId: 1,
                 settings: {},
                 createdAt: '2025-01-01T00:00:00Z',
                 updatedAt: '2025-01-01T00:00:00Z',
@@ -156,9 +156,9 @@ describe('CampaignDashboard', () => {
     it('renders breadcrumbs with campaign name', () => {
         vi.mocked(useCampaign).mockReturnValue({
             data: {
-                id: 'test-campaign-id',
+                id: 1,
                 name: 'My Awesome Campaign',
-                systemId: 'coc-7e',
+                systemId: 1,
                 settings: {},
                 createdAt: '2025-01-01T00:00:00Z',
                 updatedAt: '2025-01-01T00:00:00Z',

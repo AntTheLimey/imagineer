@@ -16,11 +16,10 @@ import (
 	"fmt"
 
 	"github.com/antonypegg/imagineer/internal/models"
-	"github.com/google/uuid"
 )
 
 // ListSessionsByCampaign retrieves all sessions for a campaign.
-func (db *DB) ListSessionsByCampaign(ctx context.Context, campaignID uuid.UUID) ([]models.Session, error) {
+func (db *DB) ListSessionsByCampaign(ctx context.Context, campaignID int64) ([]models.Session, error) {
 	query := `
         SELECT id, campaign_id, chapter_id, title, session_number, planned_date, actual_date,
                status, stage, prep_notes, planned_scenes, actual_notes, discoveries,
@@ -61,7 +60,7 @@ func (db *DB) ListSessionsByCampaign(ctx context.Context, campaignID uuid.UUID) 
 }
 
 // ListSessionsByChapter retrieves all sessions for a specific chapter.
-func (db *DB) ListSessionsByChapter(ctx context.Context, chapterID uuid.UUID) ([]models.Session, error) {
+func (db *DB) ListSessionsByChapter(ctx context.Context, chapterID int64) ([]models.Session, error) {
 	query := `
         SELECT id, campaign_id, chapter_id, title, session_number, planned_date, actual_date,
                status, stage, prep_notes, planned_scenes, actual_notes, discoveries,
@@ -102,7 +101,7 @@ func (db *DB) ListSessionsByChapter(ctx context.Context, chapterID uuid.UUID) ([
 }
 
 // GetSession retrieves a session by ID.
-func (db *DB) GetSession(ctx context.Context, id uuid.UUID) (*models.Session, error) {
+func (db *DB) GetSession(ctx context.Context, id int64) (*models.Session, error) {
 	query := `
         SELECT id, campaign_id, chapter_id, title, session_number, planned_date, actual_date,
                status, stage, prep_notes, planned_scenes, actual_notes, discoveries,
@@ -128,9 +127,7 @@ func (db *DB) GetSession(ctx context.Context, id uuid.UUID) (*models.Session, er
 }
 
 // CreateSession creates a new session in a campaign.
-func (db *DB) CreateSession(ctx context.Context, campaignID uuid.UUID, req models.CreateSessionRequest) (*models.Session, error) {
-	id := uuid.New()
-
+func (db *DB) CreateSession(ctx context.Context, campaignID int64, req models.CreateSessionRequest) (*models.Session, error) {
 	// Default status to PLANNED
 	status := models.SessionStatusPlanned
 
@@ -147,16 +144,16 @@ func (db *DB) CreateSession(ctx context.Context, campaignID uuid.UUID, req model
 	}
 
 	query := `
-        INSERT INTO sessions (id, campaign_id, chapter_id, title, session_number, planned_date,
+        INSERT INTO sessions (campaign_id, chapter_id, title, session_number, planned_date,
                               status, stage, prep_notes, planned_scenes)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING id, campaign_id, chapter_id, title, session_number, planned_date, actual_date,
                   status, stage, prep_notes, planned_scenes, actual_notes, discoveries,
                   player_decisions, consequences, created_at, updated_at`
 
 	var s models.Session
 	var retStage *string
-	err := db.QueryRow(ctx, query, id, campaignID, req.ChapterID, req.Title, req.SessionNumber,
+	err := db.QueryRow(ctx, query, campaignID, req.ChapterID, req.Title, req.SessionNumber,
 		req.PlannedDate, status, stage, req.PrepNotes, plannedScenes).Scan(
 		&s.ID, &s.CampaignID, &s.ChapterID, &s.Title, &s.SessionNumber, &s.PlannedDate, &s.ActualDate,
 		&s.Status, &retStage, &s.PrepNotes, &s.PlannedScenes, &s.ActualNotes, &s.Discoveries,
@@ -173,7 +170,7 @@ func (db *DB) CreateSession(ctx context.Context, campaignID uuid.UUID, req model
 }
 
 // UpdateSession updates an existing session.
-func (db *DB) UpdateSession(ctx context.Context, id uuid.UUID, req models.UpdateSessionRequest) (*models.Session, error) {
+func (db *DB) UpdateSession(ctx context.Context, id int64, req models.UpdateSessionRequest) (*models.Session, error) {
 	// First get the existing session
 	existing, err := db.GetSession(ctx, id)
 	if err != nil {
@@ -277,7 +274,7 @@ func (db *DB) UpdateSession(ctx context.Context, id uuid.UUID, req models.Update
 }
 
 // DeleteSession deletes a session by ID.
-func (db *DB) DeleteSession(ctx context.Context, id uuid.UUID) error {
+func (db *DB) DeleteSession(ctx context.Context, id int64) error {
 	query := `DELETE FROM sessions WHERE id = $1`
 	result, err := db.Pool.Exec(ctx, query, id)
 	if err != nil {

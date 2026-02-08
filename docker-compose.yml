@@ -1,7 +1,26 @@
 services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: imagineer-ollama
+    volumes:
+      - ollama-models:/root/.ollama
+    ports:
+      - "11434:11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - imagineer-network
+
   postgres:
     image: ghcr.io/pgedge/pgedge-postgres:18-spock5-standard
     container_name: imagineer-postgres
+    depends_on:
+      ollama:
+        condition: service_healthy
     environment:
       - POSTGRES_USER=imagineer
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -17,6 +36,9 @@ services:
       -c shared_preload_libraries=pg_cron,pg_tokenizer,pgedge_vectorizer
       -c cron.database_name=imagineer
       -c listen_addresses='*'
+      -c pgedge_vectorizer.provider='ollama'
+      -c pgedge_vectorizer.api_url='http://ollama:11434'
+      -c pgedge_vectorizer.model='mxbai-embed-large'
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U imagineer -d imagineer"]
       interval: 10s
@@ -54,3 +76,6 @@ services:
 networks:
   imagineer-network:
     driver: bridge
+
+volumes:
+  ollama-models:

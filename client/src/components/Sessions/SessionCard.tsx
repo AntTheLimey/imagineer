@@ -135,7 +135,7 @@ export default function SessionCard({
                 border: isSelected ? 2 : 1,
                 borderColor: isSelected ? 'primary.main' : 'divider',
                 '&:hover': {
-                    elevation: 3,
+                    boxShadow: 3,
                     transform: 'translateY(-2px)',
                     '& .session-card-actions': {
                         opacity: 1,

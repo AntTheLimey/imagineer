@@ -78,3 +78,10 @@ export type {
     CreateSessionInput,
     UpdateSessionInput,
 } from './sessions';
+
+export { entityDetectionApi } from './entityDetection';
+export type {
+    DetectEntitiesRequest,
+    EntitySuggestion,
+    DetectEntitiesResponse,
+} from './entityDetection';

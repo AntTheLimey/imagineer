@@ -102,7 +102,7 @@ export default function ChapterCard({
                 border: isSelected ? 2 : 1,
                 borderColor: isSelected ? 'primary.main' : 'divider',
                 '&:hover': {
-                    elevation: 3,
+                    boxShadow: 3,
                     transform: 'translateY(-2px)',
                     '& .chapter-card-actions': {
                         opacity: 1,

@@ -20,7 +20,7 @@ import { statsApi } from '../api';
 export const statsKeys = {
     all: ['stats'] as const,
     dashboard: () => [...statsKeys.all, 'dashboard'] as const,
-    campaign: (campaignId: string) => [...statsKeys.all, 'campaign', campaignId] as const,
+    campaign: (campaignId: number) => [...statsKeys.all, 'campaign', campaignId] as const,
 };
 
 /**
@@ -38,7 +38,7 @@ export function useDashboardStats() {
 /**
  * Hook to fetch statistics for a specific campaign.
  */
-export function useCampaignStats(campaignId: string, options?: { enabled?: boolean }) {
+export function useCampaignStats(campaignId: number, options?: { enabled?: boolean }) {
     return useQuery({
         queryKey: statsKeys.campaign(campaignId),
         queryFn: () => statsApi.getCampaign(campaignId),

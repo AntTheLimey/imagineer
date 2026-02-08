@@ -26,12 +26,12 @@ import type { Session } from '../types';
 export const sessionKeys = {
     all: ['sessions'] as const,
     lists: () => [...sessionKeys.all, 'list'] as const,
-    list: (campaignId: string, params?: ListSessionsParams) =>
+    list: (campaignId: number, params?: ListSessionsParams) =>
         [...sessionKeys.lists(), campaignId, params] as const,
-    byChapter: (campaignId: string, chapterId: string) =>
+    byChapter: (campaignId: number, chapterId: number) =>
         [...sessionKeys.lists(), 'byChapter', campaignId, chapterId] as const,
     details: () => [...sessionKeys.all, 'detail'] as const,
-    detail: (campaignId: string, sessionId: string) =>
+    detail: (campaignId: number, sessionId: number) =>
         [...sessionKeys.details(), campaignId, sessionId] as const,
 };
 
@@ -42,7 +42,7 @@ export const sessionKeys = {
  * @param params - Optional query parameters to filter or paginate the session list
  * @returns The React Query result containing the list of sessions for the specified campaign
  */
-export function useSessions(campaignId: string, params?: ListSessionsParams) {
+export function useSessions(campaignId: number, params?: ListSessionsParams) {
     return useQuery({
         queryKey: sessionKeys.list(campaignId, params),
         queryFn: () => sessionsApi.list(campaignId, params),
@@ -57,7 +57,7 @@ export function useSessions(campaignId: string, params?: ListSessionsParams) {
  *
  * @returns The query result containing the session list for the specified chapter.
  */
-export function useSessionsByChapter(campaignId: string, chapterId: string) {
+export function useSessionsByChapter(campaignId: number, chapterId: number) {
     return useQuery({
         queryKey: sessionKeys.byChapter(campaignId, chapterId),
         queryFn: () => sessionsApi.listByChapter(campaignId, chapterId),
@@ -75,8 +75,8 @@ export function useSessionsByChapter(campaignId: string, chapterId: string) {
  * @returns The React Query result for the session, containing the session data when available
  */
 export function useSession(
-    campaignId: string,
-    sessionId: string,
+    campaignId: number,
+    sessionId: number,
     options?: { enabled?: boolean }
 ) {
     return useQuery({
@@ -91,7 +91,7 @@ export function useSession(
  *
  * Invalidates cached session lists for the created session's campaign and, if the session has a chapterId, invalidates that campaign+chapter list as well.
  *
- * @returns The React Query mutation object for creating sessions. The mutation expects an object with `campaignId: string` and `input: CreateSessionInput`. */
+ * @returns The React Query mutation object for creating sessions. The mutation expects an object with `campaignId: number` and `input: CreateSessionInput`. */
 export function useCreateSession() {
     const queryClient = useQueryClient();
 
@@ -100,7 +100,7 @@ export function useCreateSession() {
             campaignId,
             input,
         }: {
-            campaignId: string;
+            campaignId: number;
             input: CreateSessionInput;
         }) => sessionsApi.create(campaignId, input),
         onSuccess: (data: Session) => {
@@ -145,8 +145,8 @@ export function useUpdateSession() {
             sessionId,
             input,
         }: {
-            campaignId: string;
-            sessionId: string;
+            campaignId: number;
+            sessionId: number;
             input: UpdateSessionInput;
         }) => sessionsApi.update(campaignId, sessionId, input),
         onSuccess: (data: Session) => {
@@ -191,12 +191,12 @@ export function useDeleteSession() {
             campaignId,
             sessionId,
         }: {
-            campaignId: string;
-            sessionId: string;
+            campaignId: number;
+            sessionId: number;
         }) => sessionsApi.delete(campaignId, sessionId),
         onSuccess: (
             _data: void,
-            variables: { campaignId: string; sessionId: string }
+            variables: { campaignId: number; sessionId: number }
         ) => {
             // Remove from cache
             queryClient.removeQueries({

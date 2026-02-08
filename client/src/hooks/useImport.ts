@@ -26,9 +26,9 @@ export function useImportEvernote() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: ({ campaignId, file }: { campaignId: string; file: File }) =>
+        mutationFn: ({ campaignId, file }: { campaignId: number; file: File }) =>
             importApi.importEvernote(campaignId, file),
-        onSuccess: (data: ImportResult, variables: { campaignId: string; file: File }) => {
+        onSuccess: (data: ImportResult, variables: { campaignId: number; file: File }) => {
             if (data.success) {
                 // Invalidate all related queries for this campaign
                 invalidateCampaignData(queryClient, variables.campaignId);
@@ -62,9 +62,9 @@ export function useImportFile() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: ({ campaignId, file }: { campaignId: string; file: File }) =>
+        mutationFn: ({ campaignId, file }: { campaignId: number; file: File }) =>
             importApi.importFile(campaignId, file),
-        onSuccess: (data: ImportResult, variables: { campaignId: string; file: File }) => {
+        onSuccess: (data: ImportResult, variables: { campaignId: number; file: File }) => {
             if (data.success) {
                 // Invalidate all related queries for this campaign
                 invalidateCampaignData(queryClient, variables.campaignId);
@@ -80,11 +80,11 @@ export function useImportFiles() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: ({ campaignId, files }: { campaignId: string; files: File[] }) =>
+        mutationFn: ({ campaignId, files }: { campaignId: number; files: File[] }) =>
             importApi.importFiles(campaignId, files),
         onSuccess: (
             data: ImportResult[],
-            variables: { campaignId: string; files: File[] }
+            variables: { campaignId: number; files: File[] }
         ) => {
             // Check if any import was successful
             const anySuccess = data.some((result) => result.success);
@@ -101,7 +101,7 @@ export function useImportFiles() {
  */
 function invalidateCampaignData(
     queryClient: ReturnType<typeof useQueryClient>,
-    campaignId: string
+    campaignId: number
 ) {
     // Invalidate entities
     queryClient.invalidateQueries({
@@ -109,7 +109,7 @@ function invalidateCampaignData(
         predicate: (query) => {
             const key = query.queryKey as unknown[];
             if (key.length >= 3 && typeof key[2] === 'object' && key[2] !== null) {
-                const params = key[2] as { campaignId?: string };
+                const params = key[2] as { campaignId?: number };
                 return params.campaignId === campaignId;
             }
             return false;
@@ -122,7 +122,7 @@ function invalidateCampaignData(
         predicate: (query) => {
             const key = query.queryKey as unknown[];
             if (key.length >= 3 && typeof key[2] === 'object' && key[2] !== null) {
-                const params = key[2] as { campaignId?: string };
+                const params = key[2] as { campaignId?: number };
                 return params.campaignId === campaignId;
             }
             return false;
@@ -135,7 +135,7 @@ function invalidateCampaignData(
         predicate: (query) => {
             const key = query.queryKey as unknown[];
             if (key.length >= 3 && typeof key[2] === 'object' && key[2] !== null) {
-                const params = key[2] as { campaignId?: string };
+                const params = key[2] as { campaignId?: number };
                 return params.campaignId === campaignId;
             }
             return false;

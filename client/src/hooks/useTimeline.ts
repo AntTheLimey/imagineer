@@ -29,9 +29,9 @@ export const timelineKeys = {
     list: (params: ListTimelineEventsParams) =>
         [...timelineKeys.lists(), params] as const,
     details: () => [...timelineKeys.all, 'detail'] as const,
-    detail: (campaignId: string, eventId: string) =>
+    detail: (campaignId: number, eventId: number) =>
         [...timelineKeys.details(), campaignId, eventId] as const,
-    forEntity: (campaignId: string, entityId: string) =>
+    forEntity: (campaignId: number, entityId: number) =>
         [...timelineKeys.all, 'entity', campaignId, entityId] as const,
 };
 
@@ -50,8 +50,8 @@ export function useTimelineEvents(params: ListTimelineEventsParams) {
  * Hook to fetch a single timeline event by ID.
  */
 export function useTimelineEvent(
-    campaignId: string,
-    eventId: string,
+    campaignId: number,
+    eventId: number,
     options?: { enabled?: boolean }
 ) {
     return useQuery({
@@ -65,8 +65,8 @@ export function useTimelineEvent(
  * Hook to fetch timeline events involving a specific entity.
  */
 export function useEntityTimeline(
-    campaignId: string,
-    entityId: string,
+    campaignId: number,
+    entityId: number,
     options?: { enabled?: boolean }
 ) {
     return useQuery({
@@ -91,7 +91,7 @@ export function useCreateTimelineEvent() {
                 predicate: (query) => {
                     const key = query.queryKey as unknown[];
                     if (key.length >= 3 && typeof key[2] === 'object' && key[2] !== null) {
-                        const params = key[2] as { campaignId?: string };
+                        const params = key[2] as { campaignId?: number };
                         return params.campaignId === data.campaignId;
                     }
                     return false;
@@ -119,8 +119,8 @@ export function useUpdateTimelineEvent() {
             eventId,
             input,
         }: {
-            campaignId: string;
-            eventId: string;
+            campaignId: number;
+            eventId: number;
             input: UpdateTimelineEventInput;
         }) => timelineApi.update(campaignId, eventId, input),
         onSuccess: (data: TimelineEvent) => {
@@ -135,7 +135,7 @@ export function useUpdateTimelineEvent() {
                 predicate: (query) => {
                     const key = query.queryKey as unknown[];
                     if (key.length >= 3 && typeof key[2] === 'object' && key[2] !== null) {
-                        const params = key[2] as { campaignId?: string };
+                        const params = key[2] as { campaignId?: number };
                         return params.campaignId === data.campaignId;
                     }
                     return false;
@@ -162,10 +162,10 @@ export function useDeleteTimelineEvent() {
             campaignId,
             eventId,
         }: {
-            campaignId: string;
-            eventId: string;
+            campaignId: number;
+            eventId: number;
         }) => timelineApi.delete(campaignId, eventId),
-        onSuccess: (_data: void, variables: { campaignId: string; eventId: string }) => {
+        onSuccess: (_data: void, variables: { campaignId: number; eventId: number }) => {
             // Remove from cache
             queryClient.removeQueries({
                 queryKey: timelineKeys.detail(variables.campaignId, variables.eventId),
@@ -176,7 +176,7 @@ export function useDeleteTimelineEvent() {
                 predicate: (query) => {
                     const key = query.queryKey as unknown[];
                     if (key.length >= 3 && typeof key[2] === 'object' && key[2] !== null) {
-                        const params = key[2] as { campaignId?: string };
+                        const params = key[2] as { campaignId?: number };
                         return params.campaignId === variables.campaignId;
                     }
                     return false;

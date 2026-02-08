@@ -14,12 +14,12 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/antonypegg/imagineer/internal/agents/consistency"
 	"github.com/antonypegg/imagineer/internal/auth"
 	"github.com/antonypegg/imagineer/internal/database"
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 )
 
 // AgentHandler provides HTTP handlers for agent operations.
@@ -46,7 +46,7 @@ type ConsistencyCheckRequest struct {
 // Verifies the user owns the campaign before running the consistency check.
 func (h *AgentHandler) RunConsistencyCheck(w http.ResponseWriter, r *http.Request) {
 	campaignIDStr := chi.URLParam(r, "id")
-	campaignID, err := uuid.Parse(campaignIDStr)
+	campaignID, err := strconv.ParseInt(campaignIDStr, 10, 64)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
 		return

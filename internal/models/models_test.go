@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -29,7 +28,7 @@ func TestGameSystem_JSONMarshalUnmarshal(t *testing.T) {
 		{
 			name: "full game system",
 			system: GameSystem{
-				ID:              uuid.MustParse("550e8400-e29b-41d4-a716-446655440000"),
+				ID:              1,
 				Name:            "Call of Cthulhu 7e",
 				Code:            "coc7e",
 				AttributeSchema: json.RawMessage(`{"STR": {"min": 1, "max": 100}}`),
@@ -37,7 +36,7 @@ func TestGameSystem_JSONMarshalUnmarshal(t *testing.T) {
 				CreatedAt:       time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC),
 			},
 			wantJSON: map[string]interface{}{
-				"id":              "550e8400-e29b-41d4-a716-446655440000",
+				"id":              float64(1),
 				"name":            "Call of Cthulhu 7e",
 				"code":            "coc7e",
 				"attributeSchema": map[string]interface{}{"STR": map[string]interface{}{"min": float64(1), "max": float64(100)}},
@@ -48,13 +47,13 @@ func TestGameSystem_JSONMarshalUnmarshal(t *testing.T) {
 		{
 			name: "minimal game system",
 			system: GameSystem{
-				ID:        uuid.MustParse("660e8400-e29b-41d4-a716-446655440001"),
+				ID:        2,
 				Name:      "GURPS 4e",
 				Code:      "gurps4e",
 				CreatedAt: time.Date(2025, 2, 20, 14, 30, 0, 0, time.UTC),
 			},
 			wantJSON: map[string]interface{}{
-				"id":        "660e8400-e29b-41d4-a716-446655440001",
+				"id":        float64(2),
 				"name":      "GURPS 4e",
 				"code":      "gurps4e",
 				"createdAt": "2025-02-20T14:30:00Z",
@@ -91,7 +90,7 @@ func TestGameSystem_JSONMarshalUnmarshal(t *testing.T) {
 
 func TestCampaign_JSONMarshalUnmarshal(t *testing.T) {
 	description := "A dark investigation in 1920s Arkham"
-	systemID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
+	systemID := int64(1)
 
 	tests := []struct {
 		name     string
@@ -100,7 +99,7 @@ func TestCampaign_JSONMarshalUnmarshal(t *testing.T) {
 		{
 			name: "full campaign",
 			campaign: Campaign{
-				ID:          uuid.MustParse("770e8400-e29b-41d4-a716-446655440002"),
+				ID:          3,
 				Name:        "Masks of Nyarlathotep",
 				SystemID:    &systemID,
 				Description: &description,
@@ -112,7 +111,7 @@ func TestCampaign_JSONMarshalUnmarshal(t *testing.T) {
 		{
 			name: "minimal campaign",
 			campaign: Campaign{
-				ID:        uuid.MustParse("880e8400-e29b-41d4-a716-446655440003"),
+				ID:        4,
 				Name:      "Horror on the Orient Express",
 				CreatedAt: time.Date(2025, 4, 1, 8, 0, 0, 0, time.UTC),
 				UpdatedAt: time.Date(2025, 4, 1, 8, 0, 0, 0, time.UTC),
@@ -157,8 +156,8 @@ func TestEntity_JSONMarshalUnmarshal(t *testing.T) {
 		{
 			name: "NPC entity",
 			entity: Entity{
-				ID:               uuid.MustParse("990e8400-e29b-41d4-a716-446655440004"),
-				CampaignID:       uuid.MustParse("770e8400-e29b-41d4-a716-446655440002"),
+				ID:               5,
+				CampaignID:       3,
 				EntityType:       EntityTypeNPC,
 				Name:             "Edward Gavigan",
 				Description:      &description,
@@ -174,8 +173,8 @@ func TestEntity_JSONMarshalUnmarshal(t *testing.T) {
 		{
 			name: "Location entity",
 			entity: Entity{
-				ID:               uuid.MustParse("aa0e8400-e29b-41d4-a716-446655440005"),
-				CampaignID:       uuid.MustParse("770e8400-e29b-41d4-a716-446655440002"),
+				ID:               6,
+				CampaignID:       3,
 				EntityType:       EntityTypeLocation,
 				Name:             "Miskatonic University",
 				Attributes:       json.RawMessage(`{"city": "Arkham", "founded": 1690}`),
@@ -384,7 +383,7 @@ func TestCreateCampaignRequest_JSONUnmarshal(t *testing.T) {
 		},
 		{
 			name:     "valid request with all fields",
-			jsonData: `{"name": "Full Campaign", "systemId": "550e8400-e29b-41d4-a716-446655440000", "description": "A test description", "settings": {"era": "1920s"}}`,
+			jsonData: `{"name": "Full Campaign", "systemId": 1, "description": "A test description", "settings": {"era": "1920s"}}`,
 			expected: CreateCampaignRequest{
 				Name: "Full Campaign",
 			},
@@ -477,7 +476,7 @@ func TestDashboardStats_JSONMarshalUnmarshal(t *testing.T) {
 		},
 		RecentCampaigns: []Campaign{
 			{
-				ID:        uuid.MustParse("550e8400-e29b-41d4-a716-446655440000"),
+				ID:        7,
 				Name:      "Recent Campaign",
 				CreatedAt: time.Date(2025, 6, 1, 10, 0, 0, 0, time.UTC),
 				UpdatedAt: time.Date(2025, 6, 1, 10, 0, 0, 0, time.UTC),

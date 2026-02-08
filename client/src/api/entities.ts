@@ -18,7 +18,7 @@ import type { Entity, EntityType, SourceConfidence } from '../types';
  * Parameters for listing entities.
  */
 export interface ListEntitiesParams {
-    campaignId: string;
+    campaignId: number;
     page?: number;
     pageSize?: number;
     entityType?: EntityType;
@@ -30,14 +30,14 @@ export interface ListEntitiesParams {
  * Input for creating a new entity.
  */
 export interface CreateEntityInput {
-    campaignId: string;
+    campaignId: number;
     entityType: EntityType;
     name: string;
     description?: string;
     attributes?: Record<string, unknown>;
     tags?: string[];
     gmNotes?: string;
-    discoveredSession?: string;
+    discoveredSession?: number;
     sourceDocument?: string;
     sourceConfidence?: SourceConfidence;
 }
@@ -51,7 +51,7 @@ export interface UpdateEntityInput {
     attributes?: Record<string, unknown>;
     tags?: string[];
     gmNotes?: string;
-    discoveredSession?: string;
+    discoveredSession?: number;
     sourceDocument?: string;
     sourceConfidence?: SourceConfidence;
 }
@@ -87,7 +87,7 @@ export const entitiesApi = {
      * Note: campaignId is kept for API consistency but not used in the URL.
      * The server verifies campaign ownership via the entity's campaign_id.
      */
-    get(_campaignId: string, entityId: string): Promise<Entity> {
+    get(_campaignId: number, entityId: number): Promise<Entity> {
         return apiClient.get<Entity>(`/entities/${entityId}`);
     },
 
@@ -104,7 +104,7 @@ export const entitiesApi = {
      * Note: campaignId is kept for API consistency but not used in the URL.
      * The server verifies campaign ownership via the entity's campaign_id.
      */
-    update(_campaignId: string, entityId: string, input: UpdateEntityInput): Promise<Entity> {
+    update(_campaignId: number, entityId: number, input: UpdateEntityInput): Promise<Entity> {
         return apiClient.put<Entity>(`/entities/${entityId}`, input);
     },
 
@@ -113,14 +113,14 @@ export const entitiesApi = {
      * Note: campaignId is kept for API consistency but not used in the URL.
      * The server verifies campaign ownership via the entity's campaign_id.
      */
-    delete(_campaignId: string, entityId: string): Promise<void> {
+    delete(_campaignId: number, entityId: number): Promise<void> {
         return apiClient.delete<void>(`/entities/${entityId}`);
     },
 
     /**
      * Search for similar entities by name (for duplicate detection).
      */
-    searchSimilar(campaignId: string, name: string): Promise<Entity[]> {
+    searchSimilar(campaignId: number, name: string): Promise<Entity[]> {
         return apiClient.get<Entity[]>(`/campaigns/${campaignId}/entities/search`, {
             name,
         });

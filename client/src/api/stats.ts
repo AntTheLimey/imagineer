@@ -51,7 +51,7 @@ export const statsApi = {
     /**
      * Get statistics for a specific campaign.
      */
-    getCampaign(campaignId: string): Promise<CampaignStats> {
+    getCampaign(campaignId: number): Promise<CampaignStats> {
         return apiClient.get<CampaignStats>(`/campaigns/${campaignId}/stats`);
     },
 };

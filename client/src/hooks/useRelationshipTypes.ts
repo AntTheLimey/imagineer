@@ -21,7 +21,7 @@ import type { RelationshipType, CreateRelationshipTypeInput } from '../types';
 export const relationshipTypeKeys = {
     all: ['relationshipTypes'] as const,
     lists: () => [...relationshipTypeKeys.all, 'list'] as const,
-    list: (campaignId: string) =>
+    list: (campaignId: number) =>
         [...relationshipTypeKeys.lists(), campaignId] as const,
 };
 
@@ -30,7 +30,7 @@ export const relationshipTypeKeys = {
  * Returns both system defaults and campaign-specific custom types.
  */
 export function useRelationshipTypes(
-    campaignId: string,
+    campaignId: number,
     options?: { enabled?: boolean }
 ) {
     return useQuery({
@@ -51,13 +51,13 @@ export function useCreateRelationshipType() {
             campaignId,
             input,
         }: {
-            campaignId: string;
+            campaignId: number;
             input: CreateRelationshipTypeInput;
         }) => relationshipTypesApi.create(campaignId, input),
         onSuccess: (data: RelationshipType) => {
             // Invalidate relationship types for this campaign
             queryClient.invalidateQueries({
-                queryKey: relationshipTypeKeys.list(data.campaignId ?? ''),
+                queryKey: relationshipTypeKeys.list(data.campaignId ?? 0),
             });
         },
     });
@@ -74,12 +74,12 @@ export function useDeleteRelationshipType() {
             campaignId,
             typeId,
         }: {
-            campaignId: string;
-            typeId: string;
+            campaignId: number;
+            typeId: number;
         }) => relationshipTypesApi.delete(campaignId, typeId),
         onSuccess: (
             _data: void,
-            variables: { campaignId: string; typeId: string }
+            variables: { campaignId: number; typeId: number }
         ) => {
             // Invalidate relationship types for this campaign
             queryClient.invalidateQueries({

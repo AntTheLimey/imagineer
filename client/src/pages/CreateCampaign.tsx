@@ -161,7 +161,7 @@ export default function CreateCampaign() {
         try {
             const created = await createCampaign.mutateAsync({
                 name: formData.name.trim(),
-                systemId: formData.systemId,
+                systemId: Number(formData.systemId),
                 description: formData.description.trim() || undefined,
                 settings: {
                     genre: formData.genre || undefined,

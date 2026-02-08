@@ -66,7 +66,8 @@ type EditableField = 'name' | 'description' | 'genre' | 'imageStylePrompt';
  * @returns The Campaign Overview page component ready to be mounted in the app UI
  */
 export default function CampaignOverview() {
-    const { id: campaignId } = useParams<{ id: string }>();
+    const { id } = useParams<{ id: string }>();
+    const campaignId = id ? Number(id) : undefined;
     const { setCurrentCampaignId } = useCampaignContext();
 
     // Editing state
@@ -86,12 +87,12 @@ export default function CampaignOverview() {
         data: campaign,
         isLoading: campaignLoading,
         error: campaignError,
-    } = useCampaign(campaignId ?? '', {
+    } = useCampaign(campaignId ?? 0, {
         enabled: !!campaignId,
     });
 
     // Fetch campaign stats
-    const { data: stats } = useCampaignStats(campaignId ?? '', {
+    const { data: stats } = useCampaignStats(campaignId ?? 0, {
         enabled: !!campaignId,
     });
 
@@ -118,7 +119,7 @@ export default function CampaignOverview() {
     /**
      * Get game system name by ID.
      */
-    const getGameSystemName = (systemId: string): string => {
+    const getGameSystemName = (systemId: number): string => {
         const system = gameSystems?.find((gs: GameSystem) => gs.id === systemId);
         return system?.name ?? 'Unknown System';
     };
@@ -167,7 +168,7 @@ export default function CampaignOverview() {
 
         try {
             await updateCampaign.mutateAsync({
-                id: campaignId,
+                id: campaignId!,
                 input: {
                     name: formData.name.trim(),
                     description: formData.description.trim() || undefined,
@@ -215,7 +216,7 @@ export default function CampaignOverview() {
 
         try {
             await updateCampaign.mutateAsync({
-                id: campaignId,
+                id: campaignId!,
                 input: {
                     name: formData.name.trim(),
                     description: formData.description.trim() || undefined,

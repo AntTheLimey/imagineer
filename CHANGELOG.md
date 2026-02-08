@@ -8,9 +8,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Ollama Embedding Pipeline (Local-First Semantic Search)
+  - Ollama container in Docker Compose for local embedding
+    generation using `mxbai-embed-large` model (1024 dimensions).
+  - Vectorization extended to chapters, sessions, and campaign
+    memories with a hybrid search function.
+  - Hybrid search API endpoint `GET /campaigns/{id}/search`
+    combining vector similarity (70%) with BM25 text search (30%).
+  - Entity detection upgraded to use vector search with
+    text-based fallback.
+  - Ollama added as embedding service option in Account Settings
+    (no API key required for local operation).
+- Campaign Description Vectorization
+  - Campaign descriptions are now vectorized and searchable
+    via the hybrid semantic search endpoint.
+  - `search_campaign_content()` SQL function returns campaign
+    description matches with `source_table='campaigns'`.
+  - Chunk size tuned to 200 tokens for campaign descriptions
+    (HTML content requires smaller chunks than plain text).
+- Integration Tests for Embedding Pipeline
+  - Build-tagged (`integration`) tests verifying vectorization
+    availability, chunk creation, search results, and campaign
+    description search.
+  - `make test-integration` target for running embedding tests
+    against live Docker services.
 - Chapters and Sessions Management
-  - Database migration `007_chapters_and_sessions.sql` adds chapters table,
-    enhances sessions table with stages, and creates AI memory system tables.
+  - Chapters table, enhanced sessions table with stages, and
+    AI memory system tables.
   - Chapter model and CRUD operations in Go backend (`internal/database/chapters.go`).
   - Session model updated with ChapterID, Title, and Stage workflow fields.
   - REST API endpoints for chapters: GET/POST `/campaigns/{id}/chapters`,
@@ -78,8 +102,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   for TTRPG expert agent with comprehensive terminology reference covering GM
   titles across systems.
 - Multi-User Foundation & Authentication
-  - Database migration `003_add_users.sql` adds users table and owner_id
-    foreign key on campaigns table.
+  - Users table and owner_id foreign key on campaigns table
+    (included in the consolidated schema migration).
   - User model and database operations in Go backend handle user creation,
     retrieval, and campaign ownership.
   - Google OAuth authentication flow enables sign-in and sign-up via Google.
@@ -155,11 +179,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Timeline page forEach lint error from implicit return (CodeRabbit)
 - Campaign scoping security issue in relationship and timeline handlers -
   now verify resources belong to the campaign specified in URL (CodeRabbit)
+- Worked around pgedge_vectorizer UUID primary key bug: chunk
+  tables now correctly use UUID `source_id` columns instead of
+  BIGINT, matching Imagineer's UUID primary keys. Applied via
+  SQL hotfix pending upstream fix in pgedge_vectorizer.
+- Fixed `search_campaign_content()` SQL function referencing
+  non-existent column `c.chunk` (correct column is `c.content`
+  in pgedge_vectorizer chunk tables).
 
 ### Changed
 
-- Renamed `keeper_notes` column to `gm_notes` throughout codebase (migration
-  004) from Call of Cthulhu-specific to generic RPG terminology.
+- Squashed 10 incremental database migrations into two files:
+  `001_schema.sql` (complete schema with 20 tables, indexes,
+  triggers, functions, views, and vectorization) and
+  `002_seed_data.sql` (game systems and default relationship
+  types). The database is still in active development, so no
+  data preservation was needed.
+- Renamed `keeper_notes` column to `gm_notes` throughout the
+  codebase, moving from Call of Cthulhu-specific to generic RPG
+  terminology.
 - GM notes filtered at API level; non-campaign-owners receive empty `gmNotes`
   field in entity responses.
 - Client-side GM notes UI hidden for non-owners using `useCampaignOwnership`
@@ -203,8 +241,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - PostgreSQL schema with UUID primary keys and JSONB columns
 - Core tables: game_systems, campaigns, sessions, entities, relationships,
   timeline_events, canon_conflicts, schema_migrations
-- Initial migration (001_initial_schema.sql) with all core tables
-- Game system seed data (002_seed_game_systems.sql) for CoC 7e, GURPS 4e, FitD
+- Schema migration (001_schema.sql) with all tables, indexes,
+  triggers, functions, views, and vectorization
+- Seed data migration (002_seed_data.sql) for CoC 7e, GURPS 4e,
+  FitD game systems and default relationship types
 - GIN indexes for JSONB and array columns
 - Trigram index for fuzzy name matching
 - Automatic updated_at triggers

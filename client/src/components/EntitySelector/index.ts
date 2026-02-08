@@ -9,3 +9,4 @@
 
 export { default as EntitySelector } from './EntitySelector';
 export type { EntitySelectorProps } from './EntitySelector';
+export { entityTypeColors, formatEntityType } from './entityConstants';

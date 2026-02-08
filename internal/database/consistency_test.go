@@ -15,60 +15,52 @@ import (
 	"time"
 
 	"github.com/antonypegg/imagineer/internal/models"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 )
 
 // TestOrphanedEntity_Structure tests the OrphanedEntity struct fields.
 func TestOrphanedEntity_Structure(t *testing.T) {
-	id := uuid.New()
 	orphan := OrphanedEntity{
-		ID:         id,
+		ID:         1,
 		Name:       "Test Entity",
 		EntityType: models.EntityTypeNPC,
 	}
 
-	assert.Equal(t, id, orphan.ID)
+	assert.Equal(t, int64(1), orphan.ID)
 	assert.Equal(t, "Test Entity", orphan.Name)
 	assert.Equal(t, models.EntityTypeNPC, orphan.EntityType)
 }
 
 // TestDuplicateNamePair_Structure tests the DuplicateNamePair struct fields.
 func TestDuplicateNamePair_Structure(t *testing.T) {
-	id1 := uuid.New()
-	id2 := uuid.New()
-
 	pair := DuplicateNamePair{
-		EntityID1:  id1,
+		EntityID1:  1,
 		Name1:      "John Smith",
-		EntityID2:  id2,
+		EntityID2:  2,
 		Name2:      "Jon Smith",
 		Similarity: 0.85,
 	}
 
-	assert.Equal(t, id1, pair.EntityID1)
+	assert.Equal(t, int64(1), pair.EntityID1)
 	assert.Equal(t, "John Smith", pair.Name1)
-	assert.Equal(t, id2, pair.EntityID2)
+	assert.Equal(t, int64(2), pair.EntityID2)
 	assert.Equal(t, "Jon Smith", pair.Name2)
 	assert.InDelta(t, 0.85, pair.Similarity, 0.001)
 }
 
 // TestTimelineConflict_Structure tests the TimelineConflict struct fields.
 func TestTimelineConflict_Structure(t *testing.T) {
-	entityID := uuid.New()
-	eventID1 := uuid.New()
-	eventID2 := uuid.New()
 	eventDate := time.Date(1925, 3, 15, 0, 0, 0, 0, time.UTC)
 
 	conflict := TimelineConflict{
-		EntityID:   entityID,
+		EntityID:   1,
 		EntityName: "Professor Armitage",
 		EventDate:  eventDate,
 		EventCount: 2,
-		EventIDs:   []uuid.UUID{eventID1, eventID2},
+		EventIDs:   []int64{10, 11},
 	}
 
-	assert.Equal(t, entityID, conflict.EntityID)
+	assert.Equal(t, int64(1), conflict.EntityID)
 	assert.Equal(t, "Professor Armitage", conflict.EntityName)
 	assert.Equal(t, eventDate, conflict.EventDate)
 	assert.Equal(t, 2, conflict.EventCount)
@@ -77,30 +69,25 @@ func TestTimelineConflict_Structure(t *testing.T) {
 
 // TestInvalidReference_Structure tests the InvalidReference struct fields.
 func TestInvalidReference_Structure(t *testing.T) {
-	relID := uuid.New()
-	missingID := uuid.New()
-
 	ref := InvalidReference{
-		RelationshipID:  relID,
-		MissingEntityID: missingID,
+		RelationshipID:  1,
+		MissingEntityID: 2,
 		ReferenceType:   "target",
 	}
 
-	assert.Equal(t, relID, ref.RelationshipID)
-	assert.Equal(t, missingID, ref.MissingEntityID)
+	assert.Equal(t, int64(1), ref.RelationshipID)
+	assert.Equal(t, int64(2), ref.MissingEntityID)
 	assert.Equal(t, "target", ref.ReferenceType)
 }
 
 // TestEmptySession_Structure tests the EmptySession struct fields.
 func TestEmptySession_Structure(t *testing.T) {
-	id := uuid.New()
-
 	session := EmptySession{
-		ID:            id,
+		ID:            1,
 		SessionNumber: 5,
 	}
 
-	assert.Equal(t, id, session.ID)
+	assert.Equal(t, int64(1), session.ID)
 	assert.Equal(t, 5, session.SessionNumber)
 }
 
@@ -119,10 +106,10 @@ func TestOrphanedEntity_AllEntityTypes(t *testing.T) {
 		models.EntityTypeOther,
 	}
 
-	for _, et := range entityTypes {
+	for i, et := range entityTypes {
 		t.Run(string(et), func(t *testing.T) {
 			orphan := OrphanedEntity{
-				ID:         uuid.New(),
+				ID:         int64(i + 1),
 				Name:       "Test",
 				EntityType: et,
 			}
@@ -144,12 +131,12 @@ func TestDuplicateNamePair_SimilarityRange(t *testing.T) {
 		{"no similarity", 0.0},
 	}
 
-	for _, tt := range tests {
+	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pair := DuplicateNamePair{
-				EntityID1:  uuid.New(),
+				EntityID1:  int64(i*2 + 1),
 				Name1:      "Name1",
-				EntityID2:  uuid.New(),
+				EntityID2:  int64(i*2 + 2),
 				Name2:      "Name2",
 				Similarity: tt.similarity,
 			}
@@ -160,13 +147,10 @@ func TestDuplicateNamePair_SimilarityRange(t *testing.T) {
 
 // TestTimelineConflict_MultipleEvents tests conflicts with multiple event IDs.
 func TestTimelineConflict_MultipleEvents(t *testing.T) {
-	eventIDs := make([]uuid.UUID, 5)
-	for i := range eventIDs {
-		eventIDs[i] = uuid.New()
-	}
+	eventIDs := []int64{10, 11, 12, 13, 14}
 
 	conflict := TimelineConflict{
-		EntityID:   uuid.New(),
+		EntityID:   1,
 		EntityName: "Test Entity",
 		EventDate:  time.Now(),
 		EventCount: 5,
@@ -187,11 +171,11 @@ func TestInvalidReference_ReferenceTypes(t *testing.T) {
 		{"target reference", "target"},
 	}
 
-	for _, tt := range tests {
+	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ref := InvalidReference{
-				RelationshipID:  uuid.New(),
-				MissingEntityID: uuid.New(),
+				RelationshipID:  int64(i + 1),
+				MissingEntityID: int64(i + 100),
 				ReferenceType:   tt.refType,
 			}
 			assert.Equal(t, tt.refType, ref.ReferenceType)
@@ -202,7 +186,7 @@ func TestInvalidReference_ReferenceTypes(t *testing.T) {
 // TestEmptySession_ZeroSessionNumber tests EmptySession with session number 0.
 func TestEmptySession_ZeroSessionNumber(t *testing.T) {
 	session := EmptySession{
-		ID:            uuid.New(),
+		ID:            1,
 		SessionNumber: 0,
 	}
 

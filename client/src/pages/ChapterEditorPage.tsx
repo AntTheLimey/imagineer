@@ -69,39 +69,41 @@ const DEFAULT_FORM_DATA: ChapterFormData = {
  * @returns The React element for the Chapter Editor page
  */
 export default function ChapterEditorPage() {
-    const { campaignId, chapterId } = useParams<{
+    const params = useParams<{
         campaignId: string;
         chapterId?: string;
     }>();
+    const campaignId = params.campaignId ? Number(params.campaignId) : undefined;
+    const chapterId = params.chapterId && params.chapterId !== 'new' ? Number(params.chapterId) : undefined;
     const navigate = useNavigate();
 
-    const isNewChapter = !chapterId || chapterId === 'new';
+    const isNewChapter = !chapterId;
     const draftKey = isNewChapter
         ? `chapter-new-${campaignId}`
         : `chapter-${chapterId}`;
 
     // Fetch campaign for breadcrumbs
-    const { data: campaign } = useCampaign(campaignId ?? '', {
+    const { data: campaign } = useCampaign(campaignId ?? 0, {
         enabled: !!campaignId,
     });
 
     // Fetch chapters to determine next sort order
-    const { data: chapters } = useChapters(campaignId ?? '');
+    const { data: chapters } = useChapters(campaignId ?? 0);
 
     // Fetch existing chapter if editing
     const {
         data: existingChapter,
         isLoading: chapterLoading,
         error: chapterError,
-    } = useChapter(campaignId ?? '', chapterId ?? '', {
+    } = useChapter(campaignId ?? 0, chapterId ?? 0, {
         enabled: !isNewChapter && !!campaignId && !!chapterId,
     });
 
     // Fetch chapter entities for the entity panel
-    const { data: chapterEntities } = useChapterEntities(campaignId ?? '', chapterId ?? '');
+    const { data: chapterEntities } = useChapterEntities(campaignId ?? 0, chapterId ?? 0);
 
     // Fetch all campaign entities for the entity selector
-    const { data: allEntities } = useEntities(campaignId ?? '');
+    const { data: allEntities } = useEntities({ campaignId: campaignId ?? 0 });
 
     // Check if embedding service is configured
     const { data: userSettings } = useUserSettings();
@@ -116,7 +118,7 @@ export default function ChapterEditorPage() {
     >({});
 
     // Pending entity links for new chapters
-    const [pendingEntityLinks, setPendingEntityLinks] = useState<string[]>([]);
+    const [pendingEntityLinks, setPendingEntityLinks] = useState<number[]>([]);
 
     // Draft management
     const { getDraft, deleteDraft } = useDraft();
@@ -130,7 +132,7 @@ export default function ChapterEditorPage() {
         });
 
     // Track the last hydrated chapter ID to detect route changes
-    const lastHydratedChapterIdRef = useRef<string | undefined>(undefined);
+    const lastHydratedChapterIdRef = useRef<number | undefined>(undefined);
 
     // Autosave
     const { lastSaved } = useAutosave({
@@ -339,7 +341,7 @@ export default function ChapterEditorPage() {
      * Link an entity to this chapter.
      */
     const handleLinkEntity = useCallback(
-        async (entityId: string) => {
+        async (entityId: number) => {
             try {
                 if (isNewChapter) {
                     // Add to pending links for new chapters
@@ -363,7 +365,7 @@ export default function ChapterEditorPage() {
      * Unlink an entity from this chapter.
      */
     const handleUnlinkEntity = useCallback(
-        async (linkId: string, entityId: string) => {
+        async (linkId: number, entityId: number) => {
             try {
                 if (isNewChapter) {
                     // Remove from pending links for new chapters
@@ -599,7 +601,7 @@ export default function ChapterEditorPage() {
                                                 variant="caption"
                                                 onClick={() =>
                                                     handleUnlinkEntity(
-                                                        link?.id ?? '',
+                                                        link?.id ?? 0,
                                                         entity.id
                                                     )
                                                 }

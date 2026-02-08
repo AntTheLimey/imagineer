@@ -39,14 +39,14 @@ export const chaptersApi = {
     /**
      * List all chapters for a campaign.
      */
-    list(campaignId: string): Promise<Chapter[]> {
+    list(campaignId: number): Promise<Chapter[]> {
         return apiClient.get<Chapter[]>(`/campaigns/${campaignId}/chapters`);
     },
 
     /**
      * Get a single chapter by ID.
      */
-    get(campaignId: string, chapterId: string): Promise<Chapter> {
+    get(campaignId: number, chapterId: number): Promise<Chapter> {
         return apiClient.get<Chapter>(
             `/campaigns/${campaignId}/chapters/${chapterId}`
         );
@@ -55,7 +55,7 @@ export const chaptersApi = {
     /**
      * Create a new chapter.
      */
-    create(campaignId: string, input: CreateChapterInput): Promise<Chapter> {
+    create(campaignId: number, input: CreateChapterInput): Promise<Chapter> {
         return apiClient.post<Chapter>(
             `/campaigns/${campaignId}/chapters`,
             input
@@ -66,8 +66,8 @@ export const chaptersApi = {
      * Update an existing chapter.
      */
     update(
-        campaignId: string,
-        chapterId: string,
+        campaignId: number,
+        chapterId: number,
         input: UpdateChapterInput
     ): Promise<Chapter> {
         return apiClient.put<Chapter>(
@@ -79,7 +79,7 @@ export const chaptersApi = {
     /**
      * Delete a chapter.
      */
-    delete(campaignId: string, chapterId: string): Promise<void> {
+    delete(campaignId: number, chapterId: number): Promise<void> {
         return apiClient.delete<void>(
             `/campaigns/${campaignId}/chapters/${chapterId}`
         );
