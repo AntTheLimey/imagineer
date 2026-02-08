@@ -148,3 +148,14 @@ export type {
 
 // Entity resolve hooks
 export { useEntityResolve, entityResolveKeys } from './useEntityResolve';
+
+// Content analysis hooks
+export {
+    useAnalysisJobs,
+    useAnalysisJob,
+    useAnalysisItems,
+    useResolveItem,
+    useTriggerAnalysis,
+    usePendingAnalysisCount,
+    contentAnalysisKeys,
+} from './useContentAnalysis';
