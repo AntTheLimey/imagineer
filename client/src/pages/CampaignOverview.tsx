@@ -31,6 +31,7 @@ import {
     Paper,
     Select,
     Skeleton,
+    Snackbar,
     TextField,
     Tooltip,
     Typography,
@@ -91,6 +92,13 @@ export default function CampaignOverview() {
         genre: '',
         imageStylePrompt: '',
     });
+
+    // Analysis snackbar state
+    const [analysisSnackbar, setAnalysisSnackbar] = useState<{
+        open: boolean;
+        jobId: number;
+        count: number;
+    }>({ open: false, jobId: 0, count: 0 });
 
     // Fetch campaign data
     const {
@@ -177,7 +185,7 @@ export default function CampaignOverview() {
         if (!campaignId || !editingField) return;
 
         try {
-            await updateCampaign.mutateAsync({
+            const result = await updateCampaign.mutateAsync({
                 id: campaignId!,
                 input: {
                     name: formData.name.trim(),
@@ -188,6 +196,18 @@ export default function CampaignOverview() {
                     },
                 },
             });
+
+            // Check for analysis results
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const analysisResult = (result as any)?._analysis;
+            if (analysisResult?.pendingCount > 0) {
+                setAnalysisSnackbar({
+                    open: true,
+                    jobId: analysisResult.jobId,
+                    count: analysisResult.pendingCount,
+                });
+            }
+
             setEditingField(null);
         } catch (error) {
             console.error('Failed to save field:', error);
@@ -225,7 +245,7 @@ export default function CampaignOverview() {
         }
 
         try {
-            await updateCampaign.mutateAsync({
+            const result = await updateCampaign.mutateAsync({
                 id: campaignId!,
                 input: {
                     name: formData.name.trim(),
@@ -236,6 +256,18 @@ export default function CampaignOverview() {
                     },
                 },
             });
+
+            // Check for analysis results
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const analysisResult = (result as any)?._analysis;
+            if (analysisResult?.pendingCount > 0) {
+                setAnalysisSnackbar({
+                    open: true,
+                    jobId: analysisResult.jobId,
+                    count: analysisResult.pendingCount,
+                });
+            }
+
             setIsEditing(false);
         } catch (error) {
             console.error('Failed to save campaign:', error);
@@ -647,6 +679,26 @@ export default function CampaignOverview() {
                     </Typography>
                 </Box>
             </Box>
+
+            {/* Analysis results snackbar */}
+            <Snackbar
+                open={analysisSnackbar.open}
+                autoHideDuration={10000}
+                onClose={() => setAnalysisSnackbar(prev => ({ ...prev, open: false }))}
+                message={`Analysis found ${analysisSnackbar.count} item${analysisSnackbar.count === 1 ? '' : 's'} to review`}
+                action={
+                    <Button
+                        color="warning"
+                        size="small"
+                        onClick={() => {
+                            setAnalysisSnackbar(prev => ({ ...prev, open: false }));
+                            navigate(`/campaigns/${campaignId}/analysis/${analysisSnackbar.jobId}`);
+                        }}
+                    >
+                        Review Now
+                    </Button>
+                }
+            />
         </Box>
     );
 }

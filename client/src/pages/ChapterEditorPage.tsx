@@ -21,9 +21,11 @@ import {
     Alert,
     AlertTitle,
     Box,
+    Button,
     Link as MuiLink,
     Paper,
     Skeleton,
+    Snackbar,
     TextField,
     Typography,
 } from '@mui/material';
@@ -175,6 +177,13 @@ export default function ChapterEditorPage() {
 
     const isSaving = createChapter.isPending || updateChapter.isPending;
 
+    // Analysis snackbar state
+    const [analysisSnackbar, setAnalysisSnackbar] = useState<{
+        open: boolean;
+        jobId: number;
+        count: number;
+    }>({ open: false, jobId: 0, count: 0 });
+
     // Calculate next sort order for new chapters
     const nextSortOrder = useMemo(() => {
         if (!chapters || chapters.length === 0) return 0;
@@ -308,7 +317,7 @@ export default function ChapterEditorPage() {
                     replace: true,
                 });
             } else if (chapterId) {
-                await updateChapter.mutateAsync({
+                const result = await updateChapter.mutateAsync({
                     campaignId,
                     chapterId,
                     input: {
@@ -317,6 +326,17 @@ export default function ChapterEditorPage() {
                         sortOrder: formData.sortOrder,
                     },
                 });
+
+                // Check for analysis results
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const analysisResult = (result as any)?._analysis;
+                if (analysisResult?.pendingCount > 0) {
+                    setAnalysisSnackbar({
+                        open: true,
+                        jobId: analysisResult.jobId,
+                        count: analysisResult.pendingCount,
+                    });
+                }
 
                 deleteDraft(draftKey);
                 clearDirty();
@@ -692,6 +712,26 @@ export default function ChapterEditorPage() {
                     </Paper>
                 </Box>
             </Box>
+
+            {/* Analysis results snackbar */}
+            <Snackbar
+                open={analysisSnackbar.open}
+                autoHideDuration={10000}
+                onClose={() => setAnalysisSnackbar(prev => ({ ...prev, open: false }))}
+                message={`Analysis found ${analysisSnackbar.count} item${analysisSnackbar.count === 1 ? '' : 's'} to review`}
+                action={
+                    <Button
+                        color="warning"
+                        size="small"
+                        onClick={() => {
+                            setAnalysisSnackbar(prev => ({ ...prev, open: false }));
+                            navigate(`/campaigns/${campaignId}/analysis/${analysisSnackbar.jobId}`);
+                        }}
+                    >
+                        Review Now
+                    </Button>
+                }
+            />
 
             {/* Navigation confirmation dialog */}
             {ConfirmDialog}
