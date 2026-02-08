@@ -581,3 +581,51 @@ type SearchResult struct {
 	VectorScore   float64 `json:"vectorScore"`
 	CombinedScore float64 `json:"combinedScore"`
 }
+
+// ContentAnalysisJob represents an analysis run for a content field.
+type ContentAnalysisJob struct {
+	ID            int64     `json:"id"`
+	CampaignID    int64     `json:"campaignId"`
+	SourceTable   string    `json:"sourceTable"`
+	SourceID      int64     `json:"sourceId"`
+	SourceField   string    `json:"sourceField"`
+	Status        string    `json:"status"`
+	TotalItems    int       `json:"totalItems"`
+	ResolvedItems int       `json:"resolvedItems"`
+	CreatedAt     time.Time `json:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+}
+
+// ContentAnalysisItem represents an individual detection within an analysis job.
+type ContentAnalysisItem struct {
+	ID               int64      `json:"id"`
+	JobID            int64      `json:"jobId"`
+	DetectionType    string     `json:"detectionType"`
+	MatchedText      string     `json:"matchedText"`
+	EntityID         *int64     `json:"entityId,omitempty"`
+	Similarity       *float64   `json:"similarity,omitempty"`
+	ContextSnippet   *string    `json:"contextSnippet,omitempty"`
+	PositionStart    *int       `json:"positionStart,omitempty"`
+	PositionEnd      *int       `json:"positionEnd,omitempty"`
+	Resolution       string     `json:"resolution"`
+	ResolvedEntityID *int64     `json:"resolvedEntityId,omitempty"`
+	ResolvedAt       *time.Time `json:"resolvedAt,omitempty"`
+	CreatedAt        time.Time  `json:"createdAt"`
+
+	// Joined fields (not in database)
+	EntityName *string     `json:"entityName,omitempty"`
+	EntityType *EntityType `json:"entityType,omitempty"`
+}
+
+// ResolveAnalysisItemRequest is the request body for resolving an analysis item.
+type ResolveAnalysisItemRequest struct {
+	Resolution string      `json:"resolution"`
+	EntityType *EntityType `json:"entityType,omitempty"`
+	EntityName *string     `json:"entityName,omitempty"`
+}
+
+// AnalysisSummary provides a brief summary of a content analysis job.
+type AnalysisSummary struct {
+	JobID        int64 `json:"jobId"`
+	PendingCount int   `json:"pendingCount"`
+}
