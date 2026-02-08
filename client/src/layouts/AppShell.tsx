@@ -608,7 +608,7 @@ export default function AppShell({ children }: AppShellProps) {
                             />
                         ) : (
                             <Select
-                                value={effectiveCampaignId ? String(effectiveCampaignId) : ''}
+                                value={effectiveCampaignId && campaigns?.some(c => c.id === effectiveCampaignId) ? String(effectiveCampaignId) : ''}
                                 onChange={handleCampaignChange}
                                 displayEmpty
                                 sx={{
