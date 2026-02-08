@@ -81,25 +81,25 @@ storage. Every MVP feature includes its AI component.
 
 ### Text Entry & Entity Linking System
 
-- [ ] `[MVP-1]` @mention entity linking with autocomplete
-  - Syntax: @EntityName with typeahead autocomplete
-  - AI can auto-insert @mentions when detecting entities
-  - GM can manually type @ to trigger autocomplete
+- [x] `[MVP-1]` Wiki-link entity linking with autocomplete
+  - Syntax: `[[Entity Name]]` or `[[Entity Name|display text]]`
+    with typeahead autocomplete (triggered by typing `[[`)
+  - Fuzzy entity name matching via `pg_trgm`
+  - Toolbar insert button with entity search popover
   - Visual indicator for linked entities in text
-  - Click mention to view entity preview popup
+  - Click wiki link to navigate to entity search
+  - Entity rename propagation updates all wiki links across
+    campaign content in a single transaction
 - [ ] `[MVP-1]` Text storage architecture for vectorization
   - Separate text content from JSONB for pgedge vectorizer chunking
   - Ensure all text entries can be chunked and embedded
   - Entity link metadata stored alongside text
-- [ ] `[MVP-1]` Convert rich text editor output to Markdown
+- [x] `[MVP-1]` Convert rich text editor output to Markdown
       before saving
-  - RichTextEditor currently saves HTML; convert to Markdown
-    for cleaner storage and vectorization
-  - HTML markup inflates token counts in embedding chunks
-    (discovered during campaign description vectorization)
-  - Markdown is more portable and produces better embeddings
-  - Investigate TipTap Markdown extensions or server-side
-    HTML-to-Markdown conversion
+  - The MarkdownEditor uses tiptap-markdown for native
+    Markdown round-trip serialization.
+  - Markdown storage produces better embeddings and is more
+    portable than HTML.
 
 ### AI Memory System
 
@@ -606,6 +606,19 @@ Features planned for after initial release.
   - Tests: vectorization available, chunks created, search
     results, campaign description search
   - Makefile test-integration target added
+- [x] Wiki Links (`[[Entity Name]]` syntax)
+  - `[[Entity Name]]` and `[[Entity Name|display text]]`
+    wiki-link syntax in the Markdown editor and renderer.
+  - Inline autocomplete triggered by `[[` with `pg_trgm` fuzzy
+    matching.
+  - Toolbar insert button with entity search popover.
+  - Clickable wiki links in MarkdownRenderer with entity
+    navigation.
+  - Entity rename propagation across all campaign content.
+  - Entity resolve API endpoint for fuzzy name matching.
+- [x] Convert rich text editor output to Markdown before saving
+  - The MarkdownEditor uses tiptap-markdown for native Markdown
+    round-trip serialization.
 - [x] pgedge_vectorizer UUID primary key workaround
   - Hotfix SQL patches enable_vectorization and
     vectorization_trigger for UUID support
