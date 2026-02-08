@@ -38,7 +38,7 @@ export interface ContentAnalysisJob {
 export interface ContentAnalysisItem {
     id: number;
     jobId: number;
-    detectionType: 'wiki_link_resolved' | 'wiki_link_unresolved' | 'untagged_mention' | 'misspelling';
+    detectionType: 'wiki_link_resolved' | 'wiki_link_unresolved' | 'untagged_mention' | 'potential_alias' | 'misspelling';
     matchedText: string;
     entityId?: number;
     similarity?: number;

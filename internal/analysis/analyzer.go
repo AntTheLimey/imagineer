@@ -44,7 +44,7 @@ const similarityThresholdResolved = 0.9
 
 // similarityThresholdMinimum is the minimum similarity score for a
 // fuzzy match to be considered a possible suggestion.
-const similarityThresholdMinimum = 0.4
+const similarityThresholdMinimum = 0.6
 
 // Analyzer performs content analysis against campaign entities stored
 // in the database.
@@ -249,7 +249,9 @@ func (a *Analyzer) scanUntaggedMentions(
 // scanMisspellings extracts capitalized phrases from plain text and
 // checks each against the entity list using fuzzy matching. Only
 // results with similarity between the minimum threshold and the
-// resolved threshold are kept.
+// resolved threshold are kept. Matches are classified as
+// "potential_alias" when the matched phrase is a substring of the
+// entity name or vice versa, and as "misspelling" otherwise.
 func (a *Analyzer) scanMisspellings(
 	ctx context.Context,
 	campaignID int64,
@@ -293,8 +295,17 @@ func (a *Analyzer) scanMisspellings(
 		snippet := extractContextSnippet(plainText, loc[0], loc[1])
 		entityID := r.ID
 
+		// Classify as alias or misspelling based on substring
+		// relationship.
+		detectionType := "misspelling"
+		lowerPhrase := strings.ToLower(phrase)
+		lowerEntityName := strings.ToLower(r.Name)
+		if strings.Contains(lowerEntityName, lowerPhrase) || strings.Contains(lowerPhrase, lowerEntityName) {
+			detectionType = "potential_alias"
+		}
+
 		items = append(items, models.ContentAnalysisItem{
-			DetectionType:  "misspelling",
+			DetectionType:  detectionType,
 			MatchedText:    phrase,
 			EntityID:       &entityID,
 			Similarity:     &r.Similarity,

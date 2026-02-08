@@ -322,16 +322,18 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 	// brackets within the source content.
 	if req.Resolution == "accepted" || req.Resolution == "new_entity" {
 		var posStart, posEnd *int
-		var matchedText, srcTable, srcField string
+		var matchedText, srcTable, srcField, detectionType string
 		var srcID int64
 		err := h.db.QueryRow(r.Context(),
 			`SELECT i.position_start, i.position_end, i.matched_text,
+			        i.detection_type,
 			        j.source_table, j.source_id, j.source_field
 			 FROM content_analysis_items i
 			 JOIN content_analysis_jobs j ON i.job_id = j.id
 			 WHERE i.id = $1`,
 			itemID,
-		).Scan(&posStart, &posEnd, &matchedText, &srcTable, &srcID, &srcField)
+		).Scan(&posStart, &posEnd, &matchedText, &detectionType,
+			&srcTable, &srcID, &srcField)
 		if err != nil {
 			log.Printf("Error fetching item details for content fix (item %d): %v",
 				itemID, err)
@@ -340,6 +342,21 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 			var replacement string
 			if req.Resolution == "new_entity" && req.EntityName != nil && *req.EntityName != "" {
 				replacement = "[[" + *req.EntityName + "]]"
+			} else if detectionType == "potential_alias" && resolvedEntityID != nil {
+				// For potential aliases, use wiki alias syntax
+				// to preserve the original display text.
+				var entityName string
+				err = h.db.QueryRow(r.Context(),
+					"SELECT name FROM entities WHERE id = $1",
+					*resolvedEntityID,
+				).Scan(&entityName)
+				if err != nil {
+					log.Printf("Error fetching entity name for alias link (item %d): %v",
+						itemID, err)
+					replacement = "[[" + matchedText + "]]"
+				} else {
+					replacement = "[[" + entityName + "|" + matchedText + "]]"
+				}
 			} else {
 				replacement = "[[" + matchedText + "]]"
 			}

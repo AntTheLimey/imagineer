@@ -74,6 +74,11 @@ const DETECTION_GROUPS = [
         color: '#2196f3',
     },
     {
+        key: 'potential_alias' as const,
+        label: 'Potential Aliases',
+        color: '#9c27b0',
+    },
+    {
         key: 'misspelling' as const,
         label: 'Misspellings',
         color: '#ffc107',
