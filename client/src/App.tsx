@@ -32,6 +32,7 @@ import Timeline from './pages/Timeline';
 import Login from './pages/Login';
 import AuthCallback from './pages/AuthCallback';
 import AccountSettings from './pages/AccountSettings';
+import AnalysisTriagePage from './pages/AnalysisTriagePage';
 
 /**
  * Guards access to child routes based on authentication state.
@@ -204,6 +205,11 @@ function AppRoutes() {
                     <Route
                         path="/campaigns/:campaignId/chapters/:chapterId/edit"
                         element={<ChapterEditorPage />}
+                    />
+                    {/* Analysis triage */}
+                    <Route
+                        path="/campaigns/:campaignId/analysis/:jobId"
+                        element={<AnalysisTriagePage />}
                     />
                 </Route>
             </Route>
