@@ -268,6 +268,7 @@ export default function CampaignSettings({
                     placeholder="Describe your campaign setting, themes, and background..."
                     minHeight={150}
                     maxHeight={300}
+                    campaignId={campaign?.id}
                 />
             </Box>
 

@@ -556,6 +556,7 @@ export default function ChapterEditorPage() {
                             onChange={(value) => updateField('overview', value)}
                             placeholder="Describe this chapter's story arc, themes, and key events..."
                             minHeight={300}
+                            campaignId={campaignId}
                         />
 
                         {/* Sort Order */}

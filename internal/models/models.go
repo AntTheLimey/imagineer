@@ -563,6 +563,15 @@ type UpdatePlayerCharacterRequest struct {
 	Background    *string `json:"background,omitempty"`
 }
 
+// EntityResolveResult represents a fuzzy-matched entity returned by the
+// entity resolve endpoint for wiki-link autocomplete.
+type EntityResolveResult struct {
+	ID         int64      `json:"id"`
+	Name       string     `json:"name"`
+	EntityType EntityType `json:"entityType"`
+	Similarity float64    `json:"similarity"`
+}
+
 // SearchResult represents a content chunk returned by hybrid search.
 type SearchResult struct {
 	SourceTable   string  `json:"sourceTable"`

@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Wiki Links (`[[Entity Name]]` syntax)
+  - `[[Entity Name]]` and `[[Entity Name|display text]]` wiki-link
+    syntax in the Markdown editor and renderer.
+  - Inline autocomplete triggered by `[[` with fuzzy entity name
+    matching via `pg_trgm`.
+  - Toolbar insert button for wiki-link insertion via entity
+    search.
+  - Clickable wiki links in read mode navigate to entity search.
+  - Entity rename propagation updates all wiki links across
+    campaign content (entities, chapters, sessions, memories,
+    timelines, relationships) in a single transaction.
+  - Entity resolve API endpoint
+    `GET /campaigns/{id}/entities/resolve` for fuzzy name
+    matching.
 - Ollama Embedding Pipeline (Local-First Semantic Search)
   - Ollama container in Docker Compose for local embedding
     generation using `mxbai-embed-large` model (1024 dimensions).

@@ -15,7 +15,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
     Alert,
     Box,
@@ -68,7 +68,17 @@ type EditableField = 'name' | 'description' | 'genre' | 'imageStylePrompt';
 export default function CampaignOverview() {
     const { id } = useParams<{ id: string }>();
     const campaignId = id ? Number(id) : undefined;
+    const navigate = useNavigate();
     const { setCurrentCampaignId } = useCampaignContext();
+
+    /**
+     * Navigate to entities page filtered by the clicked wiki link name.
+     */
+    const handleEntityClick = useCallback((name: string) => {
+        if (campaignId) {
+            navigate(`/campaigns/${campaignId}/entities?search=${encodeURIComponent(name)}`);
+        }
+    }, [campaignId, navigate]);
 
     // Editing state
     const [isEditing, setIsEditing] = useState(false);
@@ -515,6 +525,7 @@ export default function CampaignOverview() {
                                 placeholder="Describe your campaign setting, themes, and background..."
                                 minHeight={150}
                                 maxHeight={300}
+                                campaignId={campaignId}
                             />
                             {editingField === 'description' && (
                                 <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
@@ -544,7 +555,10 @@ export default function CampaignOverview() {
                                 '& p:last-child': { mb: 0 },
                             }}
                         >
-                            <MarkdownRenderer content={campaign.description} />
+                            <MarkdownRenderer
+                                content={campaign.description}
+                                onEntityClick={handleEntityClick}
+                            />
                         </Box>
                     ) : (
                         <Typography variant="body1" color="text.secondary" fontStyle="italic">

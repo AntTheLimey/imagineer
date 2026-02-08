@@ -124,7 +124,9 @@ func (db *DB) CreateEntity(ctx context.Context, campaignID int64, req models.Cre
 	return &e, nil
 }
 
-// UpdateEntity updates an existing entity.
+// UpdateEntity updates an existing entity. If the entity name changes,
+// all wiki links referencing the old name are updated across campaign
+// content within the same transaction.
 func (db *DB) UpdateEntity(ctx context.Context, id int64, req models.UpdateEntityRequest) (*models.Entity, error) {
 	// First get the existing entity
 	existing, err := db.GetEntity(ctx, id)
@@ -178,6 +180,16 @@ func (db *DB) UpdateEntity(ctx context.Context, id int64, req models.UpdateEntit
 		sourceConfidence = *req.SourceConfidence
 	}
 
+	nameChanged := req.Name != nil && *req.Name != existing.Name
+
+	// Use a transaction so the entity update and wiki link propagation
+	// are atomic.
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // Rollback is a no-op if already committed
+
 	query := `
         UPDATE entities
         SET entity_type = $2, name = $3, description = $4, attributes = $5,
@@ -189,7 +201,7 @@ func (db *DB) UpdateEntity(ctx context.Context, id int64, req models.UpdateEntit
                   source_confidence, version, created_at, updated_at`
 
 	var e models.Entity
-	err = db.QueryRow(ctx, query,
+	err = tx.QueryRow(ctx, query,
 		id, entityType, name, description, attributes,
 		tags, gmNotes, discoveredSession,
 		sourceDocument, sourceConfidence,
@@ -201,6 +213,18 @@ func (db *DB) UpdateEntity(ctx context.Context, id int64, req models.UpdateEntit
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update entity: %w", err)
+	}
+
+	// Propagate the name change to all wiki links in campaign content
+	if nameChanged {
+		_, err = PropagateEntityRename(ctx, tx, existing.CampaignID, existing.Name, *req.Name)
+		if err != nil {
+			return nil, fmt.Errorf("failed to propagate entity rename: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return &e, nil

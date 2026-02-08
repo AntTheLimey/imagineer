@@ -8,9 +8,12 @@
  *-------------------------------------------------------------------------
  */
 
+import { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Box } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material';
+import remarkWikiLinks from './remarkWikiLinks';
+import WikiLinkInline from './WikiLinkInline';
 
 /**
  * Props for the MarkdownRenderer component.
@@ -25,6 +28,13 @@ export interface MarkdownRendererProps {
      * truncated with an ellipsis after the specified number of lines.
      */
     maxLines?: number;
+    /**
+     * Callback fired when a wiki link `[[Entity Name]]` is clicked.
+     *
+     * Receives the canonical entity name extracted from the wiki-link
+     * syntax.
+     */
+    onEntityClick?: (name: string) => void;
 }
 
 /**
@@ -32,7 +42,8 @@ export interface MarkdownRendererProps {
  *
  * This whitelist prevents rendering of potentially dangerous elements
  * such as images, links, and iframes while permitting standard text
- * formatting and structural elements.
+ * formatting and structural elements. The `wiki-link` entry allows
+ * the custom element produced by the remarkWikiLinks plugin.
  */
 const ALLOWED_ELEMENTS = [
     'p', 'strong', 'em', 'del',
@@ -40,6 +51,7 @@ const ALLOWED_ELEMENTS = [
     'ul', 'ol', 'li',
     'blockquote', 'hr', 'br',
     'code', 'pre',
+    'wiki-link',
 ];
 
 /**
@@ -81,6 +93,11 @@ const typographySx: SxProps<Theme> = {
  * line clamping for preview contexts such as entity cards and search
  * snippets.
  *
+ * Wiki-link syntax (`[[Entity Name]]` or `[[Entity Name|display text]]`)
+ * is transformed by the remarkWikiLinks plugin into clickable inline
+ * elements. When `onEntityClick` is provided, clicking a wiki link
+ * invokes the callback with the entity name.
+ *
  * @param props - The component props.
  * @returns A React element containing the rendered Markdown, or null
  *          if content is falsy.
@@ -90,15 +107,50 @@ const typographySx: SxProps<Theme> = {
  * <MarkdownRenderer content={entity.description} />
  *
  * <MarkdownRenderer content={entity.description} maxLines={3} />
+ *
+ * <MarkdownRenderer
+ *     content={session.notes}
+ *     onEntityClick={(name) => console.log('Navigate to', name)}
+ * />
  * ```
  */
 export default function MarkdownRenderer({
     content,
     maxLines,
+    onEntityClick,
 }: MarkdownRendererProps) {
-    if (!content) {
-        return null;
-    }
+    /**
+     * Custom component mapping for react-markdown.
+     *
+     * The `wiki-link` element is produced by the remarkWikiLinks remark
+     * plugin and rendered by WikiLinkInline. The `onEntityClick`
+     * callback is captured via closure so that each wiki link instance
+     * receives it as a prop.
+     *
+     * The explicit `any` in the return type is required because
+     * react-markdown's `Components` type does not include custom
+     * element names such as `wiki-link`.
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const components: Record<string, React.ComponentType<any>> = useMemo(() => ({
+        'wiki-link': ({
+            entityName,
+            displayText,
+            children,
+        }: {
+            entityName?: string;
+            displayText?: string;
+            children?: React.ReactNode;
+        }) => (
+            <WikiLinkInline
+                entityName={entityName}
+                displayText={displayText}
+                onEntityClick={onEntityClick}
+            >
+                {children}
+            </WikiLinkInline>
+        ),
+    }), [onEntityClick]);
 
     const clampSx: SxProps<Theme> = maxLines
         ? {
@@ -109,11 +161,17 @@ export default function MarkdownRenderer({
         }
         : {};
 
+    if (!content) {
+        return null;
+    }
+
     return (
         <Box sx={[typographySx, clampSx] as SxProps<Theme>}>
             <ReactMarkdown
                 allowedElements={ALLOWED_ELEMENTS}
                 unwrapDisallowed
+                remarkPlugins={[remarkWikiLinks]}
+                components={components}
             >
                 {content}
             </ReactMarkdown>

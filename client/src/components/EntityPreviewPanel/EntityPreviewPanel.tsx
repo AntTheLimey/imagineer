@@ -7,6 +7,7 @@
 //
 // -------------------------------------------------------------------------
 
+import { useNavigate } from 'react-router-dom';
 import {
     Box,
     Button,
@@ -99,6 +100,15 @@ export default function EntityPreviewPanel({
     onEdit,
     onDelete,
 }: EntityPreviewPanelProps) {
+    const navigate = useNavigate();
+
+    /**
+     * Navigate to entities page filtered by the clicked wiki link name.
+     */
+    const handleEntityClick = (name: string) => {
+        navigate(`/campaigns/${campaignId}/entities?search=${encodeURIComponent(name)}`);
+    };
+
     // Fetch relationships for the selected entity
     const { data: relationships } = useEntityRelationships(
         campaignId,
@@ -202,7 +212,11 @@ export default function EntityPreviewPanel({
                             '& p:last-child': { mb: 0 },
                         }}
                     >
-                        <MarkdownRenderer content={entity.description} maxLines={6} />
+                        <MarkdownRenderer
+                            content={entity.description}
+                            maxLines={6}
+                            onEntityClick={handleEntityClick}
+                        />
                     </Box>
                 ) : (
                     <Typography variant="body2">No description</Typography>

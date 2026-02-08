@@ -145,3 +145,6 @@ export type {
     UseEntityDetectionOptions,
     UseEntityDetectionReturn,
 } from './useEntityDetection';
+
+// Entity resolve hooks
+export { useEntityResolve, entityResolveKeys } from './useEntityResolve';

@@ -65,6 +65,7 @@ func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string)
 	importHandler := NewImportHandler(db)
 	agentHandler := NewAgentHandler(db)
 	entityDetectionHandler := NewEntityDetectionHandler(db)
+	entityResolveHandler := NewEntityResolveHandler(db)
 
 	// API routes
 	r.Route("/api", func(r chi.Router) {
@@ -115,6 +116,7 @@ func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string)
 					r.Get("/entities", h.ListEntities)
 					r.Post("/entities", h.CreateEntity)
 					r.Get("/entities/search", h.SearchEntities)
+					r.Get("/entities/resolve", entityResolveHandler.ResolveEntity)
 
 					// Entity-specific routes within campaign context
 					r.Route("/entities/{entityId}", func(r chi.Router) {
