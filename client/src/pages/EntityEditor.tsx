@@ -20,6 +20,7 @@ import {
     Alert,
     Autocomplete,
     Box,
+    Button,
     Chip,
     FormControl,
     InputLabel,
@@ -27,6 +28,7 @@ import {
     Paper,
     Select,
     Skeleton,
+    Snackbar,
     TextField,
     Typography,
 } from '@mui/material';
@@ -237,6 +239,13 @@ export default function EntityEditor() {
 
     const isSaving = createEntity.isPending || updateEntity.isPending;
 
+    // Analysis snackbar state
+    const [analysisSnackbar, setAnalysisSnackbar] = useState<{
+        open: boolean;
+        jobId: number;
+        count: number;
+    }>({ open: false, jobId: 0, count: 0 });
+
     // Initialize form data from existing entity or check for draft
     useEffect(() => {
         if (!isNewEntity && existingEntity) {
@@ -386,7 +395,7 @@ export default function EntityEditor() {
                     replace: true,
                 });
             } else if (entityId) {
-                await updateEntity.mutateAsync({
+                const result = await updateEntity.mutateAsync({
                     campaignId,
                     entityId,
                     input: {
@@ -398,6 +407,17 @@ export default function EntityEditor() {
                         sourceConfidence: formData.sourceConfidence,
                     },
                 });
+
+                // Check for analysis results
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const analysisResult = (result as any)?._analysis;
+                if (analysisResult?.pendingCount > 0) {
+                    setAnalysisSnackbar({
+                        open: true,
+                        jobId: analysisResult.jobId,
+                        count: analysisResult.pendingCount,
+                    });
+                }
 
                 // Clean up draft
                 deleteDraft(draftKey);
@@ -707,6 +727,26 @@ export default function EntityEditor() {
                     </FormControl>
                 </Paper>
             </Box>
+
+            {/* Analysis results snackbar */}
+            <Snackbar
+                open={analysisSnackbar.open}
+                autoHideDuration={10000}
+                onClose={() => setAnalysisSnackbar(prev => ({ ...prev, open: false }))}
+                message={`Analysis found ${analysisSnackbar.count} item${analysisSnackbar.count === 1 ? '' : 's'} to review`}
+                action={
+                    <Button
+                        color="warning"
+                        size="small"
+                        onClick={() => {
+                            setAnalysisSnackbar(prev => ({ ...prev, open: false }));
+                            navigate(`/campaigns/${campaignId}/analysis/${analysisSnackbar.jobId}`);
+                        }}
+                    >
+                        Review Now
+                    </Button>
+                }
+            />
 
             {/* Navigation confirmation dialog */}
             {ConfirmDialog}

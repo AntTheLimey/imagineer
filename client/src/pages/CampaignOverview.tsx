@@ -41,6 +41,7 @@ import {
     Close as CancelIcon,
     Check as CheckIcon,
 } from '@mui/icons-material';
+import { AnalysisBadge } from '../components/AnalysisBadge';
 import { MarkdownEditor } from '../components/MarkdownEditor';
 import { GENRE_OPTIONS } from '../components/CampaignSettings';
 import {
@@ -177,7 +178,7 @@ export default function CampaignOverview() {
         if (!campaignId || !editingField) return;
 
         try {
-            await updateCampaign.mutateAsync({
+            const result = await updateCampaign.mutateAsync({
                 id: campaignId!,
                 input: {
                     name: formData.name.trim(),
@@ -188,11 +189,21 @@ export default function CampaignOverview() {
                     },
                 },
             });
+
+            // Check for analysis results
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const analysisResult = (result as any)?._analysis;
+            if (analysisResult?.pendingCount > 0) {
+                setEditingField(null);
+                navigate(`/campaigns/${campaignId}/analysis/${analysisResult.jobId}`);
+                return;
+            }
+
             setEditingField(null);
         } catch (error) {
             console.error('Failed to save field:', error);
         }
-    }, [campaignId, editingField, formData, updateCampaign]);
+    }, [campaignId, editingField, formData, updateCampaign, navigate]);
 
     /**
      * Toggle full edit mode.
@@ -225,7 +236,7 @@ export default function CampaignOverview() {
         }
 
         try {
-            await updateCampaign.mutateAsync({
+            const result = await updateCampaign.mutateAsync({
                 id: campaignId!,
                 input: {
                     name: formData.name.trim(),
@@ -236,11 +247,21 @@ export default function CampaignOverview() {
                     },
                 },
             });
+
+            // Check for analysis results
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const analysisResult = (result as any)?._analysis;
+            if (analysisResult?.pendingCount > 0) {
+                setIsEditing(false);
+                navigate(`/campaigns/${campaignId}/analysis/${analysisResult.jobId}`);
+                return;
+            }
+
             setIsEditing(false);
         } catch (error) {
             console.error('Failed to save campaign:', error);
         }
-    }, [campaignId, formData, updateCampaign]);
+    }, [campaignId, formData, updateCampaign, navigate]);
 
     /**
      * Update form field.
@@ -319,7 +340,7 @@ export default function CampaignOverview() {
                     {updateCampaign.isPending ? (
                         <CircularProgress size={20} />
                     ) : isEditing ? (
-                        'Save Changes'
+                        'Save & Analyze'
                     ) : (
                         'Edit Campaign'
                     )}
@@ -336,7 +357,7 @@ export default function CampaignOverview() {
             {/* Cancel button when in edit mode */}
             {isEditing && (
                 <Alert severity="info" sx={{ mb: 2 }}>
-                    You are in edit mode. Make your changes and click "Save Changes" to save.
+                    You are in edit mode. Make your changes and click "Save & Analyze" to save.
                     <Button
                         size="small"
                         onClick={handleToggleEdit}
@@ -345,6 +366,16 @@ export default function CampaignOverview() {
                         Cancel
                     </Button>
                 </Alert>
+            )}
+
+            {/* Pending analysis banner */}
+            {campaignId && (
+                <Box sx={{ mb: 2 }}>
+                    <AnalysisBadge
+                        campaignId={campaignId}
+                        variant="banner"
+                    />
+                </Box>
             )}
 
             {/* Quick Stats */}
@@ -647,6 +678,7 @@ export default function CampaignOverview() {
                     </Typography>
                 </Box>
             </Box>
+
         </Box>
     );
 }

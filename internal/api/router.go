@@ -66,6 +66,7 @@ func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string)
 	agentHandler := NewAgentHandler(db)
 	entityDetectionHandler := NewEntityDetectionHandler(db)
 	entityResolveHandler := NewEntityResolveHandler(db)
+	contentAnalysisHandler := NewContentAnalysisHandler(db)
 
 	// API routes
 	r.Route("/api", func(r chi.Router) {
@@ -194,6 +195,20 @@ func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string)
 					// Campaign agent endpoints
 					r.Route("/agents", func(r chi.Router) {
 						r.Post("/consistency-check", agentHandler.RunConsistencyCheck)
+					})
+
+					// Content analysis
+					r.Route("/analysis", func(r chi.Router) {
+						r.Get("/jobs", contentAnalysisHandler.ListJobs)
+						r.Post("/trigger", contentAnalysisHandler.TriggerAnalysis)
+						r.Get("/pending-count", contentAnalysisHandler.GetPendingCount)
+						r.Route("/jobs/{jobId}", func(r chi.Router) {
+							r.Get("/", contentAnalysisHandler.GetJob)
+							r.Get("/items", contentAnalysisHandler.ListJobItems)
+							r.Put("/resolve-all", contentAnalysisHandler.BatchResolve)
+						})
+						r.Put("/items/{itemId}", contentAnalysisHandler.ResolveItem)
+						r.Put("/items/{itemId}/revert", contentAnalysisHandler.RevertItem)
 					})
 				})
 			})

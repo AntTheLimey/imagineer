@@ -88,3 +88,14 @@ export type {
 
 export { entityResolveApi } from './entityResolve';
 export type { EntityResolveResult } from './entityResolve';
+
+export { contentAnalysisApi } from './contentAnalysis';
+export type {
+    ContentAnalysisJob,
+    ContentAnalysisItem,
+    AnalysisSummary,
+    ResolveAnalysisItemRequest,
+    TriggerAnalysisRequest,
+    TriggerAnalysisResponse,
+    PendingCountResponse,
+} from './contentAnalysis';

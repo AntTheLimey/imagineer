@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/antonypegg/imagineer/internal/analysis"
 	"github.com/antonypegg/imagineer/internal/auth"
 	"github.com/antonypegg/imagineer/internal/database"
 	"github.com/antonypegg/imagineer/internal/models"
@@ -26,12 +27,40 @@ import (
 
 // Handler provides HTTP handlers for the API.
 type Handler struct {
-	db *database.DB
+	db       *database.DB
+	analyzer *analysis.Analyzer
 }
 
 // NewHandler creates a new Handler with the given database connection.
 func NewHandler(db *database.DB) *Handler {
-	return &Handler{db: db}
+	return &Handler{
+		db:       db,
+		analyzer: analysis.NewAnalyzer(db),
+	}
+}
+
+// EntityWithAnalysis wraps an entity response with optional analysis metadata.
+type EntityWithAnalysis struct {
+	*models.Entity
+	Analysis *models.AnalysisSummary `json:"_analysis,omitempty"`
+}
+
+// CampaignWithAnalysis wraps a campaign response with optional analysis metadata.
+type CampaignWithAnalysis struct {
+	*models.Campaign
+	Analysis *models.AnalysisSummary `json:"_analysis,omitempty"`
+}
+
+// ChapterWithAnalysis wraps a chapter response with optional analysis metadata.
+type ChapterWithAnalysis struct {
+	*models.Chapter
+	Analysis *models.AnalysisSummary `json:"_analysis,omitempty"`
+}
+
+// SessionWithAnalysis wraps a session response with optional analysis metadata.
+type SessionWithAnalysis struct {
+	*models.Session
+	Analysis *models.AnalysisSummary `json:"_analysis,omitempty"`
 }
 
 // respondJSON writes a JSON response.
@@ -263,7 +292,27 @@ func (h *Handler) UpdateCampaign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, campaign)
+	response := CampaignWithAnalysis{Campaign: campaign}
+	if req.Description != nil {
+		content := ""
+		if req.Description != nil {
+			content = *req.Description
+		}
+		job, items, analyzeErr := h.analyzer.AnalyzeContent(
+			r.Context(), campaign.ID,
+			"campaigns", "description", campaign.ID,
+			content,
+		)
+		if analyzeErr != nil {
+			log.Printf("Content analysis failed for campaign %d: %v", campaign.ID, analyzeErr)
+		} else if len(items) > 0 {
+			response.Analysis = &models.AnalysisSummary{
+				JobID:        job.ID,
+				PendingCount: job.TotalItems,
+			}
+		}
+	}
+	respondJSON(w, http.StatusOK, response)
 }
 
 // DeleteCampaign handles DELETE /api/campaigns/:id
@@ -438,7 +487,48 @@ func (h *Handler) UpdateEntity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, entity)
+	// Trigger content analysis if description changed
+	response := EntityWithAnalysis{Entity: entity}
+	if req.Description != nil {
+		content := ""
+		if req.Description != nil {
+			content = *req.Description
+		}
+		job, items, analyzeErr := h.analyzer.AnalyzeContent(
+			r.Context(), entity.CampaignID,
+			"entities", "description", entity.ID,
+			content,
+		)
+		if analyzeErr != nil {
+			log.Printf("Content analysis failed for entity %d description: %v", entity.ID, analyzeErr)
+		} else if len(items) > 0 {
+			response.Analysis = &models.AnalysisSummary{
+				JobID:        job.ID,
+				PendingCount: job.TotalItems,
+			}
+		}
+	}
+	// Also analyze GM notes if changed
+	if req.GMNotes != nil {
+		content := ""
+		if req.GMNotes != nil {
+			content = *req.GMNotes
+		}
+		job, items, analyzeErr := h.analyzer.AnalyzeContent(
+			r.Context(), entity.CampaignID,
+			"entities", "gm_notes", entity.ID,
+			content,
+		)
+		if analyzeErr != nil {
+			log.Printf("Content analysis failed for entity %d gm_notes: %v", entity.ID, analyzeErr)
+		} else if response.Analysis == nil && len(items) > 0 {
+			response.Analysis = &models.AnalysisSummary{
+				JobID:        job.ID,
+				PendingCount: job.TotalItems,
+			}
+		}
+	}
+	respondJSON(w, http.StatusOK, response)
 }
 
 // DeleteEntity handles DELETE /api/entities/:id
@@ -1632,7 +1722,27 @@ func (h *Handler) UpdateChapter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, chapter)
+	response := ChapterWithAnalysis{Chapter: chapter}
+	if req.Overview != nil {
+		content := ""
+		if req.Overview != nil {
+			content = *req.Overview
+		}
+		job, items, analyzeErr := h.analyzer.AnalyzeContent(
+			r.Context(), chapter.CampaignID,
+			"chapters", "overview", chapter.ID,
+			content,
+		)
+		if analyzeErr != nil {
+			log.Printf("Content analysis failed for chapter %d: %v", chapter.ID, analyzeErr)
+		} else if len(items) > 0 {
+			response.Analysis = &models.AnalysisSummary{
+				JobID:        job.ID,
+				PendingCount: job.TotalItems,
+			}
+		}
+	}
+	respondJSON(w, http.StatusOK, response)
 }
 
 // DeleteChapter handles DELETE /api/campaigns/{id}/chapters/{chapterId}
@@ -1892,7 +2002,46 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, session)
+	response := SessionWithAnalysis{Session: session}
+	if req.PrepNotes != nil {
+		content := ""
+		if req.PrepNotes != nil {
+			content = *req.PrepNotes
+		}
+		job, items, analyzeErr := h.analyzer.AnalyzeContent(
+			r.Context(), session.CampaignID,
+			"sessions", "prep_notes", session.ID,
+			content,
+		)
+		if analyzeErr != nil {
+			log.Printf("Content analysis failed for session %d prep_notes: %v", session.ID, analyzeErr)
+		} else if len(items) > 0 {
+			response.Analysis = &models.AnalysisSummary{
+				JobID:        job.ID,
+				PendingCount: job.TotalItems,
+			}
+		}
+	}
+	if req.ActualNotes != nil {
+		content := ""
+		if req.ActualNotes != nil {
+			content = *req.ActualNotes
+		}
+		job, items, analyzeErr := h.analyzer.AnalyzeContent(
+			r.Context(), session.CampaignID,
+			"sessions", "actual_notes", session.ID,
+			content,
+		)
+		if analyzeErr != nil {
+			log.Printf("Content analysis failed for session %d actual_notes: %v", session.ID, analyzeErr)
+		} else if response.Analysis == nil && len(items) > 0 {
+			response.Analysis = &models.AnalysisSummary{
+				JobID:        job.ID,
+				PendingCount: job.TotalItems,
+			}
+		}
+	}
+	respondJSON(w, http.StatusOK, response)
 }
 
 // DeleteSession handles DELETE /api/campaigns/{id}/sessions/{sessionId}
