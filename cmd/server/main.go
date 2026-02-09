@@ -12,6 +12,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net/http"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/antonypegg/imagineer/internal/api"
 	"github.com/antonypegg/imagineer/internal/auth"
+	"github.com/antonypegg/imagineer/internal/crypto"
 	"github.com/antonypegg/imagineer/internal/database"
 	"github.com/joho/godotenv"
 )
@@ -70,6 +72,22 @@ func main() {
 	defer db.Close()
 
 	log.Println("Connected to database")
+
+	// Configure API key encryption if ENCRYPTION_KEY is set
+	if encKeyHex := os.Getenv("ENCRYPTION_KEY"); encKeyHex != "" {
+		encKey, err := hex.DecodeString(encKeyHex)
+		if err != nil {
+			log.Fatalf("Invalid ENCRYPTION_KEY (must be 64 hex characters): %v", err)
+		}
+		encryptor, err := crypto.NewEncryptor(encKey)
+		if err != nil {
+			log.Fatalf("Failed to create encryptor: %v", err)
+		}
+		db.Encryptor = encryptor
+		log.Println("API key encryption enabled")
+	} else {
+		log.Println("WARNING: ENCRYPTION_KEY not set — API keys will not be encrypted at rest")
+	}
 
 	// Initialize OAuth handler and JWT secret if configuration is available
 	var authHandler *auth.AuthHandler

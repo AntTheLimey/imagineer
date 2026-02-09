@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- API Key Encryption at Rest
+  - AES-256-GCM encryption for user API keys stored in
+    `user_settings` (content generation, embedding, and image
+    generation keys).
+  - `internal/crypto` package with `Encryptor` struct providing
+    `Encrypt`/`Decrypt` methods with random nonces and `enc:`
+    prefix for encrypted value identification.
+  - Transparent encryption in the database layer — API handlers
+    and LLM providers see plaintext, no changes needed.
+  - `ENCRYPTION_KEY` environment variable (64 hex chars) enables
+    encryption; server warns on startup if not set.
+  - Migration 007 NULLs existing plaintext API keys (users
+    re-enter via Account Settings).
 - LLM Enrichment (Phase 4 — Post-Save Content Analysis)
   - LLM client abstraction supporting Anthropic Claude, OpenAI
     GPT-4o, and Ollama local models with exponential backoff retry.

@@ -13,6 +13,8 @@ package database
 import (
 	"context"
 	"fmt"
+	"log"
+	"strings"
 
 	"github.com/antonypegg/imagineer/internal/models"
 	"github.com/jackc/pgx/v5"
@@ -43,6 +45,11 @@ func (db *DB) GetUserSettings(ctx context.Context, userID int64) (*models.UserSe
 		}
 		return nil, fmt.Errorf("failed to get user settings: %w", err)
 	}
+
+	// Decrypt API keys
+	s.ContentGenAPIKey = db.decryptKey(s.ContentGenAPIKey)
+	s.EmbeddingAPIKey = db.decryptKey(s.EmbeddingAPIKey)
+	s.ImageGenAPIKey = db.decryptKey(s.ImageGenAPIKey)
 
 	// Convert string pointers to LLMService pointers
 	if contentGenService != nil {
@@ -91,6 +98,11 @@ func (db *DB) UpdateUserSettings(ctx context.Context, userID int64, req models.U
 		imageGenAPIKey = req.ImageGenAPIKey
 	}
 
+	// Encrypt API keys before writing
+	contentGenAPIKey = db.encryptKey(contentGenAPIKey)
+	embeddingAPIKey = db.encryptKey(embeddingAPIKey)
+	imageGenAPIKey = db.encryptKey(imageGenAPIKey)
+
 	// Use COALESCE to atomically merge: NULL in request preserves existing value
 	query := `
         INSERT INTO user_settings (
@@ -128,6 +140,11 @@ func (db *DB) UpdateUserSettings(ctx context.Context, userID int64, req models.U
 		return nil, fmt.Errorf("failed to update user settings: %w", err)
 	}
 
+	// Decrypt API keys from RETURNING values
+	s.ContentGenAPIKey = db.decryptKey(s.ContentGenAPIKey)
+	s.EmbeddingAPIKey = db.decryptKey(s.EmbeddingAPIKey)
+	s.ImageGenAPIKey = db.decryptKey(s.ImageGenAPIKey)
+
 	// Convert string pointers to LLMService pointers
 	if retContentGenService != nil {
 		svc := models.LLMService(*retContentGenService)
@@ -143,4 +160,42 @@ func (db *DB) UpdateUserSettings(ctx context.Context, userID int64, req models.U
 	}
 
 	return &s, nil
+}
+
+// encryptKey encrypts an API key if encryption is configured.
+// Returns the original value if Encryptor is nil or the key is nil/empty.
+func (db *DB) encryptKey(key *string) *string {
+	if db.Encryptor == nil || key == nil || *key == "" {
+		return key
+	}
+	encrypted, err := db.Encryptor.Encrypt(*key)
+	if err != nil {
+		log.Printf("WARNING: failed to encrypt API key: %v", err)
+		return key
+	}
+	return &encrypted
+}
+
+// decryptKey decrypts an API key if encryption is configured.
+// Returns nil on decryption failure (user must re-enter key).
+// When no Encryptor is available but the stored value carries the "enc:"
+// prefix, the key is treated as unreadable and nil is returned so the
+// caller sees it as absent rather than leaking ciphertext.
+func (db *DB) decryptKey(key *string) *string {
+	if key == nil || *key == "" {
+		return key
+	}
+	if db.Encryptor == nil {
+		if strings.HasPrefix(*key, "enc:") {
+			log.Printf("WARNING: encrypted API key found but ENCRYPTION_KEY not set (re-enter required)")
+			return nil
+		}
+		return key
+	}
+	decrypted, err := db.Encryptor.Decrypt(*key)
+	if err != nil {
+		log.Printf("WARNING: failed to decrypt API key (re-enter required): %v", err)
+		return nil
+	}
+	return &decrypted
 }

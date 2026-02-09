@@ -18,6 +18,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/antonypegg/imagineer/internal/crypto"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -46,7 +47,8 @@ type UserConfig struct {
 
 // DB wraps a pgxpool.Pool with helper methods.
 type DB struct {
-	Pool *pgxpool.Pool
+	Pool      *pgxpool.Pool
+	Encryptor *crypto.Encryptor // nil = no encryption
 }
 
 // LoadConfig reads the database configuration from a JSON file.
