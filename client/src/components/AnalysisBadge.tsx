@@ -74,9 +74,10 @@ export function AnalysisBadge({
     }
 
     // Find the latest job matching the source filter (or the latest job
-    // overall when no filter is provided).
-    const latestJob = jobs
-        ?.filter((job) => {
+    // overall when no filter is provided). Spread the array before sorting
+    // to avoid mutating the React Query cache.
+    const latestJob = [...(jobs ?? [])]
+        .filter((job) => {
             if (sourceTable && sourceId !== undefined) {
                 return (
                     job.sourceTable === sourceTable &&

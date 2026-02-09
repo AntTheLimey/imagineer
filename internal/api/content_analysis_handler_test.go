@@ -72,6 +72,18 @@ func TestContentAnalysisHandler_AuthEnforcement(t *testing.T) {
 			path:   "/api/campaigns/1/analysis/pending-count?sourceTable=entities&sourceId=1",
 			route:  "/api/campaigns/{id}/analysis/pending-count",
 		},
+		{
+			name:   "BatchResolve requires auth",
+			method: http.MethodPut,
+			path:   "/api/campaigns/1/analysis/jobs/1/resolve-all",
+			route:  "/api/campaigns/{id}/analysis/jobs/{jobId}/resolve-all",
+		},
+		{
+			name:   "RevertItem requires auth",
+			method: http.MethodPut,
+			path:   "/api/campaigns/1/analysis/items/1/revert",
+			route:  "/api/campaigns/{id}/analysis/items/{itemId}/revert",
+		},
 	}
 
 	for _, tt := range tests {
@@ -91,7 +103,14 @@ func TestContentAnalysisHandler_AuthEnforcement(t *testing.T) {
 					r.Get(tt.route, handler.GetPendingCount)
 				}
 			case http.MethodPut:
-				r.Put(tt.route, handler.ResolveItem)
+				switch {
+				case tt.route == "/api/campaigns/{id}/analysis/jobs/{jobId}/resolve-all":
+					r.Put(tt.route, handler.BatchResolve)
+				case tt.route == "/api/campaigns/{id}/analysis/items/{itemId}/revert":
+					r.Put(tt.route, handler.RevertItem)
+				default:
+					r.Put(tt.route, handler.ResolveItem)
+				}
 			case http.MethodPost:
 				r.Post(tt.route, handler.TriggerAnalysis)
 			}

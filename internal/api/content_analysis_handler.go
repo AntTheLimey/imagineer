@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -305,6 +306,8 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 		}
 
 		resolvedEntityID = &entity.ID
+		log.Printf("Created entity %d (%q) from analysis item %d in campaign %d",
+			entity.ID, *req.EntityName, itemID, campaignID)
 
 	case "accepted":
 		// Use the existing entity_id from the analysis item.
@@ -356,7 +359,7 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 				itemID, err)
 		} else {
 			fixJobIDFound = true
-			if posStart != nil && posEnd != nil {
+			if posStart != nil && posEnd != nil && !strings.HasPrefix(detectionType, "wiki_link_") {
 				// Determine the replacement text based on resolution type.
 				var replacement string
 				if req.Resolution == "new_entity" && req.EntityName != nil && *req.EntityName != "" {

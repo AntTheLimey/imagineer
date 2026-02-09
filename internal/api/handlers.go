@@ -293,15 +293,19 @@ func (h *Handler) UpdateCampaign(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := CampaignWithAnalysis{Campaign: campaign}
-	if req.Description != nil && *req.Description != "" {
-		job, items, err := h.analyzer.AnalyzeContent(
+	if req.Description != nil {
+		content := ""
+		if req.Description != nil {
+			content = *req.Description
+		}
+		job, items, analyzeErr := h.analyzer.AnalyzeContent(
 			r.Context(), campaign.ID,
 			"campaigns", "description", campaign.ID,
-			*req.Description,
+			content,
 		)
-		if err != nil {
-			log.Printf("Content analysis failed for campaign %d: %v", campaign.ID, err)
-		} else if job != nil && len(items) > 0 {
+		if analyzeErr != nil {
+			log.Printf("Content analysis failed for campaign %d: %v", campaign.ID, analyzeErr)
+		} else if len(items) > 0 {
 			response.Analysis = &models.AnalysisSummary{
 				JobID:        job.ID,
 				PendingCount: job.TotalItems,
@@ -485,15 +489,19 @@ func (h *Handler) UpdateEntity(w http.ResponseWriter, r *http.Request) {
 
 	// Trigger content analysis if description changed
 	response := EntityWithAnalysis{Entity: entity}
-	if req.Description != nil && *req.Description != "" {
-		job, items, err := h.analyzer.AnalyzeContent(
+	if req.Description != nil {
+		content := ""
+		if req.Description != nil {
+			content = *req.Description
+		}
+		job, items, analyzeErr := h.analyzer.AnalyzeContent(
 			r.Context(), entity.CampaignID,
 			"entities", "description", entity.ID,
-			*req.Description,
+			content,
 		)
-		if err != nil {
-			log.Printf("Content analysis failed for entity %d description: %v", entity.ID, err)
-		} else if job != nil && len(items) > 0 {
+		if analyzeErr != nil {
+			log.Printf("Content analysis failed for entity %d description: %v", entity.ID, analyzeErr)
+		} else if len(items) > 0 {
 			response.Analysis = &models.AnalysisSummary{
 				JobID:        job.ID,
 				PendingCount: job.TotalItems,
@@ -501,15 +509,19 @@ func (h *Handler) UpdateEntity(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// Also analyze GM notes if changed
-	if req.GMNotes != nil && *req.GMNotes != "" {
-		job, items, err := h.analyzer.AnalyzeContent(
+	if req.GMNotes != nil {
+		content := ""
+		if req.GMNotes != nil {
+			content = *req.GMNotes
+		}
+		job, items, analyzeErr := h.analyzer.AnalyzeContent(
 			r.Context(), entity.CampaignID,
 			"entities", "gm_notes", entity.ID,
-			*req.GMNotes,
+			content,
 		)
-		if err != nil {
-			log.Printf("Content analysis failed for entity %d gm_notes: %v", entity.ID, err)
-		} else if response.Analysis == nil && job != nil && len(items) > 0 {
+		if analyzeErr != nil {
+			log.Printf("Content analysis failed for entity %d gm_notes: %v", entity.ID, analyzeErr)
+		} else if response.Analysis == nil && len(items) > 0 {
 			response.Analysis = &models.AnalysisSummary{
 				JobID:        job.ID,
 				PendingCount: job.TotalItems,
@@ -1711,15 +1723,19 @@ func (h *Handler) UpdateChapter(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := ChapterWithAnalysis{Chapter: chapter}
-	if req.Overview != nil && *req.Overview != "" {
-		job, items, err := h.analyzer.AnalyzeContent(
+	if req.Overview != nil {
+		content := ""
+		if req.Overview != nil {
+			content = *req.Overview
+		}
+		job, items, analyzeErr := h.analyzer.AnalyzeContent(
 			r.Context(), chapter.CampaignID,
 			"chapters", "overview", chapter.ID,
-			*req.Overview,
+			content,
 		)
-		if err != nil {
-			log.Printf("Content analysis failed for chapter %d: %v", chapter.ID, err)
-		} else if job != nil && len(items) > 0 {
+		if analyzeErr != nil {
+			log.Printf("Content analysis failed for chapter %d: %v", chapter.ID, analyzeErr)
+		} else if len(items) > 0 {
 			response.Analysis = &models.AnalysisSummary{
 				JobID:        job.ID,
 				PendingCount: job.TotalItems,
@@ -1987,30 +2003,38 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := SessionWithAnalysis{Session: session}
-	if req.PrepNotes != nil && *req.PrepNotes != "" {
-		job, items, err := h.analyzer.AnalyzeContent(
+	if req.PrepNotes != nil {
+		content := ""
+		if req.PrepNotes != nil {
+			content = *req.PrepNotes
+		}
+		job, items, analyzeErr := h.analyzer.AnalyzeContent(
 			r.Context(), session.CampaignID,
 			"sessions", "prep_notes", session.ID,
-			*req.PrepNotes,
+			content,
 		)
-		if err != nil {
-			log.Printf("Content analysis failed for session %d prep_notes: %v", session.ID, err)
-		} else if job != nil && len(items) > 0 {
+		if analyzeErr != nil {
+			log.Printf("Content analysis failed for session %d prep_notes: %v", session.ID, analyzeErr)
+		} else if len(items) > 0 {
 			response.Analysis = &models.AnalysisSummary{
 				JobID:        job.ID,
 				PendingCount: job.TotalItems,
 			}
 		}
 	}
-	if req.ActualNotes != nil && *req.ActualNotes != "" {
-		job, items, err := h.analyzer.AnalyzeContent(
+	if req.ActualNotes != nil {
+		content := ""
+		if req.ActualNotes != nil {
+			content = *req.ActualNotes
+		}
+		job, items, analyzeErr := h.analyzer.AnalyzeContent(
 			r.Context(), session.CampaignID,
 			"sessions", "actual_notes", session.ID,
-			*req.ActualNotes,
+			content,
 		)
-		if err != nil {
-			log.Printf("Content analysis failed for session %d actual_notes: %v", session.ID, err)
-		} else if response.Analysis == nil && job != nil && len(items) > 0 {
+		if analyzeErr != nil {
+			log.Printf("Content analysis failed for session %d actual_notes: %v", session.ID, analyzeErr)
+		} else if response.Analysis == nil && len(items) > 0 {
 			response.Analysis = &models.AnalysisSummary{
 				JobID:        job.ID,
 				PendingCount: job.TotalItems,

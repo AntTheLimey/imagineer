@@ -225,29 +225,26 @@ func (a *Analyzer) scanUntaggedMentions(
 	}
 
 	var items []models.ContentAnalysisItem
-	lowerPlain := strings.ToLower(plainText)
 
 	for _, entity := range entities {
 		if len(entity.Name) < 3 {
 			continue
 		}
 
-		lowerName := strings.ToLower(entity.Name)
-		nameLen := len(lowerName)
+		// Use case-insensitive regex matching against the
+		// original plainText to avoid byte-offset misalignment
+		// that occurs when strings.ToLower changes byte lengths
+		// for certain Unicode characters.
+		pattern := "(?i)" + regexp.QuoteMeta(entity.Name)
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			continue
+		}
 
-		// Find ALL occurrences of this entity name in the
-		// plain text, not just the first one.
-		searchFrom := 0
-		for searchFrom <= len(lowerPlain)-nameLen {
-			idx := strings.Index(lowerPlain[searchFrom:], lowerName)
-			if idx < 0 {
-				break
-			}
-			idx += searchFrom
-			end := idx + len(entity.Name)
-
-			// Advance past this match for the next iteration.
-			searchFrom = idx + 1
+		matches := re.FindAllStringIndex(plainText, -1)
+		for _, match := range matches {
+			idx := match[0]
+			end := match[1]
 
 			// Skip if this occurrence overlaps with any wiki
 			// link range in plain-text coordinates.
