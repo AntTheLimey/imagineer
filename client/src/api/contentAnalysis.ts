@@ -80,6 +80,8 @@ export interface ResolveAnalysisItemRequest {
     resolution: 'accepted' | 'new_entity' | 'dismissed';
     entityType?: EntityType;
     entityName?: string;
+    /** Override for the relationship type in a relationship_suggestion. */
+    suggestedContentOverride?: Record<string, unknown>;
 }
 
 /**

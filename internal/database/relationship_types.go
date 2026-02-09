@@ -121,6 +121,32 @@ func (db *DB) DeleteRelationshipType(ctx context.Context, id int64) error {
 	return nil
 }
 
+// GetRelationshipTypeByName retrieves a relationship type by its name for a
+// given campaign. Campaign-specific types take precedence over system defaults.
+func (db *DB) GetRelationshipTypeByName(ctx context.Context, campaignID int64, name string) (*models.RelationshipType, error) {
+	query := `
+		SELECT id, campaign_id, name, inverse_name, is_symmetric,
+		       display_label, inverse_display_label, description,
+		       created_at, updated_at
+		FROM relationship_types
+		WHERE name = $1
+		  AND (campaign_id = $2 OR campaign_id IS NULL)
+		ORDER BY campaign_id DESC NULLS LAST
+		LIMIT 1`
+
+	var rt models.RelationshipType
+	err := db.QueryRow(ctx, query, name, campaignID).Scan(
+		&rt.ID, &rt.CampaignID, &rt.Name, &rt.InverseName, &rt.IsSymmetric,
+		&rt.DisplayLabel, &rt.InverseDisplayLabel, &rt.Description,
+		&rt.CreatedAt, &rt.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get relationship type by name: %w", err)
+	}
+
+	return &rt, nil
+}
+
 // GetInverseType returns the inverse type name for a given relationship type.
 // It checks campaign-specific types first, then falls back to system defaults.
 func (db *DB) GetInverseType(ctx context.Context, campaignID int64, typeName string) (string, error) {

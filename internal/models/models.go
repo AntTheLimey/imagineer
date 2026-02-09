@@ -623,9 +623,10 @@ type ContentAnalysisItem struct {
 
 // ResolveAnalysisItemRequest is the request body for resolving an analysis item.
 type ResolveAnalysisItemRequest struct {
-	Resolution string      `json:"resolution"`
-	EntityType *EntityType `json:"entityType,omitempty"`
-	EntityName *string     `json:"entityName,omitempty"`
+	Resolution               string                 `json:"resolution"`
+	EntityType               *EntityType            `json:"entityType,omitempty"`
+	EntityName               *string                `json:"entityName,omitempty"`
+	SuggestedContentOverride map[string]interface{} `json:"suggestedContentOverride,omitempty"`
 }
 
 // AnalysisSummary provides a brief summary of a content analysis job.

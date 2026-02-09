@@ -268,7 +268,6 @@ func (db *DB) CountPendingAnalysisItems(ctx context.Context, campaignID int64, s
 			WHERE j.campaign_id = $1
 			  AND j.source_table = $2
 			  AND j.source_id = $3
-			  AND i.phase = 'identification'
 			  AND i.resolution = 'pending'`
 		err = db.QueryRow(ctx, query, campaignID, sourceTable, sourceID).Scan(&count)
 	} else {
@@ -277,7 +276,6 @@ func (db *DB) CountPendingAnalysisItems(ctx context.Context, campaignID int64, s
 			FROM content_analysis_items i
 			JOIN content_analysis_jobs j ON i.job_id = j.id
 			WHERE j.campaign_id = $1
-			  AND i.phase = 'identification'
 			  AND i.resolution = 'pending'`
 		err = db.QueryRow(ctx, query, campaignID).Scan(&count)
 	}
@@ -287,6 +285,41 @@ func (db *DB) CountPendingAnalysisItems(ctx context.Context, campaignID int64, s
 	}
 
 	return count, nil
+}
+
+// FindPendingInverseRelationship searches for a pending enrichment item
+// in the same job that represents the inverse of a relationship suggestion.
+// It matches items where the source and target entity IDs are swapped
+// compared to the provided values.
+func (db *DB) FindPendingInverseRelationship(ctx context.Context, jobID int64, sourceEntityID, targetEntityID int64) (*models.ContentAnalysisItem, error) {
+	query := `
+		SELECT i.id, i.job_id, i.detection_type, i.matched_text,
+		       i.entity_id, i.similarity, i.context_snippet,
+		       i.position_start, i.position_end, i.resolution,
+		       i.resolved_entity_id, i.resolved_at, i.created_at,
+		       i.suggested_content, i.phase
+		FROM content_analysis_items i
+		WHERE i.job_id = $1
+		  AND i.detection_type = 'relationship_suggestion'
+		  AND i.phase = 'enrichment'
+		  AND i.resolution = 'pending'
+		  AND (i.suggested_content->>'sourceEntityId')::bigint = $2
+		  AND (i.suggested_content->>'targetEntityId')::bigint = $3
+		LIMIT 1`
+
+	var item models.ContentAnalysisItem
+	err := db.QueryRow(ctx, query, jobID, targetEntityID, sourceEntityID).Scan(
+		&item.ID, &item.JobID, &item.DetectionType, &item.MatchedText,
+		&item.EntityID, &item.Similarity, &item.ContextSnippet,
+		&item.PositionStart, &item.PositionEnd, &item.Resolution,
+		&item.ResolvedEntityID, &item.ResolvedAt, &item.CreatedAt,
+		&item.SuggestedContent, &item.Phase,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find pending inverse relationship: %w", err)
+	}
+
+	return &item, nil
 }
 
 // DeleteAnalysisJobsForSource deletes all analysis jobs (and their items

@@ -343,20 +343,22 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 	// brackets within the source content.
 	var fixJobID int64
 	var fixJobIDFound bool
+	var detectionType string
+	var suggestedContent json.RawMessage
 	if req.Resolution == "accepted" || req.Resolution == "new_entity" {
 		var posStart, posEnd *int
-		var matchedText, srcTable, srcField, detectionType string
+		var matchedText, srcTable, srcField string
 		var srcID int64
 		err := h.db.QueryRow(r.Context(),
 			`SELECT i.position_start, i.position_end, i.matched_text,
-			        i.detection_type, i.job_id,
+			        i.detection_type, i.job_id, i.suggested_content,
 			        j.source_table, j.source_id, j.source_field
 			 FROM content_analysis_items i
 			 JOIN content_analysis_jobs j ON i.job_id = j.id
 			 WHERE i.id = $1`,
 			itemID,
 		).Scan(&posStart, &posEnd, &matchedText, &detectionType,
-			&fixJobID, &srcTable, &srcID, &srcField)
+			&fixJobID, &suggestedContent, &srcTable, &srcID, &srcField)
 		if err != nil {
 			log.Printf("Error fetching item details for content fix (item %d): %v",
 				itemID, err)
@@ -421,6 +423,12 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
+	// Handle relationship_suggestion acceptance: create the actual
+	// relationship and auto-resolve any pending inverse suggestion.
+	if req.Resolution == "accepted" && detectionType == "relationship_suggestion" && len(suggestedContent) > 0 {
+		h.handleRelationshipSuggestion(r.Context(), campaignID, fixJobID, itemID, suggestedContent, req.SuggestedContentOverride)
+	}
+
 	// Update the job's resolved count. Reuse the job ID fetched above
 	// when available; otherwise fall back to a separate lookup.
 	jobID := fixJobID
@@ -434,6 +442,9 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 	} else {
 		if err := h.db.UpdateJobResolvedCount(r.Context(), jobID); err != nil {
 			log.Printf("Error updating job resolved count: %v", err)
+		}
+		if err := h.db.UpdateJobEnrichmentCount(r.Context(), jobID); err != nil {
+			log.Printf("Error updating job enrichment count: %v", err)
 		}
 
 		// Auto-trigger enrichment if all Phase 1 items are resolved
@@ -1160,6 +1171,100 @@ func (h *ContentAnalysisHandler) revertContentFix(
 	return delta, nil
 }
 
+// handleRelationshipSuggestion creates a relationship from an accepted
+// relationship_suggestion enrichment item and auto-resolves any pending
+// inverse suggestion in the same job.
+func (h *ContentAnalysisHandler) handleRelationshipSuggestion(
+	ctx context.Context,
+	campaignID int64,
+	jobID int64,
+	itemID int64,
+	suggestedContent json.RawMessage,
+	override map[string]interface{},
+) {
+	var suggestion models.RelationshipSuggestion
+	if err := json.Unmarshal(suggestedContent, &suggestion); err != nil {
+		log.Printf("Error parsing relationship suggestion for item %d: %v",
+			itemID, err)
+		return
+	}
+
+	// Determine the final relationship type, allowing the user to
+	// override the LLM-suggested type from the triage UI.
+	finalType := suggestion.RelationshipType
+	if override != nil {
+		if overriddenType, ok := override["relationshipType"].(string); ok && overriddenType != "" {
+			finalType = overriddenType
+		}
+	}
+
+	// Create the relationship.
+	desc := suggestion.Description
+	_, err := h.db.CreateRelationship(ctx, campaignID, models.CreateRelationshipRequest{
+		SourceEntityID:   suggestion.SourceEntityID,
+		TargetEntityID:   suggestion.TargetEntityID,
+		RelationshipType: finalType,
+		Description:      &desc,
+	})
+	if err != nil {
+		log.Printf("Error creating relationship from suggestion (item %d): %v",
+			itemID, err)
+		return
+	}
+
+	log.Printf("Created relationship %s -> %s (%s) from enrichment item %d",
+		suggestion.SourceEntityName, suggestion.TargetEntityName,
+		finalType, itemID)
+
+	// Auto-resolve inverse: look for a pending relationship_suggestion
+	// where source/target are swapped.
+	inverseItem, err := h.db.FindPendingInverseRelationship(
+		ctx, jobID, suggestion.SourceEntityID, suggestion.TargetEntityID,
+	)
+	if err != nil {
+		return
+	}
+
+	// Determine the inverse relationship type name.
+	inverseTypeName := finalType
+	inverseName, err := h.db.GetInverseType(ctx, campaignID, finalType)
+	if err != nil {
+		log.Printf("Could not find inverse type for %q in campaign %d: %v",
+			finalType, campaignID, err)
+	} else {
+		inverseTypeName = inverseName
+	}
+
+	// Build the inverse description.
+	inverseDesc := fmt.Sprintf("Inverse of: %s", suggestion.Description)
+
+	// Create the inverse relationship.
+	_, err = h.db.CreateRelationship(ctx, campaignID, models.CreateRelationshipRequest{
+		SourceEntityID:   suggestion.TargetEntityID,
+		TargetEntityID:   suggestion.SourceEntityID,
+		RelationshipType: inverseTypeName,
+		Description:      &inverseDesc,
+	})
+	if err != nil {
+		log.Printf("Error creating inverse relationship for item %d: %v",
+			inverseItem.ID, err)
+	} else {
+		log.Printf(
+			"Created inverse relationship %s -> %s (%s) from auto-resolved item %d",
+			suggestion.TargetEntityName, suggestion.SourceEntityName,
+			inverseTypeName, inverseItem.ID)
+	}
+
+	// Auto-resolve the inverse item.
+	if err := h.db.ResolveAnalysisItem(ctx, inverseItem.ID, "accepted", nil); err != nil {
+		log.Printf("Error auto-resolving inverse item %d: %v",
+			inverseItem.ID, err)
+	} else {
+		log.Printf("Auto-resolved inverse relationship suggestion item %d",
+			inverseItem.ID)
+	}
+}
+
 // tryAutoEnrich automatically triggers LLM enrichment when all Phase 1
 // identification items have been resolved. It silently returns if the
 // user has not configured an LLM provider or if there are no accepted
@@ -1170,10 +1275,13 @@ func (h *ContentAnalysisHandler) tryAutoEnrich(
 	// 1. Fetch user settings to check LLM configuration.
 	settings, err := h.db.GetUserSettings(ctx, userID)
 	if err != nil || settings == nil {
-		return // No settings, silently skip
+		log.Printf("Auto-enrich: skipping job %d — no user settings found for user %d", jobID, userID)
+		return
 	}
 	if settings.ContentGenService == nil || settings.ContentGenAPIKey == nil {
-		return // No LLM configured, silently skip
+		log.Printf("Auto-enrich: skipping job %d — no LLM configured (service=%v, key=%v)",
+			jobID, settings.ContentGenService != nil, settings.ContentGenAPIKey != nil)
+		return
 	}
 
 	// 2. Create LLM provider from user settings.
@@ -1210,7 +1318,8 @@ func (h *ContentAnalysisHandler) tryAutoEnrich(
 	}
 
 	if len(entityIDSet) == 0 {
-		return // No entities to enrich
+		log.Printf("Auto-enrich: skipping job %d — no accepted entities with resolved_entity_id", jobID)
+		return
 	}
 
 	entityIDs := make([]int64, 0, len(entityIDSet))
@@ -1257,6 +1366,7 @@ func (h *ContentAnalysisHandler) tryAutoEnrich(
 	// 8. Spawn background goroutine for enrichment.
 	engine := enrichment.NewEngine(h.db)
 	go func() {
+		log.Printf("Auto-enrich: starting enrichment for job %d with %d entities", jobID, len(entityIDs))
 		bgCtx := context.Background()
 
 		for _, entityID := range entityIDs {
@@ -1321,6 +1431,7 @@ func (h *ContentAnalysisHandler) tryAutoEnrich(
 		}
 
 		// Mark enrichment as completed.
+		log.Printf("Auto-enrich: completed enrichment for job %d", jobID)
 		if err := h.db.Exec(context.Background(),
 			"UPDATE content_analysis_jobs SET status = 'completed' WHERE id = $1",
 			jobID,
