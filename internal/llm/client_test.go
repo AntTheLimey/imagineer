@@ -109,7 +109,7 @@ func TestAnthropicProvider_Complete(t *testing.T) {
 		resp.Usage.OutputTokens = 5
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -194,7 +194,7 @@ func TestOllamaProvider_Complete(t *testing.T) {
 		resp.Message.Content = "ollama response"
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -226,7 +226,7 @@ func TestRetryOn429(t *testing.T) {
 		attempts++
 		if attempts <= 2 {
 			w.WriteHeader(http.StatusTooManyRequests)
-			w.Write([]byte(`{"error":{"message":"rate limited"}}`))
+			_, _ = w.Write([]byte(`{"error":{"message":"rate limited"}}`))
 			return
 		}
 
@@ -237,7 +237,7 @@ func TestRetryOn429(t *testing.T) {
 		resp.Message.Content = "success after retry"
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 

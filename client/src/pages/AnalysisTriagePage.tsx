@@ -579,7 +579,7 @@ export default function AnalysisTriagePage() {
     const [newEntityType, setNewEntityType] = useState<EntityType>('npc');
     const [showNewEntityForm, setShowNewEntityForm] = useState(false);
     const [showDoneDialog, setShowDoneDialog] = useState(false);
-    const [_editedDescription, setEditedDescription] = useState<string>('');
+    const [, setEditedDescription] = useState<string>('');
     const [selectedEntityGroup, setSelectedEntityGroup] = useState<{
         entityId: number;
         detectionType: string;
@@ -843,6 +843,63 @@ export default function AnalysisTriagePage() {
         }
     }, [campaignId, job]);
 
+    /**
+     * Handle resolving an enrichment item (Phase 2). For dismissed items,
+     * simply mark as dismissed. For accepted items, mark as accepted; the
+     * backend applies the suggestion when resolving.
+     */
+    const handleEnrichmentResolve = useCallback(
+        async (
+            itemId: number,
+            resolution: 'accepted' | 'dismissed',
+            item: ContentAnalysisItem,
+        ) => {
+            if (resolution === 'dismissed') {
+                resolveItem.mutate({
+                    itemId,
+                    req: { resolution: 'dismissed' },
+                });
+                return;
+            }
+
+            try {
+                const suggestion = item.suggestedContent;
+                if (!suggestion) {
+                    resolveItem.mutate({
+                        itemId,
+                        req: { resolution: 'accepted' },
+                    });
+                    return;
+                }
+
+                // If the user overrode the relationship type, include
+                // the override so the backend can use the corrected value.
+                const overriddenType = editedRelTypes.get(itemId);
+                const override =
+                    item.detectionType === 'relationship_suggestion' &&
+                    overriddenType
+                        ? {
+                              relationshipType: overriddenType,
+                          }
+                        : undefined;
+
+                resolveItem.mutate({
+                    itemId,
+                    req: {
+                        resolution: 'accepted',
+                        suggestedContentOverride: override,
+                    },
+                });
+            } catch (error) {
+                console.error(
+                    'Failed to apply enrichment suggestion:',
+                    error,
+                );
+            }
+        },
+        [resolveItem, editedRelTypes],
+    );
+
     if (Number.isNaN(numericCampaignId) || Number.isNaN(numericJobId)) {
         return (
             <Box sx={{ p: 4 }}>
@@ -923,63 +980,6 @@ export default function AnalysisTriagePage() {
         setNewEntityType('npc');
         setShowNewEntityForm(false);
     };
-
-    /**
-     * Handle resolving an enrichment item (Phase 2). For dismissed items,
-     * simply mark as dismissed. For accepted items, mark as accepted; the
-     * backend applies the suggestion when resolving.
-     */
-    const handleEnrichmentResolve = useCallback(
-        async (
-            itemId: number,
-            resolution: 'accepted' | 'dismissed',
-            item: ContentAnalysisItem,
-        ) => {
-            if (resolution === 'dismissed') {
-                resolveItem.mutate({
-                    itemId,
-                    req: { resolution: 'dismissed' },
-                });
-                return;
-            }
-
-            try {
-                const suggestion = item.suggestedContent;
-                if (!suggestion) {
-                    resolveItem.mutate({
-                        itemId,
-                        req: { resolution: 'accepted' },
-                    });
-                    return;
-                }
-
-                // If the user overrode the relationship type, include
-                // the override so the backend can use the corrected value.
-                const overriddenType = editedRelTypes.get(itemId);
-                const override =
-                    item.detectionType === 'relationship_suggestion' &&
-                    overriddenType
-                        ? {
-                              relationshipType: overriddenType,
-                          }
-                        : undefined;
-
-                resolveItem.mutate({
-                    itemId,
-                    req: {
-                        resolution: 'accepted',
-                        suggestedContentOverride: override,
-                    },
-                });
-            } catch (error) {
-                console.error(
-                    'Failed to apply enrichment suggestion:',
-                    error,
-                );
-            }
-        },
-        [resolveItem, editedRelTypes],
-    );
 
     /**
      * Highlight matched text within a context snippet.

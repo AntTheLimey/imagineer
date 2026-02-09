@@ -99,9 +99,18 @@ func (db *DB) UpdateUserSettings(ctx context.Context, userID int64, req models.U
 	}
 
 	// Encrypt API keys before writing
-	contentGenAPIKey = db.encryptKey(contentGenAPIKey)
-	embeddingAPIKey = db.encryptKey(embeddingAPIKey)
-	imageGenAPIKey = db.encryptKey(imageGenAPIKey)
+	contentGenAPIKey, err := db.encryptKey(contentGenAPIKey)
+	if err != nil {
+		return nil, err
+	}
+	embeddingAPIKey, err = db.encryptKey(embeddingAPIKey)
+	if err != nil {
+		return nil, err
+	}
+	imageGenAPIKey, err = db.encryptKey(imageGenAPIKey)
+	if err != nil {
+		return nil, err
+	}
 
 	// Use COALESCE to atomically merge: NULL in request preserves existing value
 	query := `
@@ -126,7 +135,7 @@ func (db *DB) UpdateUserSettings(ctx context.Context, userID int64, req models.U
 
 	var s models.UserSettings
 	var retContentGenService, retEmbeddingService, retImageGenService *string
-	err := db.QueryRow(ctx, query,
+	err = db.QueryRow(ctx, query,
 		userID, contentGenService, contentGenAPIKey,
 		embeddingService, embeddingAPIKey,
 		imageGenService, imageGenAPIKey,
@@ -164,16 +173,15 @@ func (db *DB) UpdateUserSettings(ctx context.Context, userID int64, req models.U
 
 // encryptKey encrypts an API key if encryption is configured.
 // Returns the original value if Encryptor is nil or the key is nil/empty.
-func (db *DB) encryptKey(key *string) *string {
+func (db *DB) encryptKey(key *string) (*string, error) {
 	if db.Encryptor == nil || key == nil || *key == "" {
-		return key
+		return key, nil
 	}
 	encrypted, err := db.Encryptor.Encrypt(*key)
 	if err != nil {
-		log.Printf("WARNING: failed to encrypt API key: %v", err)
-		return key
+		return nil, fmt.Errorf("failed to encrypt API key: %w", err)
 	}
-	return &encrypted
+	return &encrypted, nil
 }
 
 // decryptKey decrypts an API key if encryption is configured.
