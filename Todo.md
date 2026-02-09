@@ -387,7 +387,7 @@ Features planned for after initial release.
 
 ### Entity History
 
-- [ ] Entity event log tracking mentions in sessions
+- [x] Entity event log tracking mentions in sessions
   - Build viewable history over time
   - Automatically establish relationship links to other entities mentioned
     in the same content/event
@@ -623,3 +623,15 @@ Features planned for after initial release.
   - Hotfix SQL patches enable_vectorization and
     vectorization_trigger for UUID support
   - All chunk tables rebuilt with UUID source_id columns
+- [x] LLM Enrichment (Phase 4)
+  - LLM client abstraction (Anthropic, OpenAI, Ollama)
+  - Enrichment engine with prompt construction and JSON parsing
+  - Auto-trigger enrichment on Phase 1 triage completion
+  - Entity log table and CRUD API/UI
+  - Triage UI enrichment section (diff view, log entries,
+    relationships)
+  - Custom Ollama Docker image with pre-baked embedding model
+  - SSE streaming and polling for progressive delivery
+  - Relationship type autocomplete with inverse auto-resolve
+  - Dark theme, suggested description, and analysis badge
+    fixes

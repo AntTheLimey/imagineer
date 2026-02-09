@@ -1,6 +1,8 @@
 services:
   ollama:
-    image: ollama/ollama:latest
+    build:
+      context: ./docker/ollama
+      dockerfile: Dockerfile
     container_name: imagineer-ollama
     volumes:
       - ollama-models:/root/.ollama
@@ -64,6 +66,7 @@ services:
       - PGPASSWORD=${POSTGRES_PASSWORD}
       - PGEDGE_LLM_PROVIDER=${LLM_PROVIDER:-anthropic}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - INIT_TOKENS=imagineer-dev-token
     volumes:
       - ./config/mcp:/app/config:ro
     ports:

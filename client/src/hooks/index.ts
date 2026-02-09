@@ -159,5 +159,16 @@ export {
     useRevertItem,
     useTriggerAnalysis,
     usePendingAnalysisCount,
+    useTriggerEnrichment,
+    useEnrichmentStream,
     contentAnalysisKeys,
 } from './useContentAnalysis';
+
+// Entity log hooks
+export {
+    useEntityLogs,
+    useCreateEntityLog,
+    useUpdateEntityLog,
+    useDeleteEntityLog,
+    entityLogKeys,
+} from './useEntityLog';

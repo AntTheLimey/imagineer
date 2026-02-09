@@ -157,6 +157,7 @@ func (a *Analyzer) scanWikiLinks(
 		item := models.ContentAnalysisItem{
 			MatchedText: entityName,
 			Resolution:  "pending",
+			Phase:       "identification",
 		}
 
 		start := loc[0]
@@ -265,6 +266,7 @@ func (a *Analyzer) scanUntaggedMentions(
 				PositionStart:  &idx,
 				PositionEnd:    &end,
 				Resolution:     "pending",
+				Phase:          "identification",
 			})
 		}
 	}
@@ -365,6 +367,7 @@ func (a *Analyzer) scanMisspellings(
 			PositionStart:  &loc[0],
 			PositionEnd:    &loc[1],
 			Resolution:     "pending",
+			Phase:          "identification",
 		})
 	}
 

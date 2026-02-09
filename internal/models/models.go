@@ -584,33 +584,37 @@ type SearchResult struct {
 
 // ContentAnalysisJob represents an analysis run for a content field.
 type ContentAnalysisJob struct {
-	ID            int64     `json:"id"`
-	CampaignID    int64     `json:"campaignId"`
-	SourceTable   string    `json:"sourceTable"`
-	SourceID      int64     `json:"sourceId"`
-	SourceField   string    `json:"sourceField"`
-	Status        string    `json:"status"`
-	TotalItems    int       `json:"totalItems"`
-	ResolvedItems int       `json:"resolvedItems"`
-	CreatedAt     time.Time `json:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt"`
+	ID                 int64     `json:"id"`
+	CampaignID         int64     `json:"campaignId"`
+	SourceTable        string    `json:"sourceTable"`
+	SourceID           int64     `json:"sourceId"`
+	SourceField        string    `json:"sourceField"`
+	Status             string    `json:"status"`
+	TotalItems         int       `json:"totalItems"`
+	ResolvedItems      int       `json:"resolvedItems"`
+	EnrichmentTotal    int       `json:"enrichmentTotal"`
+	EnrichmentResolved int       `json:"enrichmentResolved"`
+	CreatedAt          time.Time `json:"createdAt"`
+	UpdatedAt          time.Time `json:"updatedAt"`
 }
 
 // ContentAnalysisItem represents an individual detection within an analysis job.
 type ContentAnalysisItem struct {
-	ID               int64      `json:"id"`
-	JobID            int64      `json:"jobId"`
-	DetectionType    string     `json:"detectionType"`
-	MatchedText      string     `json:"matchedText"`
-	EntityID         *int64     `json:"entityId,omitempty"`
-	Similarity       *float64   `json:"similarity,omitempty"`
-	ContextSnippet   *string    `json:"contextSnippet,omitempty"`
-	PositionStart    *int       `json:"positionStart,omitempty"`
-	PositionEnd      *int       `json:"positionEnd,omitempty"`
-	Resolution       string     `json:"resolution"`
-	ResolvedEntityID *int64     `json:"resolvedEntityId,omitempty"`
-	ResolvedAt       *time.Time `json:"resolvedAt,omitempty"`
-	CreatedAt        time.Time  `json:"createdAt"`
+	ID               int64           `json:"id"`
+	JobID            int64           `json:"jobId"`
+	DetectionType    string          `json:"detectionType"`
+	MatchedText      string          `json:"matchedText"`
+	EntityID         *int64          `json:"entityId,omitempty"`
+	Similarity       *float64        `json:"similarity,omitempty"`
+	ContextSnippet   *string         `json:"contextSnippet,omitempty"`
+	PositionStart    *int            `json:"positionStart,omitempty"`
+	PositionEnd      *int            `json:"positionEnd,omitempty"`
+	Resolution       string          `json:"resolution"`
+	ResolvedEntityID *int64          `json:"resolvedEntityId,omitempty"`
+	ResolvedAt       *time.Time      `json:"resolvedAt,omitempty"`
+	CreatedAt        time.Time       `json:"createdAt"`
+	SuggestedContent json.RawMessage `json:"suggestedContent,omitempty"`
+	Phase            string          `json:"phase"`
 
 	// Joined fields (not in database)
 	EntityName *string     `json:"entityName,omitempty"`
@@ -619,13 +623,73 @@ type ContentAnalysisItem struct {
 
 // ResolveAnalysisItemRequest is the request body for resolving an analysis item.
 type ResolveAnalysisItemRequest struct {
-	Resolution string      `json:"resolution"`
-	EntityType *EntityType `json:"entityType,omitempty"`
-	EntityName *string     `json:"entityName,omitempty"`
+	Resolution               string                 `json:"resolution"`
+	EntityType               *EntityType            `json:"entityType,omitempty"`
+	EntityName               *string                `json:"entityName,omitempty"`
+	SuggestedContentOverride map[string]interface{} `json:"suggestedContentOverride,omitempty"`
 }
 
 // AnalysisSummary provides a brief summary of a content analysis job.
 type AnalysisSummary struct {
 	JobID        int64 `json:"jobId"`
 	PendingCount int   `json:"pendingCount"`
+}
+
+// EntityLog represents a chronological event history entry for an entity.
+type EntityLog struct {
+	ID          int64     `json:"id"`
+	EntityID    int64     `json:"entityId"`
+	CampaignID  int64     `json:"campaignId"`
+	ChapterID   *int64    `json:"chapterId,omitempty"`
+	SessionID   *int64    `json:"sessionId,omitempty"`
+	SourceTable *string   `json:"sourceTable,omitempty"`
+	SourceID    *int64    `json:"sourceId,omitempty"`
+	Content     string    `json:"content"`
+	OccurredAt  *string   `json:"occurredAt,omitempty"`
+	SortOrder   *int      `json:"sortOrder,omitempty"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
+// CreateEntityLogRequest is the request body for creating an entity log entry.
+type CreateEntityLogRequest struct {
+	Content    string  `json:"content"`
+	ChapterID  *int64  `json:"chapterId,omitempty"`
+	SessionID  *int64  `json:"sessionId,omitempty"`
+	OccurredAt *string `json:"occurredAt,omitempty"`
+	SortOrder  *int    `json:"sortOrder,omitempty"`
+}
+
+// UpdateEntityLogRequest is the request body for updating an entity log entry.
+type UpdateEntityLogRequest struct {
+	Content    *string `json:"content,omitempty"`
+	ChapterID  *int64  `json:"chapterId,omitempty"`
+	SessionID  *int64  `json:"sessionId,omitempty"`
+	OccurredAt *string `json:"occurredAt,omitempty"`
+	SortOrder  *int    `json:"sortOrder,omitempty"`
+}
+
+// DescriptionUpdateSuggestion is an enrichment suggestion for updating
+// an entity's description.
+type DescriptionUpdateSuggestion struct {
+	CurrentDescription   string `json:"currentDescription"`
+	SuggestedDescription string `json:"suggestedDescription"`
+	Rationale            string `json:"rationale"`
+}
+
+// LogEntrySuggestion is an enrichment suggestion for creating a new
+// entity log entry.
+type LogEntrySuggestion struct {
+	Content    string  `json:"content"`
+	OccurredAt *string `json:"occurredAt,omitempty"`
+}
+
+// RelationshipSuggestion is an enrichment suggestion for creating a
+// new relationship between entities.
+type RelationshipSuggestion struct {
+	SourceEntityID   int64  `json:"sourceEntityId"`
+	SourceEntityName string `json:"sourceEntityName"`
+	TargetEntityID   int64  `json:"targetEntityId"`
+	TargetEntityName string `json:"targetEntityName"`
+	RelationshipType string `json:"relationshipType"`
+	Description      string `json:"description"`
 }
