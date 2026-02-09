@@ -8,6 +8,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- LLM Enrichment (Phase 4 — Post-Save Content Analysis)
+  - LLM client abstraction supporting Anthropic Claude, OpenAI
+    GPT-4o, and Ollama local models with exponential backoff retry.
+  - Enrichment engine analyses content for entity description
+    updates, log entries, and relationship suggestions.
+  - Auto-triggers enrichment when Phase 1 triage items are fully
+    resolved (requires LLM configured in Account Settings).
+  - SSE streaming and polling fallback for progressive enrichment
+    delivery to the triage UI.
+  - Triage UI enrichment section with side-by-side description
+    diff, log entry preview, and relationship suggestion chips.
+- Entity Log (Chronological Event History)
+  - `entity_log` table tracking events per entity with optional
+    chapter/session association, occurred_at date, and sort order.
+  - Full CRUD API endpoints under
+    `/campaigns/{id}/entities/{entityId}/log`.
+  - Entity editor log section for viewing, adding, editing, and
+    deleting log entries.
+- Custom Ollama Docker Image
+  - Pre-bakes `mxbai-embed-large` embedding model at build time,
+    eliminating post-startup model download.
 - Wiki Links (`[[Entity Name]]` syntax)
   - `[[Entity Name]]` and `[[Entity Name|display text]]` wiki-link
     syntax in the Markdown editor and renderer.

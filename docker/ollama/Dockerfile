@@ -8,5 +8,5 @@
 #--------------------------------------------------------------------------
 
 FROM ollama/ollama:latest
-RUN ollama serve & sleep 5 && ollama pull mxbai-embed-large \
-    && kill %1
+RUN ollama serve & OLLAMA_PID=$! && sleep 5 && ollama pull mxbai-embed-large; \
+    kill $OLLAMA_PID 2>/dev/null; exit 0

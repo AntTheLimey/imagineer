@@ -756,7 +756,6 @@ export default function AnalysisTriagePage() {
                     {/* No LLM configured message */}
                     {!hasLLMConfigured &&
                         job &&
-                        job.resolvedItems === job.totalItems &&
                         job.totalItems > 0 &&
                         enrichmentItems.length === 0 &&
                         !isEnriching && (
