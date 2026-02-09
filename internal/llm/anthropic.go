@@ -28,8 +28,9 @@ const (
 
 // AnthropicProvider implements the Provider interface for Anthropic's API.
 type AnthropicProvider struct {
-	apiKey string
-	client *http.Client
+	apiKey  string
+	baseURL string
+	client  *http.Client
 }
 
 // NewAnthropicProvider creates a new Anthropic LLM provider.
@@ -38,8 +39,9 @@ func NewAnthropicProvider(apiKey string) (*AnthropicProvider, error) {
 		return nil, fmt.Errorf("anthropic API key is required")
 	}
 	return &AnthropicProvider{
-		apiKey: apiKey,
-		client: &http.Client{Timeout: 120 * time.Second},
+		apiKey:  apiKey,
+		baseURL: anthropicAPIURL,
+		client:  &http.Client{Timeout: 120 * time.Second},
 	}, nil
 }
 
@@ -93,7 +95,7 @@ func (p *AnthropicProvider) Complete(ctx context.Context, req CompletionRequest)
 			return CompletionResponse{}, 0, fmt.Errorf("failed to marshal request: %w", err)
 		}
 
-		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, anthropicAPIURL, bytes.NewReader(payload))
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL, bytes.NewReader(payload))
 		if err != nil {
 			return CompletionResponse{}, 0, fmt.Errorf("failed to create request: %w", err)
 		}

@@ -171,6 +171,20 @@ func (h *EnrichmentHandler) TriggerEnrichment(w http.ResponseWriter, r *http.Req
 	go func() {
 		bgCtx := context.Background()
 
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("Enrichment: panic in background goroutine for job %d: %v",
+					jobID, r)
+				if err := h.db.Exec(bgCtx,
+					"UPDATE content_analysis_jobs SET status = 'failed' WHERE id = $1",
+					jobID,
+				); err != nil {
+					log.Printf("Enrichment: error setting job %d to failed after panic: %v",
+						jobID, err)
+				}
+			}
+		}()
+
 		for _, entityID := range entityIDs {
 			entity, err := h.db.GetEntity(bgCtx, entityID)
 			if err != nil {
@@ -343,20 +357,12 @@ func (h *EnrichmentHandler) EnrichmentStream(w http.ResponseWriter, r *http.Requ
 			fmt.Fprintf(w, "event: enrichment_progress\ndata: %s\n\n", progressJSON)
 			flusher.Flush()
 
-			// Close stream when job is completed and all items have been sent
+			// Close stream when job is completed (all items were already
+			// sent above, so no additional check is needed)
 			if currentJob.Status == "completed" {
-				allSent := true
-				for _, item := range enrichItems {
-					if item.ID > lastItemID {
-						allSent = false
-						break
-					}
-				}
-				if allSent {
-					fmt.Fprintf(w, "event: enrichment_complete\ndata: {\"status\":\"completed\"}\n\n")
-					flusher.Flush()
-					return
-				}
+				fmt.Fprintf(w, "event: enrichment_complete\ndata: {\"status\":\"completed\"}\n\n")
+				flusher.Flush()
+				return
 			}
 		}
 	}

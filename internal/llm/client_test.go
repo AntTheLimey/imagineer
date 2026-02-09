@@ -114,12 +114,28 @@ func TestAnthropicProvider_Complete(t *testing.T) {
 	defer server.Close()
 
 	provider := &AnthropicProvider{
-		apiKey: "test-key",
-		client: server.Client(),
+		apiKey:  "test-key",
+		baseURL: server.URL,
+		client:  server.Client(),
 	}
 
-	// Override the URL by using a custom transport (we need to test against the mock server)
-	// Instead, let's test the provider creation and request building
+	t.Run("successful completion", func(t *testing.T) {
+		resp, err := provider.Complete(context.Background(), CompletionRequest{
+			SystemPrompt: "You are a test assistant",
+			UserPrompt:   "Hello",
+			MaxTokens:    100,
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if resp.Content != "test response" {
+			t.Errorf("unexpected content: got %q, want %q", resp.Content, "test response")
+		}
+		if resp.TokensUsed != 15 {
+			t.Errorf("unexpected tokens used: got %d, want 15", resp.TokensUsed)
+		}
+	})
+
 	t.Run("provider creation", func(t *testing.T) {
 		p, err := NewAnthropicProvider("test-key")
 		if err != nil {
@@ -127,6 +143,9 @@ func TestAnthropicProvider_Complete(t *testing.T) {
 		}
 		if p.apiKey != "test-key" {
 			t.Error("apiKey not set correctly")
+		}
+		if p.baseURL != anthropicAPIURL {
+			t.Errorf("baseURL not set correctly: got %q, want %q", p.baseURL, anthropicAPIURL)
 		}
 	})
 
@@ -136,8 +155,6 @@ func TestAnthropicProvider_Complete(t *testing.T) {
 			t.Error("expected error for empty key")
 		}
 	})
-
-	_ = provider // used above for reference
 }
 
 func TestOpenAIProvider_Complete(t *testing.T) {

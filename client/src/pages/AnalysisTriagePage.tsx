@@ -13,7 +13,7 @@
  * content analysis items (wiki links, untagged mentions, misspellings).
  */
 
-import React, { useState, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
     Accordion,
@@ -579,7 +579,7 @@ export default function AnalysisTriagePage() {
     const [newEntityType, setNewEntityType] = useState<EntityType>('npc');
     const [showNewEntityForm, setShowNewEntityForm] = useState(false);
     const [showDoneDialog, setShowDoneDialog] = useState(false);
-    const [editedDescription, setEditedDescription] = useState<string>('');
+    const [_editedDescription, setEditedDescription] = useState<string>('');
     const [selectedEntityGroup, setSelectedEntityGroup] = useState<{
         entityId: number;
         detectionType: string;
@@ -740,31 +740,22 @@ export default function AnalysisTriagePage() {
             : undefined;
 
     /**
-     * Synchronous state derivation: set editedDescription before render
-     * so that the MarkdownEditor (TipTap) initialises with the correct
-     * content.  Using a ref to track the previous item avoids the timing
-     * bug where a useEffect fires AFTER the editor has already mounted
-     * with empty content.
+     * Derive the initial edited-description value from the selected item.
+     * The MarkdownEditor already carries key={selectedItem.id} so it
+     * remounts whenever the selection changes, picking up this value
+     * via its value prop.  User edits are tracked separately in the
+     * editedDescription state (via onChange).
      */
-    const prevDescItemIdRef = useRef<number | null>(null);
-    if (selectedItem?.id !== prevDescItemIdRef.current) {
-        prevDescItemIdRef.current = selectedItem?.id ?? null;
+    const initialEditedDescription = useMemo(() => {
         if (
             selectedItem?.phase === 'enrichment' &&
             selectedItem?.detectionType === 'description_update'
         ) {
-            const suggestion = selectedItem.suggestedContent as Record<
-                string,
-                unknown
-            > | null;
-            const newDesc = String(
-                suggestion?.suggestedDescription ?? '',
-            );
-            if (newDesc !== editedDescription) {
-                setEditedDescription(newDesc);
-            }
+            const suggestion = selectedItem.suggestedContent as Record<string, unknown> | null;
+            return String(suggestion?.suggestedDescription ?? '');
         }
-    }
+        return '';
+    }, [selectedItem]);
 
     const resolvedCount = resolvedItems.length;
     const totalCount = items ? items.length : 0;
@@ -2160,7 +2151,7 @@ export default function AnalysisTriagePage() {
                                                     </Typography>
                                                     <MarkdownEditor
                                                         key={selectedItem.id}
-                                                        value={String(suggestion?.suggestedDescription ?? '')}
+                                                        value={initialEditedDescription}
                                                         onChange={setEditedDescription}
                                                         placeholder="Edit the suggested description..."
                                                         minHeight={120}
