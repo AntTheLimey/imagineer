@@ -99,3 +99,10 @@ export type {
     TriggerAnalysisResponse,
     PendingCountResponse,
 } from './contentAnalysis';
+
+export { entityLogApi } from './entityLog';
+export type {
+    EntityLog,
+    CreateEntityLogInput,
+    UpdateEntityLogInput,
+} from './entityLog';

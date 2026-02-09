@@ -28,6 +28,8 @@ export interface ContentAnalysisJob {
     status: string;
     totalItems: number;
     resolvedItems: number;
+    enrichmentTotal: number;
+    enrichmentResolved: number;
     createdAt: string;
     updatedAt: string;
 }
@@ -38,7 +40,15 @@ export interface ContentAnalysisJob {
 export interface ContentAnalysisItem {
     id: number;
     jobId: number;
-    detectionType: 'wiki_link_resolved' | 'wiki_link_unresolved' | 'untagged_mention' | 'potential_alias' | 'misspelling';
+    detectionType:
+        | 'wiki_link_resolved'
+        | 'wiki_link_unresolved'
+        | 'untagged_mention'
+        | 'potential_alias'
+        | 'misspelling'
+        | 'description_update'
+        | 'log_entry'
+        | 'relationship_suggestion';
     matchedText: string;
     entityId?: number;
     similarity?: number;
@@ -48,6 +58,8 @@ export interface ContentAnalysisItem {
     resolution: 'pending' | 'accepted' | 'new_entity' | 'dismissed';
     resolvedEntityId?: number;
     resolvedAt?: string;
+    suggestedContent?: Record<string, unknown>;
+    phase: 'identification' | 'enrichment';
     createdAt: string;
     entityName?: string;
     entityType?: EntityType;
@@ -172,6 +184,24 @@ export const contentAnalysisApi = {
     ): Promise<{ status: string }> {
         return apiClient.put<{ status: string }>(
             `/campaigns/${campaignId}/analysis/items/${itemId}/revert`,
+        );
+    },
+
+    /**
+     * Trigger LLM enrichment for a completed analysis job. The backend
+     * generates description updates, log entries, and relationship
+     * suggestions for entities detected in the analysed content.
+     */
+    triggerEnrichment(
+        campaignId: number,
+        jobId: number,
+    ): Promise<{ status: string; entityCount?: number; message?: string }> {
+        return apiClient.post<{
+            status: string;
+            entityCount?: number;
+            message?: string;
+        }>(
+            `/campaigns/${campaignId}/analysis/jobs/${jobId}/enrich`
         );
     },
 

@@ -27,6 +27,8 @@ import (
 	"github.com/antonypegg/imagineer/internal/analysis"
 	"github.com/antonypegg/imagineer/internal/auth"
 	"github.com/antonypegg/imagineer/internal/database"
+	"github.com/antonypegg/imagineer/internal/enrichment"
+	"github.com/antonypegg/imagineer/internal/llm"
 	"github.com/antonypegg/imagineer/internal/models"
 )
 
@@ -194,8 +196,9 @@ func (h *ContentAnalysisHandler) ListJobItems(w http.ResponseWriter, r *http.Req
 	}
 
 	resolution := r.URL.Query().Get("resolution")
+	phase := r.URL.Query().Get("phase")
 
-	items, err := h.db.ListAnalysisItemsByJob(r.Context(), jobID, resolution)
+	items, err := h.db.ListAnalysisItemsByJob(r.Context(), jobID, resolution, phase)
 	if err != nil {
 		log.Printf("Error listing analysis items: %v", err)
 		respondError(w, http.StatusInternalServerError, "Failed to list analysis items")
@@ -432,6 +435,14 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 		if err := h.db.UpdateJobResolvedCount(r.Context(), jobID); err != nil {
 			log.Printf("Error updating job resolved count: %v", err)
 		}
+
+		// Auto-trigger enrichment if all Phase 1 items are resolved
+		updatedJob, jobErr := h.db.GetAnalysisJob(r.Context(), jobID)
+		if jobErr == nil &&
+			updatedJob.ResolvedItems == updatedJob.TotalItems &&
+			updatedJob.EnrichmentTotal == 0 {
+			h.tryAutoEnrich(r.Context(), jobID, userID)
+		}
 	}
 
 	respondJSON(w, http.StatusOK, map[string]string{
@@ -502,7 +513,7 @@ func (h *ContentAnalysisHandler) BatchResolve(w http.ResponseWriter, r *http.Req
 	}
 
 	// Fetch all pending items for this job.
-	items, err := h.db.ListAnalysisItemsByJob(r.Context(), jobID, "pending")
+	items, err := h.db.ListAnalysisItemsByJob(r.Context(), jobID, "pending", "")
 	if err != nil {
 		log.Printf("Error listing pending analysis items for job %d: %v",
 			jobID, err)
@@ -600,6 +611,14 @@ func (h *ContentAnalysisHandler) BatchResolve(w http.ResponseWriter, r *http.Req
 	if err := h.db.UpdateJobResolvedCount(r.Context(), jobID); err != nil {
 		log.Printf("Error updating job resolved count for job %d: %v",
 			jobID, err)
+	}
+
+	// Auto-trigger enrichment if all Phase 1 items are resolved
+	updatedJob, jobErr := h.db.GetAnalysisJob(r.Context(), jobID)
+	if jobErr == nil &&
+		updatedJob.ResolvedItems == updatedJob.TotalItems &&
+		updatedJob.EnrichmentTotal == 0 {
+		h.tryAutoEnrich(r.Context(), jobID, userID)
 	}
 
 	respondJSON(w, http.StatusOK, BatchResolveResponse{Resolved: resolved})
@@ -1139,4 +1158,176 @@ func (h *ContentAnalysisHandler) revertContentFix(
 	}
 
 	return delta, nil
+}
+
+// tryAutoEnrich automatically triggers LLM enrichment when all Phase 1
+// identification items have been resolved. It silently returns if the
+// user has not configured an LLM provider or if there are no accepted
+// entities to enrich.
+func (h *ContentAnalysisHandler) tryAutoEnrich(
+	ctx context.Context, jobID int64, userID int64,
+) {
+	// 1. Fetch user settings to check LLM configuration.
+	settings, err := h.db.GetUserSettings(ctx, userID)
+	if err != nil || settings == nil {
+		return // No settings, silently skip
+	}
+	if settings.ContentGenService == nil || settings.ContentGenAPIKey == nil {
+		return // No LLM configured, silently skip
+	}
+
+	// 2. Create LLM provider from user settings.
+	provider, err := llm.NewProvider(
+		*settings.ContentGenService, *settings.ContentGenAPIKey,
+	)
+	if err != nil {
+		log.Printf("Auto-enrich: failed to create LLM provider for job %d: %v",
+			jobID, err)
+		return
+	}
+
+	// 3. Get the job for source info.
+	job, err := h.db.GetAnalysisJob(ctx, jobID)
+	if err != nil {
+		log.Printf("Auto-enrich: failed to get job %d: %v", jobID, err)
+		return
+	}
+
+	// 4. Collect accepted items with resolved entity IDs.
+	items, err := h.db.ListAnalysisItemsByJob(ctx, jobID, "", "identification")
+	if err != nil {
+		log.Printf("Auto-enrich: failed to list items for job %d: %v",
+			jobID, err)
+		return
+	}
+
+	entityIDSet := make(map[int64]bool)
+	for _, item := range items {
+		if (item.Resolution == "accepted" || item.Resolution == "new_entity") &&
+			item.ResolvedEntityID != nil {
+			entityIDSet[*item.ResolvedEntityID] = true
+		}
+	}
+
+	if len(entityIDSet) == 0 {
+		return // No entities to enrich
+	}
+
+	entityIDs := make([]int64, 0, len(entityIDSet))
+	for id := range entityIDSet {
+		entityIDs = append(entityIDs, id)
+	}
+
+	// 5. Set job status to "enriching".
+	if err := h.db.Exec(ctx,
+		"UPDATE content_analysis_jobs SET status = 'enriching' WHERE id = $1",
+		jobID,
+	); err != nil {
+		log.Printf("Auto-enrich: failed to set job %d status: %v",
+			jobID, err)
+		return
+	}
+
+	// 6. Fetch source content.
+	content, err := h.fetchSourceContent(
+		ctx, job.SourceTable, job.SourceID, job.SourceField,
+	)
+	if err != nil {
+		log.Printf("Auto-enrich: failed to fetch content for job %d: %v",
+			jobID, err)
+		_ = h.db.Exec(ctx,
+			"UPDATE content_analysis_jobs SET status = 'completed' WHERE id = $1",
+			jobID,
+		)
+		return
+	}
+
+	// 7. Get all campaign entities for context.
+	allEntities, err := h.db.ListEntitiesByCampaign(ctx, job.CampaignID)
+	if err != nil {
+		log.Printf("Auto-enrich: failed to list entities for campaign %d: %v",
+			job.CampaignID, err)
+		_ = h.db.Exec(ctx,
+			"UPDATE content_analysis_jobs SET status = 'completed' WHERE id = $1",
+			jobID,
+		)
+		return
+	}
+
+	// 8. Spawn background goroutine for enrichment.
+	engine := enrichment.NewEngine(h.db)
+	go func() {
+		bgCtx := context.Background()
+
+		for _, entityID := range entityIDs {
+			entity, err := h.db.GetEntity(bgCtx, entityID)
+			if err != nil {
+				log.Printf("Auto-enrich: failed to get entity %d: %v",
+					entityID, err)
+				continue
+			}
+
+			relationships, err := h.db.GetEntityRelationships(bgCtx, entityID)
+			if err != nil {
+				log.Printf(
+					"Auto-enrich: failed to get relationships for entity %d: %v",
+					entityID, err)
+				relationships = nil
+			}
+
+			// Build list of other entities (exclude the current one).
+			otherEntities := make([]models.Entity, 0, len(allEntities)-1)
+			for _, e := range allEntities {
+				if e.ID != entityID {
+					otherEntities = append(otherEntities, e)
+				}
+			}
+
+			input := enrichment.EnrichmentInput{
+				CampaignID:    job.CampaignID,
+				JobID:         jobID,
+				SourceTable:   job.SourceTable,
+				SourceID:      job.SourceID,
+				Content:       content,
+				Entity:        *entity,
+				OtherEntities: otherEntities,
+				Relationships: relationships,
+			}
+
+			enrichItems, err := engine.EnrichEntity(bgCtx, provider, input)
+			if err != nil {
+				log.Printf("Auto-enrich: failed to enrich entity %d: %v",
+					entityID, err)
+				continue
+			}
+
+			if len(enrichItems) > 0 {
+				if err := h.db.CreateAnalysisItems(bgCtx, enrichItems); err != nil {
+					log.Printf(
+						"Auto-enrich: failed to save items for entity %d: %v",
+						entityID, err)
+					continue
+				}
+
+				if err := h.db.Exec(bgCtx,
+					"UPDATE content_analysis_jobs SET enrichment_total = enrichment_total + $1 WHERE id = $2",
+					len(enrichItems), jobID,
+				); err != nil {
+					log.Printf(
+						"Auto-enrich: failed to update enrichment count for job %d: %v",
+						jobID, err)
+				}
+			}
+		}
+
+		// Mark enrichment as completed.
+		if err := h.db.Exec(context.Background(),
+			"UPDATE content_analysis_jobs SET status = 'completed' WHERE id = $1",
+			jobID,
+		); err != nil {
+			log.Printf(
+				"Auto-enrich: failed to set job %d status to completed: %v",
+				jobID, err)
+		}
+	}()
 }

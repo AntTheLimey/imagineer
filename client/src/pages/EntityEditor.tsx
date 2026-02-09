@@ -22,6 +22,7 @@ import {
     Box,
     Button,
     Chip,
+    Divider,
     FormControl,
     InputLabel,
     MenuItem,
@@ -35,6 +36,7 @@ import {
 import { FullScreenLayout } from '../layouts';
 import { MarkdownEditor } from '../components/MarkdownEditor';
 import { RelationshipEditor, PendingRelationship } from '../components/RelationshipEditor';
+import EntityLogSection from '../components/EntityLog/EntityLogSection';
 import {
     useEntity,
     useCreateEntity,
@@ -701,6 +703,17 @@ export default function EntityEditor() {
                             />
                         )}
                     </Box>
+
+                    {/* Entity Log section */}
+                    {!isNewEntity && entityId && campaignId && (
+                        <Box sx={{ mt: 3 }}>
+                            <Divider sx={{ mb: 2 }} />
+                            <EntityLogSection
+                                campaignId={campaignId}
+                                entityId={entityId}
+                            />
+                        </Box>
+                    )}
 
                     <FormControl fullWidth>
                         <InputLabel>Source Confidence</InputLabel>

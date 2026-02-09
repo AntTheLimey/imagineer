@@ -1,6 +1,8 @@
 services:
   ollama:
-    image: ollama/ollama:latest
+    build:
+      context: ./docker/ollama
+      dockerfile: Dockerfile
     container_name: imagineer-ollama
     volumes:
       - ollama-models:/root/.ollama

@@ -12,6 +12,7 @@
  * listing detected items, and resolving them.
  */
 
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { contentAnalysisApi } from '../api/contentAnalysis';
 import type {
@@ -228,4 +229,60 @@ export function usePendingAnalysisCount(
         queryFn: () => contentAnalysisApi.getPendingCount(campaignId, sourceTable, sourceId),
         enabled: !!campaignId,
     });
+}
+
+/**
+ * Mutation to trigger LLM enrichment for a completed analysis job.
+ * Invalidates all content analysis queries on success so the UI
+ * reflects newly created enrichment items.
+ *
+ * @param campaignId - The campaign the job belongs to.
+ */
+export function useTriggerEnrichment(campaignId: number) {
+    const queryClient = useQueryClient();
+    return useMutation<
+        { status: string; entityCount?: number; message?: string },
+        Error,
+        number
+    >({
+        mutationFn: (jobId) =>
+            contentAnalysisApi.triggerEnrichment(campaignId, jobId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({
+                queryKey: contentAnalysisKeys.all,
+            });
+        },
+    });
+}
+
+/**
+ * Polls the job status and items at a fixed interval while enrichment
+ * is in progress. Invalidates the job and items queries every 2 seconds
+ * so the UI stays up to date without requiring SSE.
+ *
+ * @param campaignId - The campaign the job belongs to.
+ * @param jobId - The analysis job to monitor.
+ * @param enabled - Whether polling should be active.
+ */
+export function useEnrichmentStream(
+    campaignId: number,
+    jobId: number,
+    enabled: boolean,
+) {
+    const queryClient = useQueryClient();
+
+    useEffect(() => {
+        if (!enabled || !campaignId || !jobId) return;
+
+        const interval = setInterval(() => {
+            queryClient.invalidateQueries({
+                queryKey: contentAnalysisKeys.job(campaignId, jobId),
+            });
+            queryClient.invalidateQueries({
+                queryKey: contentAnalysisKeys.items(campaignId, jobId),
+            });
+        }, 2000);
+
+        return () => clearInterval(interval);
+    }, [campaignId, jobId, enabled, queryClient]);
 }

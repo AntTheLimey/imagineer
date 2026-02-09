@@ -13,8 +13,8 @@
  * content analysis items (wiki links, untagged mentions, misspellings).
  */
 
-import { useState, useMemo, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useMemo, useCallback } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
     Accordion,
     AccordionDetails,
@@ -29,6 +29,7 @@ import {
     ListItemText,
     Divider,
     CircularProgress,
+    LinearProgress,
     Paper,
     TextField,
     Select,
@@ -59,7 +60,10 @@ import {
     useResolveItem,
     useBatchResolve,
     useRevertItem,
+    useEnrichmentStream,
+    useTriggerEnrichment,
 } from '../hooks/useContentAnalysis';
+import { useUserSettings } from '../hooks/useUserSettings';
 import {
     entityTypeColors,
     formatEntityType,
@@ -95,6 +99,27 @@ const DETECTION_GROUPS = [
         key: 'misspelling' as const,
         label: 'Misspellings',
         color: '#ffc107',
+    },
+];
+
+/**
+ * Enrichment detection type grouping configuration (Phase 2).
+ */
+const ENRICHMENT_GROUPS = [
+    {
+        key: 'description_update' as const,
+        label: 'Description Updates',
+        color: '#00897b',
+    },
+    {
+        key: 'log_entry' as const,
+        label: 'Log Entries',
+        color: '#5c6bc0',
+    },
+    {
+        key: 'relationship_suggestion' as const,
+        label: 'Relationships',
+        color: '#ef6c00',
     },
 ];
 
@@ -143,6 +168,18 @@ export default function AnalysisTriagePage() {
     const resolveItem = useResolveItem(numericCampaignId);
     const batchResolve = useBatchResolve(numericCampaignId);
     const revertItem = useRevertItem(numericCampaignId);
+    const { data: userSettings } = useUserSettings();
+    // Available for future use: trigger enrichment manually
+    useTriggerEnrichment(numericCampaignId);
+
+    // Determine if enrichment is in progress
+    const isEnriching = job?.status === 'enriching';
+
+    // Enable enrichment stream polling when enriching
+    useEnrichmentStream(numericCampaignId, numericJobId, isEnriching);
+
+    // Check if LLM is configured
+    const hasLLMConfigured = !!userSettings?.contentGenService && !!userSettings?.contentGenApiKey;
 
     const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
     const [newEntityName, setNewEntityName] = useState('');
@@ -153,25 +190,43 @@ export default function AnalysisTriagePage() {
     const isLoading = jobLoading || itemsLoading;
 
     /**
-     * Split items into pending and resolved arrays.
+     * Split items by phase and resolution status.
      */
-    const pendingItems = useMemo(() => {
+    const identificationItems = useMemo(() => {
         if (!items) return [];
-        return items.filter((i) => i.resolution === 'pending');
+        return items.filter((i) => !i.phase || i.phase === 'identification');
     }, [items]);
+
+    const enrichmentItems = useMemo(() => {
+        if (!items) return [];
+        return items.filter((i) => i.phase === 'enrichment');
+    }, [items]);
+
+    const pendingIdentificationItems = useMemo(() => {
+        return identificationItems.filter((i) => i.resolution === 'pending');
+    }, [identificationItems]);
+
+    const pendingEnrichmentItems = useMemo(() => {
+        return enrichmentItems.filter((i) => i.resolution === 'pending');
+    }, [enrichmentItems]);
 
     const resolvedItems = useMemo(() => {
         if (!items) return [];
         return items.filter((i) => i.resolution !== 'pending');
     }, [items]);
 
+    const pendingItems = useMemo(() => {
+        return [...pendingIdentificationItems, ...pendingEnrichmentItems];
+    }, [pendingIdentificationItems, pendingEnrichmentItems]);
+
     /**
-     * Group only pending items by detection type for the main sections.
+     * Group only pending identification items by detection type for the
+     * Phase 1 sections.
      */
     const groupedPendingItems = useMemo(() => {
         const groups: Record<string, ContentAnalysisItem[]> = {};
         for (const group of DETECTION_GROUPS) {
-            const groupItems = pendingItems.filter(
+            const groupItems = pendingIdentificationItems.filter(
                 (item) => item.detectionType === group.key
             );
             if (groupItems.length > 0) {
@@ -179,7 +234,7 @@ export default function AnalysisTriagePage() {
             }
         }
         return groups;
-    }, [pendingItems]);
+    }, [pendingIdentificationItems]);
 
     const selectedItem = useMemo(() => {
         if (!items || selectedItemId === null) return null;
@@ -279,6 +334,49 @@ export default function AnalysisTriagePage() {
         setNewEntityType('npc');
         setShowNewEntityForm(false);
     };
+
+    /**
+     * Handle resolving an enrichment item (Phase 2). For dismissed items,
+     * simply mark as dismissed. For accepted items, mark as accepted; the
+     * backend applies the suggestion when resolving.
+     */
+    const handleEnrichmentResolve = useCallback(
+        async (
+            itemId: number,
+            resolution: 'accepted' | 'dismissed',
+            item: ContentAnalysisItem,
+        ) => {
+            if (resolution === 'dismissed') {
+                resolveItem.mutate({
+                    itemId,
+                    req: { resolution: 'dismissed' },
+                });
+                return;
+            }
+
+            try {
+                const suggestion = item.suggestedContent;
+                if (!suggestion) {
+                    resolveItem.mutate({
+                        itemId,
+                        req: { resolution: 'accepted' },
+                    });
+                    return;
+                }
+
+                resolveItem.mutate({
+                    itemId,
+                    req: { resolution: 'accepted' },
+                });
+            } catch (error) {
+                console.error(
+                    'Failed to apply enrichment suggestion:',
+                    error,
+                );
+            }
+        },
+        [resolveItem],
+    );
 
     /**
      * Highlight matched text within a context snippet.
@@ -617,6 +715,214 @@ export default function AnalysisTriagePage() {
                         })}
                     </List>
 
+                    {/* Enrichment section divider */}
+                    {(enrichmentItems.length > 0 || (job && job.resolvedItems === job.totalItems && job.totalItems > 0)) && (
+                        <Box
+                            sx={{
+                                px: 2,
+                                py: 1.5,
+                                bgcolor: 'background.default',
+                                borderTop: 1,
+                                borderColor: 'divider',
+                            }}
+                        >
+                            <Typography
+                                variant="subtitle2"
+                                sx={{
+                                    fontWeight: 700,
+                                    color: 'text.primary',
+                                }}
+                            >
+                                Entity Enrichment
+                            </Typography>
+                        </Box>
+                    )}
+
+                    {/* Enrichment loading indicator */}
+                    {isEnriching && (
+                        <Box sx={{ px: 2, py: 1.5 }}>
+                            <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                gutterBottom
+                            >
+                                Analyzing{' '}
+                                {job?.enrichmentTotal ?? 0} entities...
+                            </Typography>
+                            <LinearProgress />
+                        </Box>
+                    )}
+
+                    {/* No LLM configured message */}
+                    {!hasLLMConfigured &&
+                        job &&
+                        job.resolvedItems === job.totalItems &&
+                        job.totalItems > 0 &&
+                        enrichmentItems.length === 0 &&
+                        !isEnriching && (
+                        <Box sx={{ px: 2, py: 1.5 }}>
+                            <Alert
+                                severity="info"
+                                sx={{ fontSize: '0.875rem' }}
+                            >
+                                Configure an LLM service in{' '}
+                                <Link
+                                    to="/settings"
+                                    style={{ color: 'inherit' }}
+                                >
+                                    Account Settings
+                                </Link>{' '}
+                                to enable entity enrichment.
+                            </Alert>
+                        </Box>
+                    )}
+
+                    {/* Enrichment groups */}
+                    {ENRICHMENT_GROUPS.map((group) => {
+                        const groupItems = pendingEnrichmentItems.filter(
+                            (item) => item.detectionType === group.key,
+                        );
+                        if (groupItems.length === 0) return null;
+                        return (
+                            <Box key={group.key}>
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 1,
+                                        px: 2,
+                                        py: 1.5,
+                                        bgcolor: 'background.default',
+                                    }}
+                                >
+                                    <Box
+                                        sx={{
+                                            width: 10,
+                                            height: 10,
+                                            borderRadius: '50%',
+                                            bgcolor: group.color,
+                                        }}
+                                    />
+                                    <Typography
+                                        variant="subtitle2"
+                                        sx={{
+                                            fontWeight: 600,
+                                            flexGrow: 1,
+                                        }}
+                                    >
+                                        {group.label} (
+                                        {groupItems.length})
+                                    </Typography>
+                                </Box>
+                                <Divider />
+                                {groupItems.map((item) => (
+                                    <ListItemButton
+                                        key={item.id}
+                                        selected={
+                                            selectedItemId === item.id
+                                        }
+                                        onClick={() =>
+                                            handleSelectItem(item)
+                                        }
+                                    >
+                                        <ListItemText
+                                            primary={
+                                                <Box
+                                                    sx={{
+                                                        display: 'flex',
+                                                        alignItems:
+                                                            'center',
+                                                        gap: 1,
+                                                    }}
+                                                >
+                                                    <Typography
+                                                        variant="body2"
+                                                        sx={{
+                                                            fontWeight: 600,
+                                                        }}
+                                                    >
+                                                        {item.matchedText}
+                                                    </Typography>
+                                                    {item.entityType && (
+                                                        <Chip
+                                                            label={
+                                                                item.entityName ??
+                                                                formatEntityType(
+                                                                    item.entityType,
+                                                                )
+                                                            }
+                                                            size="small"
+                                                            color={
+                                                                entityTypeColors[
+                                                                    item.entityType
+                                                                ] ?? 'default'
+                                                            }
+                                                            sx={{
+                                                                height: 20,
+                                                            }}
+                                                        />
+                                                    )}
+                                                </Box>
+                                            }
+                                            secondary={
+                                                item.detectionType ===
+                                                'description_update'
+                                                    ? 'Description update suggestion'
+                                                    : item.detectionType ===
+                                                      'log_entry'
+                                                      ? 'New log entry suggestion'
+                                                      : item.detectionType ===
+                                                        'relationship_suggestion'
+                                                        ? 'Relationship suggestion'
+                                                        : undefined
+                                            }
+                                        />
+                                        <Box
+                                            sx={{
+                                                display: 'flex',
+                                                gap: 0.5,
+                                                ml: 1,
+                                            }}
+                                        >
+                                            <Tooltip title="Accept">
+                                                <IconButton
+                                                    size="small"
+                                                    color="success"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleEnrichmentResolve(
+                                                            item.id,
+                                                            'accepted',
+                                                            item,
+                                                        );
+                                                    }}
+                                                >
+                                                    <Check fontSize="small" />
+                                                </IconButton>
+                                            </Tooltip>
+                                            <Tooltip title="Dismiss">
+                                                <IconButton
+                                                    size="small"
+                                                    color="error"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleEnrichmentResolve(
+                                                            item.id,
+                                                            'dismissed',
+                                                            item,
+                                                        );
+                                                    }}
+                                                >
+                                                    <Close fontSize="small" />
+                                                </IconButton>
+                                            </Tooltip>
+                                        </Box>
+                                    </ListItemButton>
+                                ))}
+                            </Box>
+                        );
+                    })}
+
                     {/* Accepted Changes - collapsible section */}
                     {resolvedItems.length > 0 && (
                         <Accordion
@@ -755,6 +1061,426 @@ export default function AnalysisTriagePage() {
                     }}
                 >
                     {selectedItem ? (
+                        selectedItem.phase === 'enrichment' ? (
+                            /* Enrichment detail view (Phase 2) */
+                            <Stack spacing={3}>
+                                {/* Entity header */}
+                                <Box>
+                                    <Box
+                                        sx={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 1,
+                                            mb: 1,
+                                        }}
+                                    >
+                                        <Typography
+                                            variant="h6"
+                                            sx={{ fontWeight: 600 }}
+                                        >
+                                            {selectedItem.matchedText}
+                                        </Typography>
+                                        {selectedItem.entityType && (
+                                            <Chip
+                                                label={formatEntityType(
+                                                    selectedItem.entityType,
+                                                )}
+                                                size="small"
+                                                color={
+                                                    entityTypeColors[
+                                                        selectedItem.entityType
+                                                    ] ?? 'default'
+                                                }
+                                            />
+                                        )}
+                                    </Box>
+                                    <Typography
+                                        variant="body2"
+                                        color="text.secondary"
+                                    >
+                                        {selectedItem.detectionType ===
+                                        'description_update'
+                                            ? 'Suggested description update'
+                                            : selectedItem.detectionType ===
+                                              'log_entry'
+                                              ? 'Suggested log entry'
+                                              : selectedItem.detectionType ===
+                                                'relationship_suggestion'
+                                                ? 'Suggested relationship'
+                                                : 'Enrichment suggestion'}
+                                    </Typography>
+                                </Box>
+
+                                <Divider />
+
+                                {/* Description update detail */}
+                                {selectedItem.detectionType ===
+                                    'description_update' &&
+                                    ((): React.ReactNode => {
+                                        let suggestion: Record<
+                                            string,
+                                            unknown
+                                        > | null = null;
+                                        try {
+                                            suggestion =
+                                                selectedItem.suggestedContent ??
+                                                null;
+                                        } catch {
+                                            suggestion = null;
+                                        }
+                                        if (!suggestion) {
+                                            return (
+                                                <Typography
+                                                    variant="body2"
+                                                    color="text.secondary"
+                                                >
+                                                    No suggestion data
+                                                    available.
+                                                </Typography>
+                                            );
+                                        }
+                                        return (
+                                            <Stack spacing={2}>
+                                                {!!suggestion.currentDescription && (
+                                                    <Box>
+                                                        <Typography
+                                                            variant="subtitle2"
+                                                            gutterBottom
+                                                        >
+                                                            Current
+                                                            Description
+                                                        </Typography>
+                                                        <Paper
+                                                            variant="outlined"
+                                                            sx={{
+                                                                p: 2,
+                                                                bgcolor:
+                                                                    'grey.50',
+                                                            }}
+                                                        >
+                                                            <Typography variant="body2">
+                                                                {String(
+                                                                    suggestion.currentDescription,
+                                                                )}
+                                                            </Typography>
+                                                        </Paper>
+                                                    </Box>
+                                                )}
+                                                <Box>
+                                                    <Typography
+                                                        variant="subtitle2"
+                                                        gutterBottom
+                                                    >
+                                                        Suggested
+                                                        Description
+                                                    </Typography>
+                                                    <Paper
+                                                        variant="outlined"
+                                                        sx={{
+                                                            p: 2,
+                                                            bgcolor:
+                                                                'success.50',
+                                                            borderColor:
+                                                                'success.light',
+                                                        }}
+                                                    >
+                                                        <Typography variant="body2">
+                                                            {String(
+                                                                suggestion.suggestedDescription ??
+                                                                    '',
+                                                            )}
+                                                        </Typography>
+                                                    </Paper>
+                                                </Box>
+                                                {!!suggestion.rationale && (
+                                                    <Box>
+                                                        <Typography
+                                                            variant="subtitle2"
+                                                            gutterBottom
+                                                        >
+                                                            Rationale
+                                                        </Typography>
+                                                        <Typography
+                                                            variant="body2"
+                                                            color="text.secondary"
+                                                        >
+                                                            {String(
+                                                                suggestion.rationale,
+                                                            )}
+                                                        </Typography>
+                                                    </Box>
+                                                )}
+                                            </Stack>
+                                        );
+                                    })()}
+
+                                {/* Log entry detail */}
+                                {selectedItem.detectionType ===
+                                    'log_entry' &&
+                                    ((): React.ReactNode => {
+                                        let suggestion: Record<
+                                            string,
+                                            unknown
+                                        > | null = null;
+                                        try {
+                                            suggestion =
+                                                selectedItem.suggestedContent ??
+                                                null;
+                                        } catch {
+                                            suggestion = null;
+                                        }
+                                        if (!suggestion) {
+                                            return (
+                                                <Typography
+                                                    variant="body2"
+                                                    color="text.secondary"
+                                                >
+                                                    No suggestion data
+                                                    available.
+                                                </Typography>
+                                            );
+                                        }
+                                        return (
+                                            <Stack spacing={2}>
+                                                <Box>
+                                                    <Typography
+                                                        variant="subtitle2"
+                                                        gutterBottom
+                                                    >
+                                                        Suggested Log
+                                                        Entry
+                                                    </Typography>
+                                                    <Paper
+                                                        variant="outlined"
+                                                        sx={{ p: 2 }}
+                                                    >
+                                                        <Typography variant="body2">
+                                                            {String(
+                                                                suggestion.logText ??
+                                                                    '',
+                                                            )}
+                                                        </Typography>
+                                                    </Paper>
+                                                </Box>
+                                                {!!suggestion.occurredAt && (
+                                                    <Box>
+                                                        <Typography
+                                                            variant="subtitle2"
+                                                            gutterBottom
+                                                        >
+                                                            Occurred At
+                                                        </Typography>
+                                                        <Typography variant="body2">
+                                                            {String(
+                                                                suggestion.occurredAt,
+                                                            )}
+                                                        </Typography>
+                                                    </Box>
+                                                )}
+                                                {!!suggestion.rationale && (
+                                                    <Box>
+                                                        <Typography
+                                                            variant="subtitle2"
+                                                            gutterBottom
+                                                        >
+                                                            Rationale
+                                                        </Typography>
+                                                        <Typography
+                                                            variant="body2"
+                                                            color="text.secondary"
+                                                        >
+                                                            {String(
+                                                                suggestion.rationale,
+                                                            )}
+                                                        </Typography>
+                                                    </Box>
+                                                )}
+                                            </Stack>
+                                        );
+                                    })()}
+
+                                {/* Relationship suggestion detail */}
+                                {selectedItem.detectionType ===
+                                    'relationship_suggestion' &&
+                                    ((): React.ReactNode => {
+                                        let suggestion: Record<
+                                            string,
+                                            unknown
+                                        > | null = null;
+                                        try {
+                                            suggestion =
+                                                selectedItem.suggestedContent ??
+                                                null;
+                                        } catch {
+                                            suggestion = null;
+                                        }
+                                        if (!suggestion) {
+                                            return (
+                                                <Typography
+                                                    variant="body2"
+                                                    color="text.secondary"
+                                                >
+                                                    No suggestion data
+                                                    available.
+                                                </Typography>
+                                            );
+                                        }
+                                        return (
+                                            <Stack spacing={2}>
+                                                <Box>
+                                                    <Typography
+                                                        variant="subtitle2"
+                                                        gutterBottom
+                                                    >
+                                                        Suggested
+                                                        Relationship
+                                                    </Typography>
+                                                    <Box
+                                                        sx={{
+                                                            display: 'flex',
+                                                            alignItems:
+                                                                'center',
+                                                            gap: 1,
+                                                            flexWrap:
+                                                                'wrap',
+                                                        }}
+                                                    >
+                                                        <Chip
+                                                            label={String(
+                                                                suggestion.sourceEntityName ??
+                                                                    'Source',
+                                                            )}
+                                                            size="small"
+                                                            color={
+                                                                suggestion.sourceEntityType
+                                                                    ? entityTypeColors[
+                                                                          suggestion.sourceEntityType as EntityType
+                                                                      ] ??
+                                                                      'default'
+                                                                    : 'default'
+                                                            }
+                                                        />
+                                                        <Typography
+                                                            variant="body2"
+                                                            sx={{
+                                                                fontWeight: 600,
+                                                            }}
+                                                        >
+                                                            {String(
+                                                                suggestion.relationshipType ??
+                                                                    'related to',
+                                                            )}
+                                                        </Typography>
+                                                        <Chip
+                                                            label={String(
+                                                                suggestion.targetEntityName ??
+                                                                    'Target',
+                                                            )}
+                                                            size="small"
+                                                            color={
+                                                                suggestion.targetEntityType
+                                                                    ? entityTypeColors[
+                                                                          suggestion.targetEntityType as EntityType
+                                                                      ] ??
+                                                                      'default'
+                                                                    : 'default'
+                                                            }
+                                                        />
+                                                    </Box>
+                                                </Box>
+                                                {!!suggestion.description && (
+                                                    <Box>
+                                                        <Typography
+                                                            variant="subtitle2"
+                                                            gutterBottom
+                                                        >
+                                                            Description
+                                                        </Typography>
+                                                        <Typography variant="body2">
+                                                            {String(
+                                                                suggestion.description,
+                                                            )}
+                                                        </Typography>
+                                                    </Box>
+                                                )}
+                                                {!!suggestion.rationale && (
+                                                    <Box>
+                                                        <Typography
+                                                            variant="subtitle2"
+                                                            gutterBottom
+                                                        >
+                                                            Rationale
+                                                        </Typography>
+                                                        <Typography
+                                                            variant="body2"
+                                                            color="text.secondary"
+                                                        >
+                                                            {String(
+                                                                suggestion.rationale,
+                                                            )}
+                                                        </Typography>
+                                                    </Box>
+                                                )}
+                                            </Stack>
+                                        );
+                                    })()}
+
+                                {/* Resolution status */}
+                                {selectedItem.resolution !== 'pending' && (
+                                    <Alert severity="info">
+                                        This item has been resolved as{' '}
+                                        <strong>
+                                            {selectedItem.resolution}
+                                        </strong>
+                                        .
+                                    </Alert>
+                                )}
+
+                                {/* Enrichment action buttons */}
+                                {selectedItem.resolution === 'pending' && (
+                                    <Stack
+                                        direction="row"
+                                        spacing={1}
+                                    >
+                                        <Button
+                                            variant="contained"
+                                            color="success"
+                                            startIcon={<Check />}
+                                            onClick={() =>
+                                                handleEnrichmentResolve(
+                                                    selectedItem.id,
+                                                    'accepted',
+                                                    selectedItem,
+                                                )
+                                            }
+                                            disabled={
+                                                resolveItem.isPending
+                                            }
+                                        >
+                                            Accept
+                                        </Button>
+                                        <Button
+                                            variant="outlined"
+                                            color="error"
+                                            startIcon={<Close />}
+                                            onClick={() =>
+                                                handleEnrichmentResolve(
+                                                    selectedItem.id,
+                                                    'dismissed',
+                                                    selectedItem,
+                                                )
+                                            }
+                                            disabled={
+                                                resolveItem.isPending
+                                            }
+                                        >
+                                            Dismiss
+                                        </Button>
+                                    </Stack>
+                                )}
+                            </Stack>
+                        ) : (
+                        /* Identification detail view (Phase 1) */
                         <Stack spacing={3}>
                             {/* Context with highlighted match */}
                             <Box>
@@ -989,6 +1715,7 @@ export default function AnalysisTriagePage() {
                                 </Box>
                             )}
                         </Stack>
+                        )
                     ) : (
                         <Box
                             sx={{

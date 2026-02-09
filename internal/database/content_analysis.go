@@ -25,18 +25,24 @@ func (db *DB) CreateAnalysisJob(ctx context.Context, job *models.ContentAnalysis
 	query := `
 		INSERT INTO content_analysis_jobs
 			(campaign_id, source_table, source_id, source_field,
-			 status, total_items, resolved_items)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+			 status, total_items, resolved_items,
+			 enrichment_total, enrichment_resolved)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id, campaign_id, source_table, source_id, source_field,
-		          status, total_items, resolved_items, created_at, updated_at`
+		          status, total_items, resolved_items,
+		          enrichment_total, enrichment_resolved,
+		          created_at, updated_at`
 
 	var j models.ContentAnalysisJob
 	err := db.QueryRow(ctx, query,
 		job.CampaignID, job.SourceTable, job.SourceID, job.SourceField,
 		job.Status, job.TotalItems, job.ResolvedItems,
+		job.EnrichmentTotal, job.EnrichmentResolved,
 	).Scan(
 		&j.ID, &j.CampaignID, &j.SourceTable, &j.SourceID, &j.SourceField,
-		&j.Status, &j.TotalItems, &j.ResolvedItems, &j.CreatedAt, &j.UpdatedAt,
+		&j.Status, &j.TotalItems, &j.ResolvedItems,
+		&j.EnrichmentTotal, &j.EnrichmentResolved,
+		&j.CreatedAt, &j.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create analysis job: %w", err)
@@ -49,14 +55,18 @@ func (db *DB) CreateAnalysisJob(ctx context.Context, job *models.ContentAnalysis
 func (db *DB) GetAnalysisJob(ctx context.Context, id int64) (*models.ContentAnalysisJob, error) {
 	query := `
 		SELECT id, campaign_id, source_table, source_id, source_field,
-		       status, total_items, resolved_items, created_at, updated_at
+		       status, total_items, resolved_items,
+		       enrichment_total, enrichment_resolved,
+		       created_at, updated_at
 		FROM content_analysis_jobs
 		WHERE id = $1`
 
 	var j models.ContentAnalysisJob
 	err := db.QueryRow(ctx, query, id).Scan(
 		&j.ID, &j.CampaignID, &j.SourceTable, &j.SourceID, &j.SourceField,
-		&j.Status, &j.TotalItems, &j.ResolvedItems, &j.CreatedAt, &j.UpdatedAt,
+		&j.Status, &j.TotalItems, &j.ResolvedItems,
+		&j.EnrichmentTotal, &j.EnrichmentResolved,
+		&j.CreatedAt, &j.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get analysis job: %w", err)
@@ -70,7 +80,9 @@ func (db *DB) GetAnalysisJob(ctx context.Context, id int64) (*models.ContentAnal
 func (db *DB) ListAnalysisJobsByCampaign(ctx context.Context, campaignID int64) ([]models.ContentAnalysisJob, error) {
 	query := `
 		SELECT id, campaign_id, source_table, source_id, source_field,
-		       status, total_items, resolved_items, created_at, updated_at
+		       status, total_items, resolved_items,
+		       enrichment_total, enrichment_resolved,
+		       created_at, updated_at
 		FROM content_analysis_jobs
 		WHERE campaign_id = $1
 		ORDER BY created_at DESC`
@@ -89,7 +101,9 @@ func (db *DB) ListAnalysisJobsByCampaign(ctx context.Context, campaignID int64) 
 func (db *DB) GetLatestAnalysisJob(ctx context.Context, campaignID int64, sourceTable string, sourceID int64, sourceField string) (*models.ContentAnalysisJob, error) {
 	query := `
 		SELECT id, campaign_id, source_table, source_id, source_field,
-		       status, total_items, resolved_items, created_at, updated_at
+		       status, total_items, resolved_items,
+		       enrichment_total, enrichment_resolved,
+		       created_at, updated_at
 		FROM content_analysis_jobs
 		WHERE campaign_id = $1
 		  AND source_table = $2
@@ -101,7 +115,9 @@ func (db *DB) GetLatestAnalysisJob(ctx context.Context, campaignID int64, source
 	var j models.ContentAnalysisJob
 	err := db.QueryRow(ctx, query, campaignID, sourceTable, sourceID, sourceField).Scan(
 		&j.ID, &j.CampaignID, &j.SourceTable, &j.SourceID, &j.SourceField,
-		&j.Status, &j.TotalItems, &j.ResolvedItems, &j.CreatedAt, &j.UpdatedAt,
+		&j.Status, &j.TotalItems, &j.ResolvedItems,
+		&j.EnrichmentTotal, &j.EnrichmentResolved,
+		&j.CreatedAt, &j.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get latest analysis job: %w", err)
@@ -117,22 +133,23 @@ func (db *DB) CreateAnalysisItems(ctx context.Context, items []models.ContentAna
 		return nil
 	}
 
-	const cols = 10 // number of columns per row
+	const cols = 12 // number of columns per row
 	valueStrings := make([]string, 0, len(items))
 	args := make([]interface{}, 0, len(items)*cols)
 
 	for i, item := range items {
 		base := i * cols
 		valueStrings = append(valueStrings, fmt.Sprintf(
-			"($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)",
+			"($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)",
 			base+1, base+2, base+3, base+4, base+5,
 			base+6, base+7, base+8, base+9, base+10,
+			base+11, base+12,
 		))
 		args = append(args,
 			item.JobID, item.DetectionType, item.MatchedText,
 			item.EntityID, item.Similarity, item.ContextSnippet,
 			item.PositionStart, item.PositionEnd, item.Resolution,
-			item.ResolvedEntityID,
+			item.ResolvedEntityID, item.SuggestedContent, item.Phase,
 		)
 	}
 
@@ -140,7 +157,7 @@ func (db *DB) CreateAnalysisItems(ctx context.Context, items []models.ContentAna
 		INSERT INTO content_analysis_items
 			(job_id, detection_type, matched_text, entity_id, similarity,
 			 context_snippet, position_start, position_end, resolution,
-			 resolved_entity_id)
+			 resolved_entity_id, suggested_content, phase)
 		VALUES %s`, strings.Join(valueStrings, ", "))
 
 	return db.Exec(ctx, query, args...)
@@ -150,22 +167,31 @@ func (db *DB) CreateAnalysisItems(ctx context.Context, items []models.ContentAna
 // entities to populate entity_name and entity_type. When resolution is
 // non-empty, only items matching that resolution are returned. Results
 // are ordered by position_start ascending.
-func (db *DB) ListAnalysisItemsByJob(ctx context.Context, jobID int64, resolution string) ([]models.ContentAnalysisItem, error) {
+func (db *DB) ListAnalysisItemsByJob(ctx context.Context, jobID int64, resolution string, phase string) ([]models.ContentAnalysisItem, error) {
 	query := `
 		SELECT i.id, i.job_id, i.detection_type, i.matched_text,
 		       i.entity_id, i.similarity, i.context_snippet,
 		       i.position_start, i.position_end, i.resolution,
 		       i.resolved_entity_id, i.resolved_at, i.created_at,
+		       i.suggested_content, i.phase,
 		       e.name AS entity_name, e.entity_type
 		FROM content_analysis_items i
 		LEFT JOIN entities e ON i.entity_id = e.id
 		WHERE i.job_id = $1`
 
 	args := []interface{}{jobID}
+	argIdx := 1
 
 	if resolution != "" {
-		query += ` AND i.resolution = $2`
+		argIdx++
+		query += fmt.Sprintf(` AND i.resolution = $%d`, argIdx)
 		args = append(args, resolution)
+	}
+
+	if phase != "" {
+		argIdx++
+		query += fmt.Sprintf(` AND i.phase = $%d`, argIdx)
+		args = append(args, phase)
 	}
 
 	query += ` ORDER BY i.position_start ASC`
@@ -199,7 +225,27 @@ func (db *DB) UpdateJobResolvedCount(ctx context.Context, jobID int64) error {
 		SET resolved_items = (
 			SELECT COUNT(*)
 			FROM content_analysis_items
-			WHERE job_id = $1 AND resolution != 'pending'
+			WHERE job_id = $1
+			  AND phase = 'identification'
+			  AND resolution != 'pending'
+		)
+		WHERE id = $1`
+
+	return db.Exec(ctx, query, jobID)
+}
+
+// UpdateJobEnrichmentCount recalculates and updates the enrichment
+// resolved count for a content analysis job based on enrichment-phase
+// items that are no longer pending.
+func (db *DB) UpdateJobEnrichmentCount(ctx context.Context, jobID int64) error {
+	query := `
+		UPDATE content_analysis_jobs
+		SET enrichment_resolved = (
+			SELECT COUNT(*)
+			FROM content_analysis_items
+			WHERE job_id = $1
+			  AND phase = 'enrichment'
+			  AND resolution != 'pending'
 		)
 		WHERE id = $1`
 
@@ -222,6 +268,7 @@ func (db *DB) CountPendingAnalysisItems(ctx context.Context, campaignID int64, s
 			WHERE j.campaign_id = $1
 			  AND j.source_table = $2
 			  AND j.source_id = $3
+			  AND i.phase = 'identification'
 			  AND i.resolution = 'pending'`
 		err = db.QueryRow(ctx, query, campaignID, sourceTable, sourceID).Scan(&count)
 	} else {
@@ -230,6 +277,7 @@ func (db *DB) CountPendingAnalysisItems(ctx context.Context, campaignID int64, s
 			FROM content_analysis_items i
 			JOIN content_analysis_jobs j ON i.job_id = j.id
 			WHERE j.campaign_id = $1
+			  AND i.phase = 'identification'
 			  AND i.resolution = 'pending'`
 		err = db.QueryRow(ctx, query, campaignID).Scan(&count)
 	}
@@ -261,7 +309,9 @@ func scanAnalysisJobs(rows pgx.Rows) ([]models.ContentAnalysisJob, error) {
 		var j models.ContentAnalysisJob
 		err := rows.Scan(
 			&j.ID, &j.CampaignID, &j.SourceTable, &j.SourceID, &j.SourceField,
-			&j.Status, &j.TotalItems, &j.ResolvedItems, &j.CreatedAt, &j.UpdatedAt,
+			&j.Status, &j.TotalItems, &j.ResolvedItems,
+			&j.EnrichmentTotal, &j.EnrichmentResolved,
+			&j.CreatedAt, &j.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan analysis job: %w", err)
@@ -287,6 +337,7 @@ func scanAnalysisItems(rows pgx.Rows) ([]models.ContentAnalysisItem, error) {
 			&item.EntityID, &item.Similarity, &item.ContextSnippet,
 			&item.PositionStart, &item.PositionEnd, &item.Resolution,
 			&item.ResolvedEntityID, &item.ResolvedAt, &item.CreatedAt,
+			&item.SuggestedContent, &item.Phase,
 			&item.EntityName, &item.EntityType,
 		)
 		if err != nil {

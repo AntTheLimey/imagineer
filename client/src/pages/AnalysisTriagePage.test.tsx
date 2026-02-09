@@ -19,6 +19,12 @@ vi.mock('../hooks/useContentAnalysis', () => ({
     useResolveItem: vi.fn(),
     useBatchResolve: vi.fn(),
     useRevertItem: vi.fn(),
+    useTriggerEnrichment: vi.fn(),
+    useEnrichmentStream: vi.fn(),
+}));
+
+vi.mock('../hooks/useUserSettings', () => ({
+    useUserSettings: vi.fn(),
 }));
 
 import {
@@ -27,13 +33,19 @@ import {
     useResolveItem,
     useBatchResolve,
     useRevertItem,
+    useTriggerEnrichment,
+    useEnrichmentStream,
 } from '../hooks/useContentAnalysis';
+import { useUserSettings } from '../hooks/useUserSettings';
 
 const mockUseAnalysisJob = vi.mocked(useAnalysisJob);
 const mockUseAnalysisItems = vi.mocked(useAnalysisItems);
 const mockUseResolveItem = vi.mocked(useResolveItem);
 const mockUseBatchResolve = vi.mocked(useBatchResolve);
 const mockUseRevertItem = vi.mocked(useRevertItem);
+const mockUseTriggerEnrichment = vi.mocked(useTriggerEnrichment);
+const mockUseEnrichmentStream = vi.mocked(useEnrichmentStream);
+const mockUseUserSettings = vi.mocked(useUserSettings);
 
 const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -63,6 +75,8 @@ const mockJob = {
     status: 'completed',
     totalItems: 4,
     resolvedItems: 0,
+    enrichmentTotal: 0,
+    enrichmentResolved: 0,
     createdAt: '2025-01-01T00:00:00Z',
     updatedAt: '2025-01-01T00:00:00Z',
 };
@@ -78,6 +92,7 @@ const mockItems = [
         entityType: 'npc' as const,
         contextSnippet: 'They went to see Professor Armitage at the university.',
         resolution: 'pending' as const,
+        phase: 'identification' as const,
         createdAt: '2025-01-01T00:00:00Z',
     },
     {
@@ -87,6 +102,7 @@ const mockItems = [
         matchedText: 'The Silver Key',
         contextSnippet: 'He carried The Silver Key in his pack.',
         resolution: 'pending' as const,
+        phase: 'identification' as const,
         createdAt: '2025-01-01T00:00:00Z',
     },
     {
@@ -100,6 +116,7 @@ const mockItems = [
         similarity: 1.0,
         contextSnippet: 'The investigators returned to Arkham that evening.',
         resolution: 'pending' as const,
+        phase: 'identification' as const,
         createdAt: '2025-01-01T00:00:00Z',
     },
     {
@@ -113,6 +130,7 @@ const mockItems = [
         similarity: 0.85,
         contextSnippet: 'The cultists chanted the name of Cthuhlu.',
         resolution: 'pending' as const,
+        phase: 'identification' as const,
         createdAt: '2025-01-01T00:00:00Z',
     },
 ];
@@ -131,6 +149,15 @@ describe('AnalysisTriagePage', () => {
             mutate: vi.fn(),
             isPending: false,
         } as unknown as ReturnType<typeof useRevertItem>);
+        mockUseTriggerEnrichment.mockReturnValue({
+            mutate: vi.fn(),
+            isPending: false,
+        } as unknown as ReturnType<typeof useTriggerEnrichment>);
+        mockUseEnrichmentStream.mockReturnValue(undefined);
+        mockUseUserSettings.mockReturnValue({
+            data: undefined,
+            isLoading: false,
+        } as unknown as ReturnType<typeof useUserSettings>);
     });
 
     it('renders loading state', () => {

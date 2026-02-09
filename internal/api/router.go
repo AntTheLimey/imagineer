@@ -67,6 +67,8 @@ func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string)
 	entityDetectionHandler := NewEntityDetectionHandler(db)
 	entityResolveHandler := NewEntityResolveHandler(db)
 	contentAnalysisHandler := NewContentAnalysisHandler(db)
+	entityLogHandler := NewEntityLogHandler(db)
+	enrichmentHandler := NewEnrichmentHandler(db)
 
 	// API routes
 	r.Route("/api", func(r chi.Router) {
@@ -123,6 +125,14 @@ func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string)
 					r.Route("/entities/{entityId}", func(r chi.Router) {
 						r.Get("/relationships", h.GetEntityRelationships)
 						r.Get("/timeline", h.GetEntityTimelineEvents)
+
+						// Entity log
+						r.Get("/log", entityLogHandler.ListEntityLogs)
+						r.Post("/log", entityLogHandler.CreateEntityLog)
+						r.Route("/log/{logId}", func(r chi.Router) {
+							r.Put("/", entityLogHandler.UpdateEntityLog)
+							r.Delete("/", entityLogHandler.DeleteEntityLog)
+						})
 					})
 
 					// Campaign relationships
@@ -206,6 +216,8 @@ func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string)
 							r.Get("/", contentAnalysisHandler.GetJob)
 							r.Get("/items", contentAnalysisHandler.ListJobItems)
 							r.Put("/resolve-all", contentAnalysisHandler.BatchResolve)
+							r.Post("/enrich", enrichmentHandler.TriggerEnrichment)
+							r.Get("/enrichment-stream", enrichmentHandler.EnrichmentStream)
 						})
 						r.Put("/items/{itemId}", contentAnalysisHandler.ResolveItem)
 						r.Put("/items/{itemId}/revert", contentAnalysisHandler.RevertItem)

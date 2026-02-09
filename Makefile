@@ -28,7 +28,7 @@ help:
 	@echo "  make client-dev     - Start React dev server"
 	@echo "  make client-build   - Build React client"
 	@echo "  make dev            - Start all services for development"
-	@echo "  make ollama-init    - Pull Ollama embedding model"
+	@echo "  make ollama-init    - Pull Ollama embedding model (fallback for manual pulls)"
 	@echo "  make test-integration - Run embedding integration tests (requires Docker)"
 
 # Docker commands
@@ -162,7 +162,8 @@ status:
 
 # Ollama commands
 ollama-init:
-	@echo "Pulling Ollama embedding model..."
+	@echo "Note: The mxbai-embed-large model is pre-baked into the Docker image."
+	@echo "Use this target only if you need to re-pull the model manually."
 	@./scripts/ollama-init.sh
 
 # Development commands
