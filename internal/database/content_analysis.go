@@ -207,20 +207,33 @@ func (db *DB) UpdateJobResolvedCount(ctx context.Context, jobID int64) error {
 }
 
 // CountPendingAnalysisItems counts analysis items with resolution =
-// 'pending' for a given campaign, source table, and source ID. This
-// joins through content_analysis_jobs to filter by campaign context.
+// 'pending' for a given campaign. When sourceTable and sourceID are
+// provided (non-empty / non-zero), the count is scoped to that
+// specific source; otherwise it returns the campaign-wide total.
 func (db *DB) CountPendingAnalysisItems(ctx context.Context, campaignID int64, sourceTable string, sourceID int64) (int, error) {
-	query := `
-		SELECT COUNT(*)
-		FROM content_analysis_items i
-		JOIN content_analysis_jobs j ON i.job_id = j.id
-		WHERE j.campaign_id = $1
-		  AND j.source_table = $2
-		  AND j.source_id = $3
-		  AND i.resolution = 'pending'`
-
 	var count int
-	err := db.QueryRow(ctx, query, campaignID, sourceTable, sourceID).Scan(&count)
+	var err error
+
+	if sourceTable != "" && sourceID != 0 {
+		query := `
+			SELECT COUNT(*)
+			FROM content_analysis_items i
+			JOIN content_analysis_jobs j ON i.job_id = j.id
+			WHERE j.campaign_id = $1
+			  AND j.source_table = $2
+			  AND j.source_id = $3
+			  AND i.resolution = 'pending'`
+		err = db.QueryRow(ctx, query, campaignID, sourceTable, sourceID).Scan(&count)
+	} else {
+		query := `
+			SELECT COUNT(*)
+			FROM content_analysis_items i
+			JOIN content_analysis_jobs j ON i.job_id = j.id
+			WHERE j.campaign_id = $1
+			  AND i.resolution = 'pending'`
+		err = db.QueryRow(ctx, query, campaignID).Scan(&count)
+	}
+
 	if err != nil {
 		return 0, fmt.Errorf("failed to count pending analysis items: %w", err)
 	}

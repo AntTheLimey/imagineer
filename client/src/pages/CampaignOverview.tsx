@@ -41,6 +41,7 @@ import {
     Close as CancelIcon,
     Check as CheckIcon,
 } from '@mui/icons-material';
+import { AnalysisBadge } from '../components/AnalysisBadge';
 import { MarkdownEditor } from '../components/MarkdownEditor';
 import { GENRE_OPTIONS } from '../components/CampaignSettings';
 import {
@@ -365,6 +366,16 @@ export default function CampaignOverview() {
                         Cancel
                     </Button>
                 </Alert>
+            )}
+
+            {/* Pending analysis banner */}
+            {campaignId && (
+                <Box sx={{ mb: 2 }}>
+                    <AnalysisBadge
+                        campaignId={campaignId}
+                        variant="banner"
+                    />
+                </Box>
             )}
 
             {/* Quick Stats */}

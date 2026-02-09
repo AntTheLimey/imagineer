@@ -149,6 +149,33 @@ export const contentAnalysisApi = {
     },
 
     /**
+     * Batch-resolve all pending items of a given detection type within a
+     * job.
+     */
+    batchResolve(
+        campaignId: number,
+        jobId: number,
+        req: { detectionType: string; resolution: string },
+    ): Promise<{ resolved: number }> {
+        return apiClient.put<{ resolved: number }>(
+            `/campaigns/${campaignId}/analysis/jobs/${jobId}/resolve-all`,
+            req,
+        );
+    },
+
+    /**
+     * Revert a previously resolved analysis item back to pending.
+     */
+    revertItem(
+        campaignId: number,
+        itemId: number,
+    ): Promise<{ status: string }> {
+        return apiClient.put<{ status: string }>(
+            `/campaigns/${campaignId}/analysis/items/${itemId}/revert`,
+        );
+    },
+
+    /**
      * Get the count of pending (unresolved) analysis items, optionally
      * scoped to a specific source.
      */

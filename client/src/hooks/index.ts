@@ -155,6 +155,8 @@ export {
     useAnalysisJob,
     useAnalysisItems,
     useResolveItem,
+    useBatchResolve,
+    useRevertItem,
     useTriggerAnalysis,
     usePendingAnalysisCount,
     contentAnalysisKeys,

@@ -17,17 +17,23 @@ vi.mock('../hooks/useContentAnalysis', () => ({
     useAnalysisJob: vi.fn(),
     useAnalysisItems: vi.fn(),
     useResolveItem: vi.fn(),
+    useBatchResolve: vi.fn(),
+    useRevertItem: vi.fn(),
 }));
 
 import {
     useAnalysisJob,
     useAnalysisItems,
     useResolveItem,
+    useBatchResolve,
+    useRevertItem,
 } from '../hooks/useContentAnalysis';
 
 const mockUseAnalysisJob = vi.mocked(useAnalysisJob);
 const mockUseAnalysisItems = vi.mocked(useAnalysisItems);
 const mockUseResolveItem = vi.mocked(useResolveItem);
+const mockUseBatchResolve = vi.mocked(useBatchResolve);
+const mockUseRevertItem = vi.mocked(useRevertItem);
 
 const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -117,6 +123,14 @@ describe('AnalysisTriagePage', () => {
             mutate: vi.fn(),
             isPending: false,
         } as unknown as ReturnType<typeof useResolveItem>);
+        mockUseBatchResolve.mockReturnValue({
+            mutate: vi.fn(),
+            isPending: false,
+        } as unknown as ReturnType<typeof useBatchResolve>);
+        mockUseRevertItem.mockReturnValue({
+            mutate: vi.fn(),
+            isPending: false,
+        } as unknown as ReturnType<typeof useRevertItem>);
     });
 
     it('renders loading state', () => {
@@ -189,7 +203,7 @@ describe('AnalysisTriagePage', () => {
         expect(screen.getByText('Cthuhlu')).toBeInTheDocument();
     });
 
-    it('"Skip for now" button is present', () => {
+    it('"Done" button is present for navigating away', () => {
         mockUseAnalysisJob.mockReturnValue({
             data: mockJob,
             isLoading: false,
@@ -202,7 +216,7 @@ describe('AnalysisTriagePage', () => {
         renderPage();
 
         expect(
-            screen.getByRole('button', { name: /skip for now/i })
+            screen.getByRole('button', { name: /^Done$/i })
         ).toBeInTheDocument();
     });
 
@@ -223,7 +237,7 @@ describe('AnalysisTriagePage', () => {
         ).toBeInTheDocument();
     });
 
-    it('"Done" button shows "All resolved" when every item is resolved', () => {
+    it('"Done" button and resolved count chip when every item is resolved', () => {
         mockUseAnalysisJob.mockReturnValue({
             data: mockJob,
             isLoading: false,
@@ -241,7 +255,10 @@ describe('AnalysisTriagePage', () => {
         renderPage();
 
         expect(
-            screen.getByRole('button', { name: /all resolved/i })
+            screen.getByRole('button', { name: /^Done$/i })
+        ).toBeInTheDocument();
+        expect(
+            screen.getByText(`${resolvedItems.length} of ${resolvedItems.length} reviewed`)
         ).toBeInTheDocument();
     });
 });

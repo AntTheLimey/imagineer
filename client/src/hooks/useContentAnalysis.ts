@@ -22,6 +22,10 @@ import type {
     TriggerAnalysisResponse,
     PendingCountResponse,
 } from '../api/contentAnalysis';
+import { campaignKeys } from './useCampaigns';
+import { entityKeys } from './useEntities';
+import { chapterKeys } from './useChapters';
+import { sessionKeys } from './useSessions';
 
 /**
  * Query keys for content analysis queries.
@@ -82,8 +86,9 @@ export function useAnalysisItems(campaignId: number, jobId: number, resolution?:
 }
 
 /**
- * Mutation to resolve a single analysis item. Invalidates all content
- * analysis queries on success.
+ * Mutation to resolve a single analysis item. Invalidates content
+ * analysis queries and source content caches on success, because the
+ * backend may modify source content (e.g., inserting wiki links).
  *
  * @param campaignId - The campaign the item belongs to.
  */
@@ -95,6 +100,21 @@ export function useResolveItem(campaignId: number) {
         onSuccess: () => {
             queryClient.invalidateQueries({
                 queryKey: contentAnalysisKeys.all,
+            });
+            // The backend modifies source content (campaigns, entities,
+            // chapters, sessions) when applying wiki-link fixes, so
+            // invalidate those caches too.
+            queryClient.invalidateQueries({
+                queryKey: campaignKeys.all,
+            });
+            queryClient.invalidateQueries({
+                queryKey: entityKeys.all,
+            });
+            queryClient.invalidateQueries({
+                queryKey: chapterKeys.all,
+            });
+            queryClient.invalidateQueries({
+                queryKey: sessionKeys.all,
             });
         },
     });
@@ -114,6 +134,77 @@ export function useTriggerAnalysis(campaignId: number) {
         onSuccess: () => {
             queryClient.invalidateQueries({
                 queryKey: contentAnalysisKeys.all,
+            });
+        },
+    });
+}
+
+/**
+ * Mutation to batch-resolve all pending items of a given detection type
+ * within a job. Invalidates content analysis and source content caches
+ * on success.
+ *
+ * @param campaignId - The campaign the job belongs to.
+ */
+export function useBatchResolve(campaignId: number) {
+    const queryClient = useQueryClient();
+    return useMutation<
+        { resolved: number },
+        Error,
+        { jobId: number; detectionType: string; resolution: string }
+    >({
+        mutationFn: ({ jobId, detectionType, resolution }) =>
+            contentAnalysisApi.batchResolve(campaignId, jobId, {
+                detectionType,
+                resolution,
+            }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({
+                queryKey: contentAnalysisKeys.all,
+            });
+            queryClient.invalidateQueries({
+                queryKey: campaignKeys.all,
+            });
+            queryClient.invalidateQueries({
+                queryKey: entityKeys.all,
+            });
+            queryClient.invalidateQueries({
+                queryKey: chapterKeys.all,
+            });
+            queryClient.invalidateQueries({
+                queryKey: sessionKeys.all,
+            });
+        },
+    });
+}
+
+/**
+ * Mutation to revert a previously resolved analysis item back to
+ * pending. Invalidates content analysis and source content caches on
+ * success.
+ *
+ * @param campaignId - The campaign the item belongs to.
+ */
+export function useRevertItem(campaignId: number) {
+    const queryClient = useQueryClient();
+    return useMutation<{ status: string }, Error, { itemId: number }>({
+        mutationFn: ({ itemId }) =>
+            contentAnalysisApi.revertItem(campaignId, itemId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({
+                queryKey: contentAnalysisKeys.all,
+            });
+            queryClient.invalidateQueries({
+                queryKey: campaignKeys.all,
+            });
+            queryClient.invalidateQueries({
+                queryKey: entityKeys.all,
+            });
+            queryClient.invalidateQueries({
+                queryKey: chapterKeys.all,
+            });
+            queryClient.invalidateQueries({
+                queryKey: sessionKeys.all,
             });
         },
     });

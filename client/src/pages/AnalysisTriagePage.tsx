@@ -16,6 +16,9 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
+    Accordion,
+    AccordionDetails,
+    AccordionSummary,
     Box,
     Typography,
     Chip,
@@ -35,17 +38,27 @@ import {
     Stack,
     Alert,
     Tooltip,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogContentText,
+    DialogActions,
 } from '@mui/material';
 import {
     Check,
     AddCircle,
     Close,
+    DoneAll,
+    Undo,
+    ExpandMore,
 } from '@mui/icons-material';
 import FullScreenLayout from '../layouts/FullScreenLayout';
 import {
     useAnalysisJob,
     useAnalysisItems,
     useResolveItem,
+    useBatchResolve,
+    useRevertItem,
 } from '../hooks/useContentAnalysis';
 import {
     entityTypeColors,
@@ -104,8 +117,10 @@ const ENTITY_TYPES: EntityType[] = [
 /**
  * Full-screen triage page for reviewing content analysis results.
  *
- * Displays items grouped by detection type in a left panel and a detail
- * view with resolution actions in a right panel.
+ * Displays pending items grouped by detection type in a left panel and
+ * a detail view with resolution actions in a right panel. Resolved
+ * items are collected into a collapsible "Accepted Changes" section
+ * at the bottom of the left panel.
  */
 export default function AnalysisTriagePage() {
     const { campaignId, jobId } = useParams<{
@@ -126,44 +141,52 @@ export default function AnalysisTriagePage() {
         numericJobId
     );
     const resolveItem = useResolveItem(numericCampaignId);
+    const batchResolve = useBatchResolve(numericCampaignId);
+    const revertItem = useRevertItem(numericCampaignId);
 
     const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
     const [newEntityName, setNewEntityName] = useState('');
     const [newEntityType, setNewEntityType] = useState<EntityType>('npc');
     const [showNewEntityForm, setShowNewEntityForm] = useState(false);
+    const [showDoneDialog, setShowDoneDialog] = useState(false);
 
     const isLoading = jobLoading || itemsLoading;
 
     /**
-     * Group items by detection type, with resolved items sorted to the
-     * bottom of each group.
+     * Split items into pending and resolved arrays.
      */
-    const groupedItems = useMemo(() => {
-        if (!items) return {};
+    const pendingItems = useMemo(() => {
+        if (!items) return [];
+        return items.filter((i) => i.resolution === 'pending');
+    }, [items]);
+
+    const resolvedItems = useMemo(() => {
+        if (!items) return [];
+        return items.filter((i) => i.resolution !== 'pending');
+    }, [items]);
+
+    /**
+     * Group only pending items by detection type for the main sections.
+     */
+    const groupedPendingItems = useMemo(() => {
         const groups: Record<string, ContentAnalysisItem[]> = {};
         for (const group of DETECTION_GROUPS) {
-            const groupItems = items
-                .filter((item) => item.detectionType === group.key)
-                .sort((a, b) => {
-                    const aResolved = a.resolution !== 'pending' ? 1 : 0;
-                    const bResolved = b.resolution !== 'pending' ? 1 : 0;
-                    return aResolved - bResolved;
-                });
+            const groupItems = pendingItems.filter(
+                (item) => item.detectionType === group.key
+            );
             if (groupItems.length > 0) {
                 groups[group.key] = groupItems;
             }
         }
         return groups;
-    }, [items]);
+    }, [pendingItems]);
 
     const selectedItem = useMemo(() => {
         if (!items || selectedItemId === null) return null;
         return items.find((item) => item.id === selectedItemId) ?? null;
     }, [items, selectedItemId]);
 
-    const resolvedCount = items
-        ? items.filter((item) => item.resolution !== 'pending').length
-        : 0;
+    const resolvedCount = resolvedItems.length;
     const totalCount = items ? items.length : 0;
     const allResolved = resolvedCount === totalCount && totalCount > 0;
 
@@ -198,6 +221,18 @@ export default function AnalysisTriagePage() {
     }
 
     /**
+     * Handle the Done button: navigate immediately if all items are
+     * resolved, otherwise show the confirmation dialog.
+     */
+    const handleDone = () => {
+        if (allResolved) {
+            navigate(getReturnPath());
+        } else {
+            setShowDoneDialog(true);
+        }
+    };
+
+    /**
      * Handle resolving an item with the given resolution.
      */
     const handleResolve = (
@@ -215,6 +250,24 @@ export default function AnalysisTriagePage() {
             },
         });
         setShowNewEntityForm(false);
+    };
+
+    /**
+     * Handle batch-resolving all pending items of a detection type.
+     */
+    const handleBatchResolve = (detectionType: string) => {
+        batchResolve.mutate({
+            jobId: numericJobId,
+            detectionType,
+            resolution: 'accepted',
+        });
+    };
+
+    /**
+     * Handle reverting a resolved item back to pending.
+     */
+    const handleRevert = (itemId: number) => {
+        revertItem.mutate({ itemId });
     };
 
     /**
@@ -321,7 +374,7 @@ export default function AnalysisTriagePage() {
             actions={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Chip
-                        label={`${resolvedCount}/${totalCount} resolved`}
+                        label={`${resolvedCount} of ${totalCount} reviewed`}
                         size="small"
                         color={allResolved ? 'success' : 'default'}
                     />
@@ -329,18 +382,9 @@ export default function AnalysisTriagePage() {
                         variant="contained"
                         size="small"
                         color={allResolved ? 'success' : 'primary'}
-                        onClick={() => navigate(getReturnPath())}
+                        onClick={handleDone}
                     >
-                        {allResolved
-                            ? 'All resolved \u2014 Done'
-                            : 'Done'}
-                    </Button>
-                    <Button
-                        variant="outlined"
-                        size="small"
-                        onClick={() => navigate(getReturnPath())}
-                    >
-                        Skip for now
+                        Done
                     </Button>
                 </Box>
             }
@@ -363,7 +407,8 @@ export default function AnalysisTriagePage() {
                 >
                     <List disablePadding>
                         {DETECTION_GROUPS.map((group) => {
-                            const groupItems = groupedItems[group.key];
+                            const groupItems =
+                                groupedPendingItems[group.key];
                             if (!groupItems || groupItems.length === 0) {
                                 return null;
                             }
@@ -389,177 +434,316 @@ export default function AnalysisTriagePage() {
                                         />
                                         <Typography
                                             variant="subtitle2"
-                                            sx={{ fontWeight: 600 }}
+                                            sx={{
+                                                fontWeight: 600,
+                                                flexGrow: 1,
+                                            }}
                                         >
-                                            {group.label} ({groupItems.length})
+                                            {group.label} (
+                                            {groupItems.length})
                                         </Typography>
+                                        <Tooltip title="Accept all pending items in this group">
+                                            <span>
+                                                <Button
+                                                    size="small"
+                                                    variant="outlined"
+                                                    startIcon={
+                                                        <DoneAll
+                                                            fontSize="small"
+                                                        />
+                                                    }
+                                                    onClick={() =>
+                                                        handleBatchResolve(
+                                                            group.key
+                                                        )
+                                                    }
+                                                    disabled={
+                                                        batchResolve.isPending
+                                                    }
+                                                    sx={{
+                                                        textTransform: 'none',
+                                                        py: 0,
+                                                        minHeight: 28,
+                                                    }}
+                                                >
+                                                    Accept All
+                                                </Button>
+                                            </span>
+                                        </Tooltip>
                                     </Box>
                                     <Divider />
-                                    {groupItems.map((item) => {
-                                        const isResolved =
-                                            item.resolution !== 'pending';
-                                        return (
-                                            <ListItemButton
-                                                key={item.id}
-                                                selected={
-                                                    selectedItemId === item.id
-                                                }
-                                                onClick={() =>
-                                                    handleSelectItem(item)
-                                                }
-                                                sx={{
-                                                    opacity: isResolved
-                                                        ? 0.5
-                                                        : 1,
-                                                    bgcolor:
-                                                        selectedItemId ===
-                                                        item.id
-                                                            ? 'action.selected'
-                                                            : undefined,
-                                                }}
-                                            >
-                                                <ListItemText
-                                                    primary={
-                                                        <Box
-                                                            sx={{
-                                                                display: 'flex',
-                                                                alignItems:
-                                                                    'center',
-                                                                gap: 1,
-                                                            }}
-                                                        >
-                                                            <Typography
-                                                                variant="body2"
-                                                                sx={{
-                                                                    fontWeight: 600,
-                                                                }}
-                                                            >
-                                                                {
-                                                                    item.matchedText
-                                                                }
-                                                            </Typography>
-                                                            {item.entityId &&
-                                                                item.entityName &&
-                                                                item.entityType && (
-                                                                <Chip
-                                                                    label={
-                                                                        item.entityName
-                                                                    }
-                                                                    size="small"
-                                                                    color={
-                                                                        entityTypeColors[
-                                                                            item
-                                                                                .entityType
-                                                                        ] ??
-                                                                            'default'
-                                                                    }
-                                                                    sx={{
-                                                                        height: 20,
-                                                                    }}
-                                                                />
-                                                            )}
-                                                            {item.similarity !==
-                                                                undefined &&
-                                                                item.detectionType ===
-                                                                    'misspelling' && (
-                                                                <Typography
-                                                                    variant="caption"
-                                                                    color="text.secondary"
-                                                                >
-                                                                    {Math.round(
-                                                                        item.similarity *
-                                                                            100
-                                                                    )}
-                                                                    %
-                                                                </Typography>
-                                                            )}
-                                                            {isResolved && (
-                                                                <Chip
-                                                                    label={
-                                                                        item.resolution
-                                                                    }
-                                                                    size="small"
-                                                                    variant="outlined"
-                                                                    sx={{
-                                                                        height: 20,
-                                                                    }}
-                                                                />
-                                                            )}
-                                                        </Box>
-                                                    }
-                                                    secondary={
-                                                        item.contextSnippet
-                                                            ? item.contextSnippet.length >
-                                                              80
-                                                                ? `${item.contextSnippet.slice(0, 80)}...`
-                                                                : item.contextSnippet
-                                                            : undefined
-                                                    }
-                                                />
-                                                {!isResolved && (
+                                    {groupItems.map((item) => (
+                                        <ListItemButton
+                                            key={item.id}
+                                            selected={
+                                                selectedItemId === item.id
+                                            }
+                                            onClick={() =>
+                                                handleSelectItem(item)
+                                            }
+                                            sx={{
+                                                bgcolor:
+                                                    selectedItemId ===
+                                                    item.id
+                                                        ? 'action.selected'
+                                                        : undefined,
+                                            }}
+                                        >
+                                            <ListItemText
+                                                primary={
                                                     <Box
                                                         sx={{
                                                             display: 'flex',
-                                                            gap: 0.5,
-                                                            ml: 1,
+                                                            alignItems:
+                                                                'center',
+                                                            gap: 1,
                                                         }}
                                                     >
-                                                        <Tooltip title="Accept — link to matched entity">
-                                                            <IconButton
+                                                        <Typography
+                                                            variant="body2"
+                                                            sx={{
+                                                                fontWeight: 600,
+                                                            }}
+                                                        >
+                                                            {
+                                                                item.matchedText
+                                                            }
+                                                        </Typography>
+                                                        {item.entityId &&
+                                                            item.entityName &&
+                                                            item.entityType && (
+                                                            <Chip
+                                                                label={
+                                                                    item.entityName
+                                                                }
                                                                 size="small"
-                                                                color="success"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleResolve(
-                                                                        item.id,
-                                                                        'accepted'
-                                                                    );
-                                                                }}
-                                                            >
-                                                                <Check fontSize="small" />
-                                                            </IconButton>
-                                                        </Tooltip>
-                                                        <Tooltip title="Create new entity from this text">
-                                                            <IconButton
-                                                                size="small"
-                                                                color="primary"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleSelectItem(
+                                                                color={
+                                                                    entityTypeColors[
                                                                         item
-                                                                    );
-                                                                    setShowNewEntityForm(
-                                                                        true
-                                                                    );
+                                                                            .entityType
+                                                                    ] ??
+                                                                        'default'
+                                                                }
+                                                                sx={{
+                                                                    height: 20,
                                                                 }}
+                                                            />
+                                                        )}
+                                                        {item.similarity !==
+                                                            undefined &&
+                                                            item.detectionType ===
+                                                                'misspelling' && (
+                                                            <Typography
+                                                                variant="caption"
+                                                                color="text.secondary"
                                                             >
-                                                                <AddCircle fontSize="small" />
-                                                            </IconButton>
-                                                        </Tooltip>
-                                                        <Tooltip title="Dismiss — ignore this detection">
-                                                            <IconButton
-                                                                size="small"
-                                                                color="error"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleResolve(
-                                                                        item.id,
-                                                                        'dismissed'
-                                                                    );
-                                                                }}
-                                                            >
-                                                                <Close fontSize="small" />
-                                                            </IconButton>
-                                                        </Tooltip>
+                                                                {Math.round(
+                                                                    item.similarity *
+                                                                        100
+                                                                )}
+                                                                %
+                                                            </Typography>
+                                                        )}
                                                     </Box>
-                                                )}
-                                            </ListItemButton>
-                                        );
-                                    })}
+                                                }
+                                                secondary={
+                                                    item.contextSnippet
+                                                        ? item.contextSnippet.length >
+                                                          80
+                                                            ? `${item.contextSnippet.slice(0, 80)}...`
+                                                            : item.contextSnippet
+                                                        : undefined
+                                                }
+                                            />
+                                            <Box
+                                                sx={{
+                                                    display: 'flex',
+                                                    gap: 0.5,
+                                                    ml: 1,
+                                                }}
+                                            >
+                                                <Tooltip title="Accept — link to matched entity">
+                                                    <IconButton
+                                                        size="small"
+                                                        color="success"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleResolve(
+                                                                item.id,
+                                                                'accepted'
+                                                            );
+                                                        }}
+                                                    >
+                                                        <Check fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                                <Tooltip title="Create new entity from this text">
+                                                    <IconButton
+                                                        size="small"
+                                                        color="primary"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleSelectItem(
+                                                                item
+                                                            );
+                                                            setShowNewEntityForm(
+                                                                true
+                                                            );
+                                                        }}
+                                                    >
+                                                        <AddCircle fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                                <Tooltip title="Dismiss — ignore this detection">
+                                                    <IconButton
+                                                        size="small"
+                                                        color="error"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleResolve(
+                                                                item.id,
+                                                                'dismissed'
+                                                            );
+                                                        }}
+                                                    >
+                                                        <Close fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                            </Box>
+                                        </ListItemButton>
+                                    ))}
                                 </Box>
                             );
                         })}
                     </List>
+
+                    {/* Accepted Changes - collapsible section */}
+                    {resolvedItems.length > 0 && (
+                        <Accordion
+                            defaultExpanded={false}
+                            disableGutters
+                            elevation={0}
+                            sx={{
+                                '&:before': { display: 'none' },
+                                borderTop: 1,
+                                borderColor: 'divider',
+                            }}
+                        >
+                            <AccordionSummary
+                                expandIcon={<ExpandMore />}
+                                sx={{
+                                    bgcolor: 'background.default',
+                                    minHeight: 44,
+                                    '& .MuiAccordionSummary-content': {
+                                        my: 0,
+                                    },
+                                }}
+                            >
+                                <Typography
+                                    variant="subtitle2"
+                                    sx={{ fontWeight: 600 }}
+                                >
+                                    Accepted Changes (
+                                    {resolvedItems.length})
+                                </Typography>
+                            </AccordionSummary>
+                            <AccordionDetails sx={{ p: 0 }}>
+                                <List disablePadding>
+                                    {resolvedItems.map((item) => (
+                                        <ListItemButton
+                                            key={item.id}
+                                            selected={
+                                                selectedItemId === item.id
+                                            }
+                                            onClick={() =>
+                                                handleSelectItem(item)
+                                            }
+                                            sx={{
+                                                opacity: 0.7,
+                                                bgcolor:
+                                                    selectedItemId ===
+                                                    item.id
+                                                        ? 'action.selected'
+                                                        : undefined,
+                                            }}
+                                        >
+                                            <ListItemText
+                                                primary={
+                                                    <Box
+                                                        sx={{
+                                                            display: 'flex',
+                                                            alignItems:
+                                                                'center',
+                                                            gap: 1,
+                                                        }}
+                                                    >
+                                                        <Typography
+                                                            variant="body2"
+                                                            sx={{
+                                                                fontWeight: 600,
+                                                            }}
+                                                        >
+                                                            {
+                                                                item.matchedText
+                                                            }
+                                                        </Typography>
+                                                        {item.entityId &&
+                                                            item.entityName &&
+                                                            item.entityType && (
+                                                            <Chip
+                                                                label={
+                                                                    item.entityName
+                                                                }
+                                                                size="small"
+                                                                color={
+                                                                    entityTypeColors[
+                                                                        item
+                                                                            .entityType
+                                                                    ] ??
+                                                                        'default'
+                                                                }
+                                                                sx={{
+                                                                    height: 20,
+                                                                }}
+                                                            />
+                                                        )}
+                                                        <Chip
+                                                            label={
+                                                                item.resolution
+                                                            }
+                                                            size="small"
+                                                            variant="outlined"
+                                                            sx={{
+                                                                height: 20,
+                                                            }}
+                                                        />
+                                                    </Box>
+                                                }
+                                            />
+                                            <Tooltip title="Revert">
+                                                <span>
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleRevert(
+                                                                item.id
+                                                            );
+                                                        }}
+                                                        disabled={
+                                                            revertItem.isPending
+                                                        }
+                                                    >
+                                                        <Undo fontSize="small" />
+                                                    </IconButton>
+                                                </span>
+                                            </Tooltip>
+                                        </ListItemButton>
+                                    ))}
+                                </List>
+                            </AccordionDetails>
+                        </Accordion>
+                    )}
                 </Paper>
 
                 {/* Right panel - Detail view */}
@@ -821,6 +1005,34 @@ export default function AnalysisTriagePage() {
                     )}
                 </Paper>
             </Box>
+
+            {/* Done confirmation dialog */}
+            <Dialog
+                open={showDoneDialog}
+                onClose={() => setShowDoneDialog(false)}
+            >
+                <DialogTitle>Unresolved Items</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        There are {pendingItems.length} items that
+                        haven&apos;t been reviewed. Unresolved items
+                        will be saved for later review.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button
+                        onClick={() => setShowDoneDialog(false)}
+                    >
+                        Continue Reviewing
+                    </Button>
+                    <Button
+                        variant="contained"
+                        onClick={() => navigate(getReturnPath())}
+                    >
+                        Finish Anyway
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </FullScreenLayout>
     );
 }

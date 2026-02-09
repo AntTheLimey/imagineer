@@ -17,6 +17,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
+	"sort"
 	"strconv"
 
 	"github.com/jackc/pgx/v5"
@@ -59,6 +61,19 @@ type TriggerAnalysisResponse struct {
 // endpoint.
 type PendingCountResponse struct {
 	Count int `json:"count"`
+}
+
+// BatchResolveRequest is the request body for batch-resolving analysis
+// items of a given detection type within a single job.
+type BatchResolveRequest struct {
+	DetectionType string `json:"detectionType"`
+	Resolution    string `json:"resolution"`
+}
+
+// BatchResolveResponse is the response body for batch resolve, reporting
+// the number of items successfully resolved.
+type BatchResolveResponse struct {
+	Resolved int `json:"resolved"`
 }
 
 // ListJobs handles GET /api/campaigns/{id}/analysis/jobs
@@ -320,62 +335,93 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 	// Apply content fix for accepted/new_entity resolutions that have
 	// position offsets. This wraps the matched text in [[wiki link]]
 	// brackets within the source content.
+	var fixJobID int64
+	var fixJobIDFound bool
 	if req.Resolution == "accepted" || req.Resolution == "new_entity" {
 		var posStart, posEnd *int
 		var matchedText, srcTable, srcField, detectionType string
 		var srcID int64
 		err := h.db.QueryRow(r.Context(),
 			`SELECT i.position_start, i.position_end, i.matched_text,
-			        i.detection_type,
+			        i.detection_type, i.job_id,
 			        j.source_table, j.source_id, j.source_field
 			 FROM content_analysis_items i
 			 JOIN content_analysis_jobs j ON i.job_id = j.id
 			 WHERE i.id = $1`,
 			itemID,
 		).Scan(&posStart, &posEnd, &matchedText, &detectionType,
-			&srcTable, &srcID, &srcField)
+			&fixJobID, &srcTable, &srcID, &srcField)
 		if err != nil {
 			log.Printf("Error fetching item details for content fix (item %d): %v",
 				itemID, err)
-		} else if posStart != nil && posEnd != nil {
-			// Determine the replacement text based on resolution type.
-			var replacement string
-			if req.Resolution == "new_entity" && req.EntityName != nil && *req.EntityName != "" {
-				replacement = "[[" + *req.EntityName + "]]"
-			} else if detectionType == "potential_alias" && resolvedEntityID != nil {
-				// For potential aliases, use wiki alias syntax
-				// to preserve the original display text.
-				var entityName string
-				err = h.db.QueryRow(r.Context(),
-					"SELECT name FROM entities WHERE id = $1",
-					*resolvedEntityID,
-				).Scan(&entityName)
-				if err != nil {
-					log.Printf("Error fetching entity name for alias link (item %d): %v",
-						itemID, err)
-					replacement = "[[" + matchedText + "]]"
+		} else {
+			fixJobIDFound = true
+			if posStart != nil && posEnd != nil {
+				// Determine the replacement text based on resolution type.
+				var replacement string
+				if req.Resolution == "new_entity" && req.EntityName != nil && *req.EntityName != "" {
+					replacement = "[[" + *req.EntityName + "]]"
+				} else if detectionType == "potential_alias" && resolvedEntityID != nil {
+					// For potential aliases, use wiki alias syntax
+					// to preserve the original display text.
+					var entityName string
+					err = h.db.QueryRow(r.Context(),
+						"SELECT name FROM entities WHERE id = $1",
+						*resolvedEntityID,
+					).Scan(&entityName)
+					if err != nil {
+						log.Printf("Error fetching entity name for alias link (item %d): %v",
+							itemID, err)
+						replacement = "[[" + matchedText + "]]"
+					} else {
+						replacement = "[[" + entityName + "|" + matchedText + "]]"
+					}
 				} else {
-					replacement = "[[" + entityName + "|" + matchedText + "]]"
+					replacement = "[[" + matchedText + "]]"
 				}
-			} else {
-				replacement = "[[" + matchedText + "]]"
-			}
 
-			if fixErr := h.applyContentFix(
-				r.Context(), srcTable, srcID, srcField,
-				*posStart, *posEnd, matchedText, replacement,
-			); fixErr != nil {
-				// Content fix failure is non-fatal: log but still
-				// return success since the resolution itself succeeded.
-				log.Printf("Content fix failed for item %d: %v",
-					itemID, fixErr)
+				if fixErr := h.applyContentFix(
+					r.Context(), srcTable, srcID, srcField,
+					*posStart, *posEnd, matchedText, replacement,
+				); fixErr != nil {
+					// Content fix failure is non-fatal: log but still
+					// return success since the resolution itself succeeded.
+					log.Printf("Content fix failed for item %d: %v",
+						itemID, fixErr)
+				} else {
+					// Adjust byte offsets of remaining pending items
+					// in the same job so that subsequent fixes apply
+					// at the correct positions.
+					delta := len(replacement) - (*posEnd - *posStart)
+					if delta != 0 {
+						adjErr := h.db.Exec(r.Context(),
+							`UPDATE content_analysis_items
+							 SET position_start = position_start + $1,
+							     position_end = position_end + $1
+							 WHERE job_id = $2
+							   AND id != $3
+							   AND resolution = 'pending'
+							   AND position_start >= $4`,
+							delta, fixJobID, itemID, *posEnd,
+						)
+						if adjErr != nil {
+							log.Printf(
+								"Failed to adjust offsets for job %d after item %d: %v",
+								fixJobID, itemID, adjErr)
+						}
+					}
+				}
 			}
 		}
 	}
 
-	// Update the job's resolved count
-	jobID, err := h.getItemJobID(r.Context(), itemID)
-	if err != nil {
+	// Update the job's resolved count. Reuse the job ID fetched above
+	// when available; otherwise fall back to a separate lookup.
+	jobID := fixJobID
+	if !fixJobIDFound {
+		jobID, err = h.getItemJobID(r.Context(), itemID)
+	}
+	if !fixJobIDFound && err != nil {
 		log.Printf("Error getting job ID for item %d: %v", itemID, err)
 		// The item was resolved successfully; the count update is
 		// non-critical so we still return success.
@@ -388,6 +434,172 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 	respondJSON(w, http.StatusOK, map[string]string{
 		"status": "resolved",
 	})
+}
+
+// BatchResolve handles PUT /api/campaigns/{id}/analysis/jobs/{jobId}/resolve-all
+// Batch-resolves all pending analysis items for a job that match the given
+// detectionType. Items are processed in reverse position order (highest
+// position_start first) so that content fixes do not invalidate the byte
+// offsets of items processed later.
+func (h *ContentAnalysisHandler) BatchResolve(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseInt64(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	if err := h.db.VerifyCampaignOwnership(r.Context(), campaignID, userID); err != nil {
+		respondError(w, http.StatusNotFound, "Campaign not found")
+		return
+	}
+
+	jobID, err := parseInt64(r, "jobId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid job ID")
+		return
+	}
+
+	// Verify the job exists and belongs to this campaign.
+	job, err := h.db.GetAnalysisJob(r.Context(), jobID)
+	if err != nil {
+		log.Printf("Error getting analysis job: %v", err)
+		respondError(w, http.StatusNotFound, "Analysis job not found")
+		return
+	}
+
+	if job.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Analysis job not found")
+		return
+	}
+
+	var req BatchResolveRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if req.DetectionType == "" {
+		respondError(w, http.StatusBadRequest, "detectionType is required")
+		return
+	}
+
+	switch req.Resolution {
+	case "accepted", "dismissed":
+		// valid
+	default:
+		respondError(w, http.StatusBadRequest,
+			"Resolution must be one of: accepted, dismissed")
+		return
+	}
+
+	// Fetch all pending items for this job.
+	items, err := h.db.ListAnalysisItemsByJob(r.Context(), jobID, "pending")
+	if err != nil {
+		log.Printf("Error listing pending analysis items for job %d: %v",
+			jobID, err)
+		respondError(w, http.StatusInternalServerError,
+			"Failed to list pending analysis items")
+		return
+	}
+
+	// Filter to only items matching the requested detection type.
+	var filtered []models.ContentAnalysisItem
+	for _, item := range items {
+		if item.DetectionType == req.DetectionType {
+			filtered = append(filtered, item)
+		}
+	}
+
+	// Sort by position_start DESCENDING so that content fixes are
+	// applied back-to-front, preserving earlier byte offsets.
+	sort.Slice(filtered, func(i, j int) bool {
+		si := 0
+		if filtered[i].PositionStart != nil {
+			si = *filtered[i].PositionStart
+		}
+		sj := 0
+		if filtered[j].PositionStart != nil {
+			sj = *filtered[j].PositionStart
+		}
+		return si > sj
+	})
+
+	resolved := 0
+	for _, item := range filtered {
+		// Determine the resolved entity ID (same logic as ResolveItem
+		// for the "accepted" case).
+		var resolvedEntityID *int64
+		if req.Resolution == "accepted" {
+			resolvedEntityID = item.EntityID
+		}
+
+		// Resolve the item in the database.
+		if err := h.db.ResolveAnalysisItem(
+			r.Context(), item.ID, req.Resolution, resolvedEntityID,
+		); err != nil {
+			log.Printf("Error resolving analysis item %d in batch: %v",
+				item.ID, err)
+			continue
+		}
+
+		// Apply content fix for accepted resolutions that have
+		// position offsets.
+		if req.Resolution == "accepted" &&
+			item.PositionStart != nil && item.PositionEnd != nil {
+			var replacement string
+			switch item.DetectionType {
+			case "potential_alias":
+				if resolvedEntityID != nil {
+					var entityName string
+					err := h.db.QueryRow(r.Context(),
+						"SELECT name FROM entities WHERE id = $1",
+						*resolvedEntityID,
+					).Scan(&entityName)
+					if err != nil {
+						log.Printf(
+							"Error fetching entity name for alias link (item %d): %v",
+							item.ID, err)
+						replacement = "[[" + item.MatchedText + "]]"
+					} else {
+						replacement = "[[" + entityName + "|" + item.MatchedText + "]]"
+					}
+				} else {
+					replacement = "[[" + item.MatchedText + "]]"
+				}
+			case "misspelling":
+				replacement = "[[" + item.MatchedText + "]]"
+			default:
+				// untagged_mention and any other type
+				replacement = "[[" + item.MatchedText + "]]"
+			}
+
+			if fixErr := h.applyContentFix(
+				r.Context(), job.SourceTable, job.SourceID,
+				job.SourceField,
+				*item.PositionStart, *item.PositionEnd,
+				item.MatchedText, replacement,
+			); fixErr != nil {
+				log.Printf("Content fix failed for item %d in batch: %v",
+					item.ID, fixErr)
+			}
+		}
+
+		resolved++
+	}
+
+	// Update the job's resolved count to reflect all changes.
+	if err := h.db.UpdateJobResolvedCount(r.Context(), jobID); err != nil {
+		log.Printf("Error updating job resolved count for job %d: %v",
+			jobID, err)
+	}
+
+	respondJSON(w, http.StatusOK, BatchResolveResponse{Resolved: resolved})
 }
 
 // TriggerAnalysis handles POST /api/campaigns/{id}/analysis/trigger
@@ -458,8 +670,9 @@ func (h *ContentAnalysisHandler) TriggerAnalysis(w http.ResponseWriter, r *http.
 }
 
 // GetPendingCount handles GET /api/campaigns/{id}/analysis/pending-count
-// Returns the number of pending analysis items for a specific source.
-// Query parameters: sourceTable, sourceId.
+// Returns the number of pending analysis items. When sourceTable and
+// sourceId query parameters are provided, the count is scoped to that
+// specific source; otherwise it returns the campaign-wide total.
 func (h *ContentAnalysisHandler) GetPendingCount(w http.ResponseWriter, r *http.Request) {
 	campaignID, err := parseInt64(r, "id")
 	if err != nil {
@@ -479,23 +692,13 @@ func (h *ContentAnalysisHandler) GetPendingCount(w http.ResponseWriter, r *http.
 	}
 
 	sourceTable := r.URL.Query().Get("sourceTable")
-	if sourceTable == "" {
-		respondError(w, http.StatusBadRequest,
-			"Query parameter 'sourceTable' is required")
-		return
-	}
-
-	sourceIDStr := r.URL.Query().Get("sourceId")
-	if sourceIDStr == "" {
-		respondError(w, http.StatusBadRequest,
-			"Query parameter 'sourceId' is required")
-		return
-	}
-
-	sourceID, err := strconv.ParseInt(sourceIDStr, 10, 64)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "Invalid sourceId")
-		return
+	var sourceID int64
+	if sourceIDStr := r.URL.Query().Get("sourceId"); sourceIDStr != "" {
+		sourceID, err = strconv.ParseInt(sourceIDStr, 10, 64)
+		if err != nil {
+			respondError(w, http.StatusBadRequest, "Invalid sourceId")
+			return
+		}
 	}
 
 	count, err := h.db.CountPendingAnalysisItems(r.Context(), campaignID, sourceTable, sourceID)
@@ -653,4 +856,284 @@ func (h *ContentAnalysisHandler) applyContentFix(
 	}
 
 	return nil
+}
+
+// wikiLinkPattern matches wiki links of the form [[text]] or
+// [[entity|display]].
+var wikiLinkPattern = regexp.MustCompile(`\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]`)
+
+// RevertItem handles PUT /api/campaigns/{id}/analysis/items/{itemId}/revert
+// Reverts a previously resolved content analysis item back to pending
+// status and removes the wiki link that was inserted into the source
+// content.
+func (h *ContentAnalysisHandler) RevertItem(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseInt64(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	if err := h.db.VerifyCampaignOwnership(r.Context(), campaignID, userID); err != nil {
+		respondError(w, http.StatusNotFound, "Campaign not found")
+		return
+	}
+
+	itemID, err := parseInt64(r, "itemId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid item ID")
+		return
+	}
+
+	// Verify the item belongs to a job within the specified campaign.
+	var itemCampaignID int64
+	err = h.db.QueryRow(r.Context(),
+		`SELECT j.campaign_id FROM content_analysis_items i
+		 JOIN content_analysis_jobs j ON i.job_id = j.id
+		 WHERE i.id = $1`,
+		itemID,
+	).Scan(&itemCampaignID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		respondError(w, http.StatusNotFound, "Analysis item not found")
+		return
+	}
+	if err != nil {
+		log.Printf("Error verifying item campaign ownership: %v", err)
+		respondError(w, http.StatusInternalServerError,
+			"Failed to verify analysis item")
+		return
+	}
+	if itemCampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Analysis item not found")
+		return
+	}
+
+	// Fetch the item details including its current resolution and
+	// position information needed for reverting the content fix.
+	var (
+		posStart, posEnd        *int
+		matchedText, resolution string
+		srcTable, srcField      string
+		srcID, jobID            int64
+	)
+	err = h.db.QueryRow(r.Context(),
+		`SELECT i.position_start, i.position_end, i.matched_text,
+		        i.resolution, i.job_id,
+		        j.source_table, j.source_id, j.source_field
+		 FROM content_analysis_items i
+		 JOIN content_analysis_jobs j ON i.job_id = j.id
+		 WHERE i.id = $1`,
+		itemID,
+	).Scan(&posStart, &posEnd, &matchedText, &resolution,
+		&jobID, &srcTable, &srcID, &srcField)
+	if err != nil {
+		log.Printf("Error fetching item details for revert (item %d): %v",
+			itemID, err)
+		respondError(w, http.StatusInternalServerError,
+			"Failed to fetch analysis item details")
+		return
+	}
+
+	// The item must already be resolved (not pending) to be reverted.
+	if resolution == "pending" {
+		respondError(w, http.StatusBadRequest,
+			"Item is already pending and cannot be reverted")
+		return
+	}
+
+	// If the original resolution inserted a wiki link (accepted or
+	// new_entity) and position data is available, attempt to remove
+	// the wiki link from the source content.
+	if (resolution == "accepted" || resolution == "new_entity") &&
+		posStart != nil && posEnd != nil {
+
+		delta, fixErr := h.revertContentFix(
+			r.Context(), srcTable, srcID, srcField,
+			*posStart, matchedText,
+		)
+		if fixErr != nil {
+			// Content revert failure is non-fatal: log but still
+			// proceed with unresolving the item.
+			log.Printf("Content revert failed for item %d: %v",
+				itemID, fixErr)
+		} else if delta != 0 {
+			// Adjust byte offsets of remaining pending items in
+			// the same job. The wiki link brackets added extra
+			// characters that are now removed, so delta is
+			// negative.
+			adjErr := h.db.Exec(r.Context(),
+				`UPDATE content_analysis_items
+				 SET position_start = position_start + $1,
+				     position_end = position_end + $1
+				 WHERE job_id = $2
+				   AND id != $3
+				   AND resolution = 'pending'
+				   AND position_start >= $4`,
+				delta, jobID, itemID, *posStart,
+			)
+			if adjErr != nil {
+				log.Printf(
+					"Failed to adjust offsets for job %d after revert of item %d: %v",
+					jobID, itemID, adjErr)
+			}
+		}
+	}
+
+	// Set the item back to pending.
+	unresolveErr := h.db.Exec(r.Context(),
+		`UPDATE content_analysis_items
+		 SET resolution = 'pending',
+		     resolved_entity_id = NULL,
+		     resolved_at = NULL
+		 WHERE id = $1`,
+		itemID,
+	)
+	if unresolveErr != nil {
+		log.Printf("Error unresolving analysis item %d: %v",
+			itemID, unresolveErr)
+		respondError(w, http.StatusInternalServerError,
+			"Failed to revert analysis item")
+		return
+	}
+
+	// Update the job's resolved count.
+	if err := h.db.UpdateJobResolvedCount(r.Context(), jobID); err != nil {
+		log.Printf("Error updating job resolved count: %v", err)
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{
+		"status": "reverted",
+	})
+}
+
+// revertContentFix locates and removes a wiki link in the source content
+// that was inserted when the analysis item was resolved. It searches for
+// a wiki link pattern near the recorded position whose display text
+// matches the item's matched text. On success it returns the byte offset
+// delta (negative, since brackets are removed).
+func (h *ContentAnalysisHandler) revertContentFix(
+	ctx context.Context,
+	sourceTable string,
+	sourceID int64,
+	sourceField string,
+	posStart int,
+	matchedText string,
+) (int, error) {
+	// Fetch the current source text.
+	content, err := h.fetchSourceContent(
+		ctx, sourceTable, sourceID, sourceField,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("failed to fetch content for revert: %w", err)
+	}
+
+	// Define a search window around the expected position (+-50 chars)
+	// to account for drift from other fixes.
+	windowStart := posStart - 50
+	if windowStart < 0 {
+		windowStart = 0
+	}
+	windowEnd := posStart + len(matchedText) + 50
+	if windowEnd > len(content) {
+		windowEnd = len(content)
+	}
+
+	window := content[windowStart:windowEnd]
+
+	// Find all wiki links in the window and pick the one whose
+	// display text matches the item's matched text.
+	matches := wikiLinkPattern.FindAllStringSubmatchIndex(window, -1)
+	foundOffset := -1
+	foundLen := 0
+	for _, m := range matches {
+		// m[0]:m[1] is the full match [[...]]
+		// m[2]:m[3] is capture group 1 (entity name or simple text)
+		// m[4]:m[5] is capture group 2 (display text in alias form),
+		//           or -1 if not present.
+		var displayText string
+		if m[4] >= 0 && m[5] >= 0 {
+			// Alias form: [[entity|display]]
+			displayText = window[m[4]:m[5]]
+		} else {
+			// Simple form: [[display]]
+			displayText = window[m[2]:m[3]]
+		}
+
+		if displayText == matchedText {
+			foundOffset = windowStart + m[0]
+			foundLen = m[1] - m[0]
+			break
+		}
+	}
+
+	if foundOffset < 0 {
+		return 0, fmt.Errorf(
+			"wiki link containing %q not found near position %d",
+			matchedText, posStart)
+	}
+
+	// Compute the delta before modifying content. The wiki link is
+	// replaced by just the plain matched text, so the content shrinks
+	// by (linkLength - matchedTextLength).
+	delta := len(matchedText) - foundLen
+
+	// Replace the wiki link with just the plain matched text.
+	newContent := content[:foundOffset] + matchedText +
+		content[foundOffset+foundLen:]
+
+	// Build the update SQL using the same safe switch pattern as
+	// applyContentFix.
+	var updateSQL string
+	switch sourceTable {
+	case "entities":
+		switch sourceField {
+		case "description":
+			updateSQL = "UPDATE entities SET description = $2, updated_at = NOW() WHERE id = $1"
+		case "gm_notes":
+			updateSQL = "UPDATE entities SET gm_notes = $2, updated_at = NOW() WHERE id = $1"
+		default:
+			return 0, fmt.Errorf("unsupported field %q for table %q",
+				sourceField, sourceTable)
+		}
+	case "chapters":
+		switch sourceField {
+		case "overview":
+			updateSQL = "UPDATE chapters SET overview = $2, updated_at = NOW() WHERE id = $1"
+		default:
+			return 0, fmt.Errorf("unsupported field %q for table %q",
+				sourceField, sourceTable)
+		}
+	case "sessions":
+		switch sourceField {
+		case "prep_notes":
+			updateSQL = "UPDATE sessions SET prep_notes = $2, updated_at = NOW() WHERE id = $1"
+		case "actual_notes":
+			updateSQL = "UPDATE sessions SET actual_notes = $2, updated_at = NOW() WHERE id = $1"
+		default:
+			return 0, fmt.Errorf("unsupported field %q for table %q",
+				sourceField, sourceTable)
+		}
+	case "campaigns":
+		switch sourceField {
+		case "description":
+			updateSQL = "UPDATE campaigns SET description = $2, updated_at = NOW() WHERE id = $1"
+		default:
+			return 0, fmt.Errorf("unsupported field %q for table %q",
+				sourceField, sourceTable)
+		}
+	default:
+		return 0, fmt.Errorf("unsupported source table: %s", sourceTable)
+	}
+
+	if err := h.db.Exec(ctx, updateSQL, sourceID, newContent); err != nil {
+		return 0, fmt.Errorf("failed to update content in %s.%s: %w",
+			sourceTable, sourceField, err)
+	}
+
+	return delta, nil
 }
