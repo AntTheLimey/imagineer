@@ -162,9 +162,20 @@ make migrate-status
 
 Copy the example files and configure as needed:
 
-- `.env` - Database credentials and API keys
+- `.env` - Database credentials, API keys, and encryption
+  settings
 - `config/db/db.json` - Database connection settings
 - `.mcp.json` - MCP server configuration for AI integration
+
+Generate an encryption key for API key storage:
+
+```bash
+openssl rand -hex 32
+```
+
+Add the output as `ENCRYPTION_KEY` in your `.env` file.
+Without this variable, user API keys configured in Account
+Settings are not encrypted at rest.
 
 ---
 

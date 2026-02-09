@@ -33,7 +33,7 @@ storage. Every MVP feature includes its AI component.
   - Embedding generation: Ollama (local), Voyage, OpenAI, or
     Gemini
   - Image generation: OpenAI DALL-E, Stability AI, or other
-- [ ] `[MVP-1]` Secure storage of API keys (encrypted in database)
+- [x] `[MVP-1]` Secure storage of API keys (encrypted in database)
 - [ ] `[MVP-1]` API key validation on save
 
 ### Campaign Dashboard & Settings
@@ -635,3 +635,6 @@ Features planned for after initial release.
   - Relationship type autocomplete with inverse auto-resolve
   - Dark theme, suggested description, and analysis badge
     fixes
+- [x] API key encryption at rest (AES-256-GCM)
+  - `internal/crypto` package, transparent DB-layer encryption,
+    `ENCRYPTION_KEY` env var, migration 007

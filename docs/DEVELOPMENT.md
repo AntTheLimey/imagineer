@@ -38,6 +38,9 @@ cp config/db/db.json.example config/db/db.json
 cp .mcp.json.example .mcp.json
 
 # Edit .env and config files with your database credentials
+
+# Generate an encryption key for API key storage
+echo "ENCRYPTION_KEY=$(openssl rand -hex 32)" >> .env
 ```
 
 Review and update the copied configuration files:
@@ -390,6 +393,17 @@ Key environment variables (see `.env.example` for complete list):
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `VITE_API_URL` | Backend API URL | `/api` |
+
+### Security
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ENCRYPTION_KEY` | AES-256 key for API key encryption (64 hex chars) | - |
+
+Generate the key with `openssl rand -hex 32`. The server
+requires this variable to encrypt user API keys (LLM service
+keys) at rest in the database. Without the variable, the
+server stores keys as plaintext.
 
 ## 9. Troubleshooting
 
