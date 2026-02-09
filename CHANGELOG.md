@@ -19,6 +19,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     delivery to the triage UI.
   - Triage UI enrichment section with side-by-side description
     diff, log entry preview, and relationship suggestion chips.
+  - Relationship type autocomplete with fuzzy-match suggestions
+    and inline create-new-type dialog in the triage UI.
+  - Auto-resolve inverse relationship suggestions when accepting
+    directional relationships.
+  - `headquartered_at`/`headquarters_of` system relationship
+    type added via migration.
 - Entity Log (Chronological Event History)
   - `entity_log` table tracking events per entity with optional
     chapter/session association, occurred_at date, and sort order.
@@ -199,6 +205,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Current description invisible in dark theme on triage UI;
+  fixed by using theme-aware background color.
+- Suggested description blank in MarkdownEditor due to TipTap
+  value initialization timing; fixed by passing value directly
+  as a prop.
+- Analysis badge missing enrichment-phase pending items on
+  campaign overview; fixed by removing the phase filter from
+  `CountPendingAnalysisItems`.
+- MCP server authentication configured via `INIT_TOKENS` in
+  Docker Compose.
 - Entity API URL routes for get/update/delete now correctly use
   `/entities/{id}` instead of `/campaigns/{campaignId}/entities/{id}`.
 - Tags input in entity forms now captures typed text on blur (added

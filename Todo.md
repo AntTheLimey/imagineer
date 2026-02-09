@@ -632,3 +632,6 @@ Features planned for after initial release.
     relationships)
   - Custom Ollama Docker image with pre-baked embedding model
   - SSE streaming and polling for progressive delivery
+  - Relationship type autocomplete with inverse auto-resolve
+  - Dark theme, suggested description, and analysis badge
+    fixes
