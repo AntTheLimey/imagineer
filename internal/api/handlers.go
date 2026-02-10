@@ -27,15 +27,18 @@ import (
 
 // Handler provides HTTP handlers for the API.
 type Handler struct {
-	db       *database.DB
-	analyzer *analysis.Analyzer
+	db        *database.DB
+	analyzer  *analysis.Analyzer
+	caHandler *ContentAnalysisHandler
 }
 
-// NewHandler creates a new Handler with the given database connection.
-func NewHandler(db *database.DB) *Handler {
+// NewHandler creates a new Handler with the given database connection
+// and content analysis handler for auto-enrichment support.
+func NewHandler(db *database.DB, caHandler *ContentAnalysisHandler) *Handler {
 	return &Handler{
-		db:       db,
-		analyzer: analysis.NewAnalyzer(db),
+		db:        db,
+		analyzer:  analysis.NewAnalyzer(db),
+		caHandler: caHandler,
 	}
 }
 
@@ -132,6 +135,46 @@ func filterEntitiesGMNotes(entities []models.Entity, isGM bool) {
 	for i := range entities {
 		entities[i].GMNotes = nil
 	}
+}
+
+// createEnrichmentJob creates a content analysis job for tracking
+// enrichment results when analysis was not triggered. The job is created
+// with status "completed" and zero total items since there are no
+// Phase 1 identification items.
+func (h *Handler) createEnrichmentJob(
+	ctx context.Context,
+	campaignID int64,
+	sourceTable string,
+	sourceField string,
+	sourceID int64,
+) *models.ContentAnalysisJob {
+	// Delete any previous analysis jobs for this source field to keep
+	// a single job per source field.
+	if err := h.db.DeleteAnalysisJobsForSource(
+		ctx, campaignID, sourceTable, sourceID, sourceField,
+	); err != nil {
+		log.Printf("createEnrichmentJob: failed to delete old jobs for %s.%s (source %d): %v",
+			sourceTable, sourceField, sourceID, err)
+		return nil
+	}
+
+	job := &models.ContentAnalysisJob{
+		CampaignID:  campaignID,
+		SourceTable: sourceTable,
+		SourceID:    sourceID,
+		SourceField: sourceField,
+		Status:      "completed",
+		TotalItems:  0,
+	}
+
+	createdJob, err := h.db.CreateAnalysisJob(ctx, job)
+	if err != nil {
+		log.Printf("createEnrichmentJob: failed to create job for %s.%s (source %d): %v",
+			sourceTable, sourceField, sourceID, err)
+		return nil
+	}
+
+	return createdJob
 }
 
 // ListGameSystems handles GET /api/game-systems
@@ -292,23 +335,40 @@ func (h *Handler) UpdateCampaign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	shouldAnalyze := r.URL.Query().Get("analyze") == "true"
+	shouldEnrich := r.URL.Query().Get("enrich") == "true"
+
 	response := CampaignWithAnalysis{Campaign: campaign}
 	if req.Description != nil {
-		content := ""
-		if req.Description != nil {
-			content = *req.Description
-		}
-		job, items, analyzeErr := h.analyzer.AnalyzeContent(
-			r.Context(), campaign.ID,
-			"campaigns", "description", campaign.ID,
-			content,
-		)
-		if analyzeErr != nil {
-			log.Printf("Content analysis failed for campaign %d: %v", campaign.ID, analyzeErr)
-		} else if len(items) > 0 {
-			response.Analysis = &models.AnalysisSummary{
-				JobID:        job.ID,
-				PendingCount: job.TotalItems,
+		content := *req.Description
+		if shouldAnalyze {
+			job, _, analyzeErr := h.analyzer.AnalyzeContent(
+				r.Context(), campaign.ID,
+				"campaigns", "description", campaign.ID,
+				content,
+			)
+			if analyzeErr != nil {
+				log.Printf("Content analysis failed for campaign %d: %v", campaign.ID, analyzeErr)
+			} else {
+				response.Analysis = &models.AnalysisSummary{
+					JobID:        job.ID,
+					PendingCount: job.TotalItems,
+				}
+				if shouldEnrich && h.caHandler != nil {
+					h.caHandler.RunContentEnrichment(
+						r.Context(), job.ID, campaign.ID, content, userID)
+				}
+			}
+		} else if shouldEnrich && h.caHandler != nil {
+			job := h.createEnrichmentJob(
+				r.Context(), campaign.ID, "campaigns", "description", campaign.ID)
+			if job != nil {
+				response.Analysis = &models.AnalysisSummary{
+					JobID:        job.ID,
+					PendingCount: 0,
+				}
+				h.caHandler.RunContentEnrichment(
+					r.Context(), job.ID, campaign.ID, content, userID)
 			}
 		}
 	}
@@ -487,44 +547,76 @@ func (h *Handler) UpdateEntity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Trigger content analysis if description changed
+	shouldAnalyze := r.URL.Query().Get("analyze") == "true"
+	shouldEnrich := r.URL.Query().Get("enrich") == "true"
+	userID, _ := auth.GetUserIDFromContext(r.Context())
+
+	// Trigger content analysis if description changed and analysis requested
 	response := EntityWithAnalysis{Entity: entity}
 	if req.Description != nil {
-		content := ""
-		if req.Description != nil {
-			content = *req.Description
-		}
-		job, items, analyzeErr := h.analyzer.AnalyzeContent(
-			r.Context(), entity.CampaignID,
-			"entities", "description", entity.ID,
-			content,
-		)
-		if analyzeErr != nil {
-			log.Printf("Content analysis failed for entity %d description: %v", entity.ID, analyzeErr)
-		} else if len(items) > 0 {
-			response.Analysis = &models.AnalysisSummary{
-				JobID:        job.ID,
-				PendingCount: job.TotalItems,
+		content := *req.Description
+		if shouldAnalyze {
+			job, _, analyzeErr := h.analyzer.AnalyzeContent(
+				r.Context(), entity.CampaignID,
+				"entities", "description", entity.ID,
+				content,
+			)
+			if analyzeErr != nil {
+				log.Printf("Content analysis failed for entity %d description: %v", entity.ID, analyzeErr)
+			} else {
+				response.Analysis = &models.AnalysisSummary{
+					JobID:        job.ID,
+					PendingCount: job.TotalItems,
+				}
+				if shouldEnrich && h.caHandler != nil {
+					h.caHandler.RunContentEnrichment(
+						r.Context(), job.ID, entity.CampaignID, content, userID)
+				}
+			}
+		} else if shouldEnrich && h.caHandler != nil {
+			job := h.createEnrichmentJob(
+				r.Context(), entity.CampaignID, "entities", "description", entity.ID)
+			if job != nil {
+				response.Analysis = &models.AnalysisSummary{
+					JobID:        job.ID,
+					PendingCount: 0,
+				}
+				h.caHandler.RunContentEnrichment(
+					r.Context(), job.ID, entity.CampaignID, content, userID)
 			}
 		}
 	}
-	// Also analyze GM notes if changed
+	// Also analyze GM notes if changed and analysis requested
 	if req.GMNotes != nil {
-		content := ""
-		if req.GMNotes != nil {
-			content = *req.GMNotes
-		}
-		job, items, analyzeErr := h.analyzer.AnalyzeContent(
-			r.Context(), entity.CampaignID,
-			"entities", "gm_notes", entity.ID,
-			content,
-		)
-		if analyzeErr != nil {
-			log.Printf("Content analysis failed for entity %d gm_notes: %v", entity.ID, analyzeErr)
-		} else if response.Analysis == nil && len(items) > 0 {
-			response.Analysis = &models.AnalysisSummary{
-				JobID:        job.ID,
-				PendingCount: job.TotalItems,
+		content := *req.GMNotes
+		if shouldAnalyze {
+			job, _, analyzeErr := h.analyzer.AnalyzeContent(
+				r.Context(), entity.CampaignID,
+				"entities", "gm_notes", entity.ID,
+				content,
+			)
+			if analyzeErr != nil {
+				log.Printf("Content analysis failed for entity %d gm_notes: %v", entity.ID, analyzeErr)
+			} else if response.Analysis == nil {
+				response.Analysis = &models.AnalysisSummary{
+					JobID:        job.ID,
+					PendingCount: job.TotalItems,
+				}
+				if shouldEnrich && h.caHandler != nil {
+					h.caHandler.RunContentEnrichment(
+						r.Context(), job.ID, entity.CampaignID, content, userID)
+				}
+			}
+		} else if shouldEnrich && h.caHandler != nil && response.Analysis == nil {
+			job := h.createEnrichmentJob(
+				r.Context(), entity.CampaignID, "entities", "gm_notes", entity.ID)
+			if job != nil {
+				response.Analysis = &models.AnalysisSummary{
+					JobID:        job.ID,
+					PendingCount: 0,
+				}
+				h.caHandler.RunContentEnrichment(
+					r.Context(), job.ID, entity.CampaignID, content, userID)
 			}
 		}
 	}
@@ -1722,23 +1814,42 @@ func (h *Handler) UpdateChapter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	shouldAnalyze := r.URL.Query().Get("analyze") == "true"
+	shouldEnrich := r.URL.Query().Get("enrich") == "true"
+
 	response := ChapterWithAnalysis{Chapter: chapter}
 	if req.Overview != nil {
-		content := ""
-		if req.Overview != nil {
-			content = *req.Overview
-		}
-		job, items, analyzeErr := h.analyzer.AnalyzeContent(
-			r.Context(), chapter.CampaignID,
-			"chapters", "overview", chapter.ID,
-			content,
-		)
-		if analyzeErr != nil {
-			log.Printf("Content analysis failed for chapter %d: %v", chapter.ID, analyzeErr)
-		} else if len(items) > 0 {
-			response.Analysis = &models.AnalysisSummary{
-				JobID:        job.ID,
-				PendingCount: job.TotalItems,
+		content := *req.Overview
+		if shouldAnalyze {
+			job, _, analyzeErr := h.analyzer.AnalyzeContent(
+				r.Context(), chapter.CampaignID,
+				"chapters", "overview", chapter.ID,
+				content,
+			)
+			if analyzeErr != nil {
+				log.Printf("Content analysis failed for chapter %d: %v", chapter.ID, analyzeErr)
+			} else {
+				response.Analysis = &models.AnalysisSummary{
+					JobID:        job.ID,
+					PendingCount: job.TotalItems,
+				}
+				if shouldEnrich && h.caHandler != nil {
+					userID, _ := auth.GetUserIDFromContext(r.Context())
+					h.caHandler.RunContentEnrichment(
+						r.Context(), job.ID, chapter.CampaignID, content, userID)
+				}
+			}
+		} else if shouldEnrich && h.caHandler != nil {
+			userID, _ := auth.GetUserIDFromContext(r.Context())
+			job := h.createEnrichmentJob(
+				r.Context(), chapter.CampaignID, "chapters", "overview", chapter.ID)
+			if job != nil {
+				response.Analysis = &models.AnalysisSummary{
+					JobID:        job.ID,
+					PendingCount: 0,
+				}
+				h.caHandler.RunContentEnrichment(
+					r.Context(), job.ID, chapter.CampaignID, content, userID)
 			}
 		}
 	}
@@ -2002,42 +2113,74 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	shouldAnalyze := r.URL.Query().Get("analyze") == "true"
+	shouldEnrich := r.URL.Query().Get("enrich") == "true"
+	userID, _ := auth.GetUserIDFromContext(r.Context())
+
 	response := SessionWithAnalysis{Session: session}
 	if req.PrepNotes != nil {
-		content := ""
-		if req.PrepNotes != nil {
-			content = *req.PrepNotes
-		}
-		job, items, analyzeErr := h.analyzer.AnalyzeContent(
-			r.Context(), session.CampaignID,
-			"sessions", "prep_notes", session.ID,
-			content,
-		)
-		if analyzeErr != nil {
-			log.Printf("Content analysis failed for session %d prep_notes: %v", session.ID, analyzeErr)
-		} else if len(items) > 0 {
-			response.Analysis = &models.AnalysisSummary{
-				JobID:        job.ID,
-				PendingCount: job.TotalItems,
+		content := *req.PrepNotes
+		if shouldAnalyze {
+			job, _, analyzeErr := h.analyzer.AnalyzeContent(
+				r.Context(), session.CampaignID,
+				"sessions", "prep_notes", session.ID,
+				content,
+			)
+			if analyzeErr != nil {
+				log.Printf("Content analysis failed for session %d prep_notes: %v", session.ID, analyzeErr)
+			} else {
+				response.Analysis = &models.AnalysisSummary{
+					JobID:        job.ID,
+					PendingCount: job.TotalItems,
+				}
+				if shouldEnrich && h.caHandler != nil {
+					h.caHandler.RunContentEnrichment(
+						r.Context(), job.ID, session.CampaignID, content, userID)
+				}
+			}
+		} else if shouldEnrich && h.caHandler != nil {
+			job := h.createEnrichmentJob(
+				r.Context(), session.CampaignID, "sessions", "prep_notes", session.ID)
+			if job != nil {
+				response.Analysis = &models.AnalysisSummary{
+					JobID:        job.ID,
+					PendingCount: 0,
+				}
+				h.caHandler.RunContentEnrichment(
+					r.Context(), job.ID, session.CampaignID, content, userID)
 			}
 		}
 	}
 	if req.ActualNotes != nil {
-		content := ""
-		if req.ActualNotes != nil {
-			content = *req.ActualNotes
-		}
-		job, items, analyzeErr := h.analyzer.AnalyzeContent(
-			r.Context(), session.CampaignID,
-			"sessions", "actual_notes", session.ID,
-			content,
-		)
-		if analyzeErr != nil {
-			log.Printf("Content analysis failed for session %d actual_notes: %v", session.ID, analyzeErr)
-		} else if response.Analysis == nil && len(items) > 0 {
-			response.Analysis = &models.AnalysisSummary{
-				JobID:        job.ID,
-				PendingCount: job.TotalItems,
+		content := *req.ActualNotes
+		if shouldAnalyze {
+			job, _, analyzeErr := h.analyzer.AnalyzeContent(
+				r.Context(), session.CampaignID,
+				"sessions", "actual_notes", session.ID,
+				content,
+			)
+			if analyzeErr != nil {
+				log.Printf("Content analysis failed for session %d actual_notes: %v", session.ID, analyzeErr)
+			} else if response.Analysis == nil {
+				response.Analysis = &models.AnalysisSummary{
+					JobID:        job.ID,
+					PendingCount: job.TotalItems,
+				}
+				if shouldEnrich && h.caHandler != nil {
+					h.caHandler.RunContentEnrichment(
+						r.Context(), job.ID, session.CampaignID, content, userID)
+				}
+			}
+		} else if shouldEnrich && h.caHandler != nil && response.Analysis == nil {
+			job := h.createEnrichmentJob(
+				r.Context(), session.CampaignID, "sessions", "actual_notes", session.ID)
+			if job != nil {
+				response.Analysis = &models.AnalysisSummary{
+					JobID:        job.ID,
+					PendingCount: 0,
+				}
+				h.caHandler.RunContentEnrichment(
+					r.Context(), job.ID, session.CampaignID, content, userID)
 			}
 		}
 	}

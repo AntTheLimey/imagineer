@@ -20,8 +20,9 @@ import {
     Delete as DeleteIcon,
     Link as RelationshipIcon,
 } from '@mui/icons-material';
-import { useEntityRelationships } from '../../hooks';
+import { useEntityRelationships, useEntities } from '../../hooks';
 import { MarkdownRenderer } from '../MarkdownRenderer';
+import type { WikiLinkEntity } from '../MarkdownRenderer';
 import type { Entity, EntityType } from '../../types';
 
 /**
@@ -108,6 +109,28 @@ export default function EntityPreviewPanel({
     const handleEntityClick = (name: string) => {
         navigate(`/campaigns/${campaignId}/entities?search=${encodeURIComponent(name)}`);
     };
+
+    /**
+     * Navigate to the entity view page for a specific entity.
+     */
+    const handleEntityNavigate = (entityId: number) => {
+        navigate(`/campaigns/${campaignId}/entities/${entityId}`);
+    };
+
+    // Fetch all campaign entities for wiki link resolution
+    const { data: allEntities } = useEntities({
+        campaignId,
+    });
+
+    // Map entities to WikiLinkEntity shape for MarkdownRenderer
+    const wikiLinkEntities: WikiLinkEntity[] | undefined = allEntities?.map(
+        (e) => ({
+            id: e.id,
+            name: e.name,
+            entityType: e.entityType,
+            description: e.description ?? null,
+        })
+    );
 
     // Fetch relationships for the selected entity
     const { data: relationships } = useEntityRelationships(
@@ -216,6 +239,8 @@ export default function EntityPreviewPanel({
                             content={entity.description}
                             maxLines={6}
                             onEntityClick={handleEntityClick}
+                            entities={wikiLinkEntities}
+                            onEntityNavigate={handleEntityNavigate}
                         />
                     </Box>
                 ) : (

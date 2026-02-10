@@ -68,11 +68,16 @@ export const chaptersApi = {
     update(
         campaignId: number,
         chapterId: number,
-        input: UpdateChapterInput
+        input: UpdateChapterInput,
+        options?: { analyze?: boolean; enrich?: boolean },
     ): Promise<Chapter> {
+        const params: Record<string, string> = {};
+        if (options?.analyze) params.analyze = 'true';
+        if (options?.enrich) params.enrich = 'true';
         return apiClient.put<Chapter>(
             `/campaigns/${campaignId}/chapters/${chapterId}`,
-            input
+            input,
+            params,
         );
     },
 

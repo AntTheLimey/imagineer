@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/jackc/pgx/v5"
 
@@ -34,8 +35,9 @@ import (
 
 // ContentAnalysisHandler handles content analysis API requests.
 type ContentAnalysisHandler struct {
-	db       *database.DB
-	analyzer *analysis.Analyzer
+	db            *database.DB
+	analyzer      *analysis.Analyzer
+	enrichCancels sync.Map // map[int64]context.CancelFunc
 }
 
 // NewContentAnalysisHandler creates a new ContentAnalysisHandler.
@@ -429,6 +431,18 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 		h.handleRelationshipSuggestion(r.Context(), campaignID, fixJobID, itemID, suggestedContent, req.SuggestedContentOverride)
 	}
 
+	// Handle description_update acceptance: apply the suggested
+	// description to the resolved entity.
+	if req.Resolution == "accepted" && detectionType == "description_update" && len(suggestedContent) > 0 && resolvedEntityID != nil {
+		h.handleDescriptionUpdate(r.Context(), *resolvedEntityID, suggestedContent)
+	}
+
+	// Handle log_entry acceptance: create a new entity log entry
+	// from the suggested content.
+	if req.Resolution == "accepted" && detectionType == "log_entry" && len(suggestedContent) > 0 && resolvedEntityID != nil {
+		h.handleLogEntry(r.Context(), campaignID, *resolvedEntityID, suggestedContent)
+	}
+
 	// Update the job's resolved count. Reuse the job ID fetched above
 	// when available; otherwise fall back to a separate lookup.
 	jobID := fixJobID
@@ -452,7 +466,7 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 		if jobErr == nil &&
 			updatedJob.ResolvedItems == updatedJob.TotalItems &&
 			updatedJob.EnrichmentTotal == 0 {
-			h.tryAutoEnrich(r.Context(), jobID, userID)
+			h.TryAutoEnrich(r.Context(), jobID, userID)
 		}
 	}
 
@@ -629,7 +643,7 @@ func (h *ContentAnalysisHandler) BatchResolve(w http.ResponseWriter, r *http.Req
 	if jobErr == nil &&
 		updatedJob.ResolvedItems == updatedJob.TotalItems &&
 		updatedJob.EnrichmentTotal == 0 {
-		h.tryAutoEnrich(r.Context(), jobID, userID)
+		h.TryAutoEnrich(r.Context(), jobID, userID)
 	}
 
 	respondJSON(w, http.StatusOK, BatchResolveResponse{Resolved: resolved})
@@ -1265,11 +1279,315 @@ func (h *ContentAnalysisHandler) handleRelationshipSuggestion(
 	}
 }
 
-// tryAutoEnrich automatically triggers LLM enrichment when all Phase 1
+// handleDescriptionUpdate applies an accepted description update to
+// the entity.
+func (h *ContentAnalysisHandler) handleDescriptionUpdate(
+	ctx context.Context,
+	entityID int64,
+	suggestedContent json.RawMessage,
+) {
+	var suggestion models.DescriptionUpdateSuggestion
+	if err := json.Unmarshal(suggestedContent, &suggestion); err != nil {
+		log.Printf("handleDescriptionUpdate: failed to unmarshal suggestion for entity %d: %v",
+			entityID, err)
+		return
+	}
+
+	_, err := h.db.UpdateEntity(ctx, entityID, models.UpdateEntityRequest{
+		Description: &suggestion.SuggestedDescription,
+	})
+	if err != nil {
+		log.Printf("handleDescriptionUpdate: failed to update entity %d description: %v",
+			entityID, err)
+	}
+}
+
+// handleLogEntry creates a new entity log entry from an accepted
+// log_entry enrichment suggestion.
+func (h *ContentAnalysisHandler) handleLogEntry(
+	ctx context.Context,
+	campaignID int64,
+	entityID int64,
+	suggestedContent json.RawMessage,
+) {
+	var suggestion models.LogEntrySuggestion
+	if err := json.Unmarshal(suggestedContent, &suggestion); err != nil {
+		log.Printf("handleLogEntry: failed to unmarshal suggestion for entity %d: %v",
+			entityID, err)
+		return
+	}
+
+	_, err := h.db.CreateEntityLog(ctx, entityID, campaignID, models.CreateEntityLogRequest{
+		Content:    suggestion.Content,
+		OccurredAt: suggestion.OccurredAt,
+	})
+	if err != nil {
+		log.Printf("handleLogEntry: failed to create log entry for entity %d: %v",
+			entityID, err)
+	}
+}
+
+// CancelEnrichment handles POST /api/campaigns/{id}/analysis/jobs/{jobId}/cancel-enrichment
+// Cancels a running LLM enrichment for the specified job.
+func (h *ContentAnalysisHandler) CancelEnrichment(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseInt64(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	if err := h.db.VerifyCampaignOwnership(r.Context(), campaignID, userID); err != nil {
+		respondError(w, http.StatusNotFound, "Campaign not found")
+		return
+	}
+
+	jobID, err := parseInt64(r, "jobId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid job ID")
+		return
+	}
+
+	// Verify the job belongs to this campaign.
+	job, err := h.db.GetAnalysisJob(r.Context(), jobID)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "Analysis job not found")
+		return
+	}
+	if job.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Analysis job not found")
+		return
+	}
+
+	if job.Status != "enriching" {
+		respondError(w, http.StatusConflict, "Enrichment is not running")
+		return
+	}
+
+	// Cancel the enrichment goroutine if running.
+	if cancelVal, ok := h.enrichCancels.LoadAndDelete(jobID); ok {
+		cancelVal.(context.CancelFunc)()
+	}
+
+	// Set job status to completed.
+	if err := h.db.Exec(r.Context(),
+		"UPDATE content_analysis_jobs SET status = 'completed' WHERE id = $1",
+		jobID,
+	); err != nil {
+		log.Printf("CancelEnrichment: failed to update job %d status: %v", jobID, err)
+		respondError(w, http.StatusInternalServerError, "Failed to update job status")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
+}
+
+// RunContentEnrichment runs LLM enrichment directly on content without
+// depending on Phase 1 analysis results. It scans the content for entity
+// name mentions (case-insensitive substring matching), enriches each
+// mentioned entity with the LLM, and runs DetectNewEntities to find new
+// entity suggestions. Results are saved as enrichment-phase analysis
+// items on the given job. The method runs enrichment in a background
+// goroutine and returns immediately.
+func (h *ContentAnalysisHandler) RunContentEnrichment(
+	ctx context.Context,
+	jobID int64,
+	campaignID int64,
+	content string,
+	userID int64,
+) {
+	// 1. Fetch user settings to check LLM configuration.
+	settings, err := h.db.GetUserSettings(ctx, userID)
+	if err != nil || settings == nil {
+		log.Printf("Content-enrich: skipping job %d — no user settings found for user %d",
+			jobID, userID)
+		return
+	}
+	if settings.ContentGenService == nil || settings.ContentGenAPIKey == nil {
+		log.Printf("Content-enrich: skipping job %d — no LLM configured (service=%v, key=%v)",
+			jobID, settings.ContentGenService != nil, settings.ContentGenAPIKey != nil)
+		return
+	}
+
+	// 2. Create LLM provider from user settings.
+	provider, err := llm.NewProvider(
+		*settings.ContentGenService, *settings.ContentGenAPIKey,
+	)
+	if err != nil {
+		log.Printf("Content-enrich: failed to create LLM provider for job %d: %v",
+			jobID, err)
+		return
+	}
+
+	// 3. Get all campaign entities.
+	allEntities, err := h.db.ListEntitiesByCampaign(ctx, campaignID)
+	if err != nil {
+		log.Printf("Content-enrich: failed to list entities for campaign %d: %v",
+			campaignID, err)
+		return
+	}
+
+	// 4. Find entities mentioned in content via case-insensitive name match.
+	lowerContent := strings.ToLower(content)
+	var mentionedEntityIDs []int64
+	for _, entity := range allEntities {
+		if entity.Name == "" {
+			continue
+		}
+		if strings.Contains(lowerContent, strings.ToLower(entity.Name)) {
+			mentionedEntityIDs = append(mentionedEntityIDs, entity.ID)
+		}
+	}
+
+	if len(mentionedEntityIDs) == 0 && len(allEntities) == 0 {
+		log.Printf("Content-enrich: skipping job %d — no entities found in campaign %d",
+			jobID, campaignID)
+		return
+	}
+
+	// 5. Get the job for source info.
+	job, err := h.db.GetAnalysisJob(ctx, jobID)
+	if err != nil {
+		log.Printf("Content-enrich: failed to get job %d: %v", jobID, err)
+		return
+	}
+
+	// 6. Set job status to "enriching".
+	if err := h.db.Exec(ctx,
+		"UPDATE content_analysis_jobs SET status = 'enriching' WHERE id = $1",
+		jobID,
+	); err != nil {
+		log.Printf("Content-enrich: failed to set job %d status: %v",
+			jobID, err)
+		return
+	}
+
+	// 7. Spawn background goroutine for enrichment.
+	engine := enrichment.NewEngine(h.db)
+	bgCtx, cancel := context.WithCancel(context.Background())
+	h.enrichCancels.Store(jobID, cancel)
+	go func() {
+		defer h.enrichCancels.Delete(jobID)
+		defer cancel()
+		log.Printf("Content-enrich: starting enrichment for job %d with %d mentioned entities",
+			jobID, len(mentionedEntityIDs))
+
+		for _, entityID := range mentionedEntityIDs {
+			if bgCtx.Err() != nil {
+				log.Printf("Content-enrich: cancelled for job %d", jobID)
+				break
+			}
+			entity, err := h.db.GetEntity(bgCtx, entityID)
+			if err != nil {
+				log.Printf("Content-enrich: failed to get entity %d: %v",
+					entityID, err)
+				continue
+			}
+
+			relationships, err := h.db.GetEntityRelationships(bgCtx, entityID)
+			if err != nil {
+				log.Printf(
+					"Content-enrich: failed to get relationships for entity %d: %v",
+					entityID, err)
+				relationships = nil
+			}
+
+			// Build list of other entities (exclude the current one).
+			otherEntities := make([]models.Entity, 0, len(allEntities)-1)
+			for _, e := range allEntities {
+				if e.ID != entityID {
+					otherEntities = append(otherEntities, e)
+				}
+			}
+
+			input := enrichment.EnrichmentInput{
+				CampaignID:    campaignID,
+				JobID:         jobID,
+				SourceTable:   job.SourceTable,
+				SourceID:      job.SourceID,
+				Content:       content,
+				Entity:        *entity,
+				OtherEntities: otherEntities,
+				Relationships: relationships,
+			}
+
+			enrichItems, err := engine.EnrichEntity(bgCtx, provider, input)
+			if err != nil {
+				log.Printf("Content-enrich: failed to enrich entity %d: %v",
+					entityID, err)
+				continue
+			}
+
+			if len(enrichItems) > 0 {
+				if err := h.db.CreateAnalysisItems(bgCtx, enrichItems); err != nil {
+					log.Printf(
+						"Content-enrich: failed to save items for entity %d: %v",
+						entityID, err)
+					continue
+				}
+
+				if err := h.db.Exec(bgCtx,
+					"UPDATE content_analysis_jobs SET enrichment_total = enrichment_total + $1 WHERE id = $2",
+					len(enrichItems), jobID,
+				); err != nil {
+					log.Printf(
+						"Content-enrich: failed to update enrichment count for job %d: %v",
+						jobID, err)
+				}
+			}
+		}
+
+		// Detect new entities not yet in the campaign database.
+		if bgCtx.Err() == nil {
+			newEntityItems, detectErr := engine.DetectNewEntities(
+				bgCtx, provider, campaignID, jobID,
+				content, allEntities,
+			)
+			if detectErr != nil {
+				log.Printf(
+					"Content-enrich: new-entity detection failed for job %d: %v",
+					jobID, detectErr)
+			} else if len(newEntityItems) > 0 {
+				if err := h.db.CreateAnalysisItems(bgCtx, newEntityItems); err != nil {
+					log.Printf(
+						"Content-enrich: failed to save new-entity items for job %d: %v",
+						jobID, err)
+				} else {
+					if err := h.db.Exec(bgCtx,
+						"UPDATE content_analysis_jobs SET enrichment_total = enrichment_total + $1 WHERE id = $2",
+						len(newEntityItems), jobID,
+					); err != nil {
+						log.Printf(
+							"Content-enrich: failed to update enrichment count for job %d: %v",
+							jobID, err)
+					}
+				}
+			}
+		}
+
+		// Mark enrichment as completed.
+		log.Printf("Content-enrich: completed enrichment for job %d", jobID)
+		if err := h.db.Exec(context.Background(),
+			"UPDATE content_analysis_jobs SET status = 'completed' WHERE id = $1",
+			jobID,
+		); err != nil {
+			log.Printf(
+				"Content-enrich: failed to set job %d status to completed: %v",
+				jobID, err)
+		}
+	}()
+}
+
+// TryAutoEnrich automatically triggers LLM enrichment when all Phase 1
 // identification items have been resolved. It silently returns if the
 // user has not configured an LLM provider or if there are no accepted
 // entities to enrich.
-func (h *ContentAnalysisHandler) tryAutoEnrich(
+func (h *ContentAnalysisHandler) TryAutoEnrich(
 	ctx context.Context, jobID int64, userID int64,
 ) {
 	// 1. Fetch user settings to check LLM configuration.
@@ -1365,11 +1683,18 @@ func (h *ContentAnalysisHandler) tryAutoEnrich(
 
 	// 8. Spawn background goroutine for enrichment.
 	engine := enrichment.NewEngine(h.db)
+	bgCtx, cancel := context.WithCancel(context.Background())
+	h.enrichCancels.Store(jobID, cancel)
 	go func() {
+		defer h.enrichCancels.Delete(jobID)
+		defer cancel()
 		log.Printf("Auto-enrich: starting enrichment for job %d with %d entities", jobID, len(entityIDs))
-		bgCtx := context.Background()
 
 		for _, entityID := range entityIDs {
+			if bgCtx.Err() != nil {
+				log.Printf("Auto-enrich: cancelled for job %d", jobID)
+				break
+			}
 			entity, err := h.db.GetEntity(bgCtx, entityID)
 			if err != nil {
 				log.Printf("Auto-enrich: failed to get entity %d: %v",
@@ -1426,6 +1751,34 @@ func (h *ContentAnalysisHandler) tryAutoEnrich(
 					log.Printf(
 						"Auto-enrich: failed to update enrichment count for job %d: %v",
 						jobID, err)
+				}
+			}
+		}
+
+		// Detect new entities not yet in the campaign database.
+		if bgCtx.Err() == nil {
+			newEntityItems, detectErr := engine.DetectNewEntities(
+				bgCtx, provider, job.CampaignID, jobID,
+				content, allEntities,
+			)
+			if detectErr != nil {
+				log.Printf(
+					"Auto-enrich: new-entity detection failed for job %d: %v",
+					jobID, detectErr)
+			} else if len(newEntityItems) > 0 {
+				if err := h.db.CreateAnalysisItems(bgCtx, newEntityItems); err != nil {
+					log.Printf(
+						"Auto-enrich: failed to save new-entity items for job %d: %v",
+						jobID, err)
+				} else {
+					if err := h.db.Exec(bgCtx,
+						"UPDATE content_analysis_jobs SET enrichment_total = enrichment_total + $1 WHERE id = $2",
+						len(newEntityItems), jobID,
+					); err != nil {
+						log.Printf(
+							"Auto-enrich: failed to update enrichment count for job %d: %v",
+							jobID, err)
+					}
 				}
 			}
 		}

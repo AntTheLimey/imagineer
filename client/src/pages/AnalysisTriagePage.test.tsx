@@ -20,6 +20,7 @@ vi.mock('../hooks/useContentAnalysis', () => ({
     useBatchResolve: vi.fn(),
     useRevertItem: vi.fn(),
     useTriggerEnrichment: vi.fn(),
+    useCancelEnrichment: vi.fn(),
     useEnrichmentStream: vi.fn(),
 }));
 
@@ -34,6 +35,7 @@ import {
     useBatchResolve,
     useRevertItem,
     useTriggerEnrichment,
+    useCancelEnrichment,
     useEnrichmentStream,
 } from '../hooks/useContentAnalysis';
 import { useUserSettings } from '../hooks/useUserSettings';
@@ -44,6 +46,7 @@ const mockUseResolveItem = vi.mocked(useResolveItem);
 const mockUseBatchResolve = vi.mocked(useBatchResolve);
 const mockUseRevertItem = vi.mocked(useRevertItem);
 const mockUseTriggerEnrichment = vi.mocked(useTriggerEnrichment);
+const mockUseCancelEnrichment = vi.mocked(useCancelEnrichment);
 const mockUseEnrichmentStream = vi.mocked(useEnrichmentStream);
 const mockUseUserSettings = vi.mocked(useUserSettings);
 
@@ -153,6 +156,10 @@ describe('AnalysisTriagePage', () => {
             mutate: vi.fn(),
             isPending: false,
         } as unknown as ReturnType<typeof useTriggerEnrichment>);
+        mockUseCancelEnrichment.mockReturnValue({
+            mutateAsync: vi.fn(),
+            isPending: false,
+        } as unknown as ReturnType<typeof useCancelEnrichment>);
         mockUseEnrichmentStream.mockReturnValue(undefined);
         mockUseUserSettings.mockReturnValue({
             data: undefined,

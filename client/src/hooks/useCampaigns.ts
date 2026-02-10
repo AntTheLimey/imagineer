@@ -74,8 +74,15 @@ export function useUpdateCampaign() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: ({ id, input }: { id: number; input: UpdateCampaignInput }) =>
-            campaignsApi.update(id, input),
+        mutationFn: ({
+            id,
+            input,
+            options,
+        }: {
+            id: number;
+            input: UpdateCampaignInput;
+            options?: { analyze?: boolean; enrich?: boolean };
+        }) => campaignsApi.update(id, input, options),
         onSuccess: (data: Campaign) => {
             // Update the specific campaign in cache
             queryClient.setQueryData(campaignKeys.detail(data.id), data);

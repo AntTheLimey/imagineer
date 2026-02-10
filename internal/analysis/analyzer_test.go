@@ -250,6 +250,71 @@ func TestWikiLinkRegex(t *testing.T) {
 	}
 }
 
+// TestWikiLinkOriginalRanges verifies that wikiLinkOriginalRanges
+// returns position ranges matching the full [[...]] markup in the
+// original content coordinate space.
+func TestWikiLinkOriginalRanges(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  []wikiLinkRange
+	}{
+		{
+			name:  "no wiki links",
+			input: "No links here",
+			want:  []wikiLinkRange{},
+		},
+		{
+			name:  "empty string",
+			input: "",
+			want:  []wikiLinkRange{},
+		},
+		{
+			name:  "single simple link",
+			input: "Visit [[Arkham]] today",
+			want: []wikiLinkRange{
+				{start: 6, end: 16},
+			},
+		},
+		{
+			name:  "single aliased link",
+			input: "Talk to [[Dr. Armitage|the Professor]]",
+			want: []wikiLinkRange{
+				{start: 8, end: 38},
+			},
+		},
+		{
+			name:  "multiple links",
+			input: "Visit [[Arkham]] and talk to [[Dr. Armitage|the Professor]]",
+			want: []wikiLinkRange{
+				{start: 6, end: 16},
+				{start: 29, end: 59},
+			},
+		},
+		{
+			name:  "link at start of content",
+			input: "[[Arkham]] is spooky",
+			want: []wikiLinkRange{
+				{start: 0, end: 10},
+			},
+		},
+		{
+			name:  "link at end of content",
+			input: "Visit [[Arkham]]",
+			want: []wikiLinkRange{
+				{start: 6, end: 16},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := wikiLinkOriginalRanges(tt.input)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 // TestCapitalizedPhraseRegex verifies the compiled capitalizedPhraseRe
 // pattern detects capitalized word sequences and ignores lowercase text.
 func TestCapitalizedPhraseRegex(t *testing.T) {

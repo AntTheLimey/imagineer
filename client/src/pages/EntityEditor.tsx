@@ -34,6 +34,8 @@ import {
     Typography,
 } from '@mui/material';
 import { FullScreenLayout } from '../layouts';
+import { SaveSplitButton } from '../components/SaveSplitButton';
+import type { SaveMode } from '../components/SaveSplitButton';
 import { MarkdownEditor } from '../components/MarkdownEditor';
 import { RelationshipEditor, PendingRelationship } from '../components/RelationshipEditor';
 import EntityLogSection from '../components/EntityLog/EntityLogSection';
@@ -246,6 +248,7 @@ export default function EntityEditor() {
         open: boolean;
         jobId: number;
         count: number;
+        message?: string;
     }>({ open: false, jobId: 0, count: 0 });
 
     // Initialize form data from existing entity or check for draft
@@ -343,9 +346,14 @@ export default function EntityEditor() {
     }, [formData]);
 
     /**
-     * Save the entity.
+     * Save the entity with an optional save mode that controls whether
+     * analysis and enrichment pipelines are triggered after saving.
+     *
+     * @param mode - The save mode: "save" (no analysis), "analyze"
+     *   (phase 1 only), or "enrich" (phase 1 + phase 2). Defaults to
+     *   "analyze" to preserve the existing auto-analyze behavior.
      */
-    const handleSave = useCallback(async (): Promise<boolean> => {
+    const handleSave = useCallback(async (mode: SaveMode = 'analyze'): Promise<boolean> => {
         if (!validateForm() || !campaignId) {
             return false;
         }
@@ -408,17 +416,33 @@ export default function EntityEditor() {
                         gmNotes: formData.gmNotes.trim() || undefined,
                         sourceConfidence: formData.sourceConfidence,
                     },
+                    options: {
+                        analyze: mode !== 'save',
+                        enrich: mode === 'enrich',
+                    },
                 });
 
                 // Check for analysis results
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const analysisResult = (result as any)?._analysis;
-                if (analysisResult?.pendingCount > 0) {
-                    setAnalysisSnackbar({
-                        open: true,
-                        jobId: analysisResult.jobId,
-                        count: analysisResult.pendingCount,
-                    });
+                if (mode !== 'save' && analysisResult) {
+                    if (mode === 'enrich' && analysisResult.jobId) {
+                        // Go directly to triage — no snackbar
+                        navigate(`/campaigns/${campaignId}/analysis/${analysisResult.jobId}`);
+                    } else if (analysisResult.pendingCount > 0) {
+                        setAnalysisSnackbar({
+                            open: true,
+                            jobId: analysisResult.jobId,
+                            count: analysisResult.pendingCount,
+                        });
+                    } else {
+                        setAnalysisSnackbar({
+                            open: true,
+                            jobId: analysisResult.jobId,
+                            count: 0,
+                            message: 'Analysis complete: no issues found.',
+                        });
+                    }
                 }
 
                 // Clean up draft
@@ -448,27 +472,20 @@ export default function EntityEditor() {
     ]);
 
     /**
-     * Save and close.
-     */
-    const handleSaveAndClose = useCallback(async () => {
-        const saved = await handleSave();
-        if (saved) {
-            navigate(`/campaigns/${campaignId}/entities`);
-        }
-    }, [handleSave, navigate, campaignId]);
-
-    /**
      * Handle back navigation with unsaved changes check.
+     *
+     * Uses browser history so the user returns to whatever page they
+     * came from (e.g. Campaign Overview, Entities list, etc.).
      */
     const handleBack = useCallback(() => {
-        const goBack = () => navigate(`/campaigns/${campaignId}/entities`);
+        const goBack = () => navigate(-1);
         // If there are unsaved changes, checkUnsavedChanges will show the dialog
         // and return true. If the user confirms, it will call goBack.
         // If there are no unsaved changes, it returns false and we navigate directly.
         if (!checkUnsavedChanges(goBack)) {
             goBack();
         }
-    }, [navigate, campaignId, checkUnsavedChanges]);
+    }, [navigate, checkUnsavedChanges]);
 
     // Build breadcrumbs
     const breadcrumbs = useMemo(
@@ -525,9 +542,14 @@ export default function EntityEditor() {
             breadcrumbs={breadcrumbs}
             isDirty={isDirty}
             isSaving={isSaving}
-            onSave={handleSave}
-            onSaveAndClose={handleSaveAndClose}
             onBack={handleBack}
+            renderSaveButtons={() => (
+                <SaveSplitButton
+                    onSave={handleSave}
+                    isDirty={isDirty}
+                    isSaving={isSaving}
+                />
+            )}
         >
             <Box sx={{ maxWidth: 800, mx: 'auto' }}>
                 {/* Draft recovery alert */}
@@ -744,22 +766,37 @@ export default function EntityEditor() {
             {/* Analysis results snackbar */}
             <Snackbar
                 open={analysisSnackbar.open}
-                autoHideDuration={10000}
+                autoHideDuration={analysisSnackbar.count === 0 ? 4000 : 10000}
                 onClose={() => setAnalysisSnackbar(prev => ({ ...prev, open: false }))}
-                message={`Analysis found ${analysisSnackbar.count} item${analysisSnackbar.count === 1 ? '' : 's'} to review`}
-                action={
-                    <Button
-                        color="warning"
-                        size="small"
-                        onClick={() => {
-                            setAnalysisSnackbar(prev => ({ ...prev, open: false }));
-                            navigate(`/campaigns/${campaignId}/analysis/${analysisSnackbar.jobId}`);
-                        }}
+            >
+                {analysisSnackbar.count === 0 ? (
+                    <Alert
+                        severity="success"
+                        onClose={() => setAnalysisSnackbar(prev => ({ ...prev, open: false }))}
                     >
-                        Review Now
-                    </Button>
-                }
-            />
+                        {analysisSnackbar.message ?? 'Analysis complete: no issues found.'}
+                    </Alert>
+                ) : (
+                    <Alert
+                        severity="warning"
+                        onClose={() => setAnalysisSnackbar(prev => ({ ...prev, open: false }))}
+                        action={
+                            <Button
+                                color="inherit"
+                                size="small"
+                                onClick={() => {
+                                    setAnalysisSnackbar(prev => ({ ...prev, open: false }));
+                                    navigate(`/campaigns/${campaignId}/analysis/${analysisSnackbar.jobId}`);
+                                }}
+                            >
+                                Review Now
+                            </Button>
+                        }
+                    >
+                        {`Analysis found ${analysisSnackbar.count} item${analysisSnackbar.count === 1 ? '' : 's'} to review`}
+                    </Alert>
+                )}
+            </Snackbar>
 
             {/* Navigation confirmation dialog */}
             {ConfirmDialog}

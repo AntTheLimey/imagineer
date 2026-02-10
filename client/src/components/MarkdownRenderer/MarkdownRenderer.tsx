@@ -14,6 +14,7 @@ import { Box } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material';
 import remarkWikiLinks from './remarkWikiLinks';
 import WikiLinkInline from './WikiLinkInline';
+import type { WikiLinkEntity } from './WikiLinkInline';
 
 /**
  * Props for the MarkdownRenderer component.
@@ -32,9 +33,23 @@ export interface MarkdownRendererProps {
      * Callback fired when a wiki link `[[Entity Name]]` is clicked.
      *
      * Receives the canonical entity name extracted from the wiki-link
-     * syntax.
+     * syntax. This is the fallback handler used when `onEntityNavigate`
+     * is not provided or the entity is not found in `entities`.
      */
     onEntityClick?: (name: string) => void;
+    /**
+     * Array of entities available for wiki link matching.
+     *
+     * When provided alongside `onEntityNavigate`, wiki links whose
+     * names match an entity (case-insensitive) will navigate directly
+     * by entity ID and display a hover popover preview.
+     */
+    entities?: WikiLinkEntity[];
+    /**
+     * Callback fired when a matched entity wiki link is clicked or
+     * the popover "View" link is activated. Receives the entity ID.
+     */
+    onEntityNavigate?: (entityId: number) => void;
 }
 
 /**
@@ -98,6 +113,11 @@ const typographySx: SxProps<Theme> = {
  * elements. When `onEntityClick` is provided, clicking a wiki link
  * invokes the callback with the entity name.
  *
+ * When `entities` and `onEntityNavigate` are provided, wiki links that
+ * match an entity name (case-insensitive) navigate directly by entity
+ * ID and display a hover popover with the entity name, type, and a
+ * description snippet.
+ *
  * @param props - The component props.
  * @returns A React element containing the rendered Markdown, or null
  *          if content is falsy.
@@ -112,20 +132,28 @@ const typographySx: SxProps<Theme> = {
  *     content={session.notes}
  *     onEntityClick={(name) => console.log('Navigate to', name)}
  * />
+ *
+ * <MarkdownRenderer
+ *     content={session.notes}
+ *     entities={campaignEntities}
+ *     onEntityNavigate={(id) => navigate(`/entities/${id}`)}
+ * />
  * ```
  */
 export default function MarkdownRenderer({
     content,
     maxLines,
     onEntityClick,
+    entities,
+    onEntityNavigate,
 }: MarkdownRendererProps) {
     /**
      * Custom component mapping for react-markdown.
      *
      * The `wiki-link` element is produced by the remarkWikiLinks remark
-     * plugin and rendered by WikiLinkInline. The `onEntityClick`
-     * callback is captured via closure so that each wiki link instance
-     * receives it as a prop.
+     * plugin and rendered by WikiLinkInline. The callbacks and entity
+     * data are captured via closure so that each wiki link instance
+     * receives them as props.
      *
      * The explicit `any` in the return type is required because
      * react-markdown's `Components` type does not include custom
@@ -146,11 +174,13 @@ export default function MarkdownRenderer({
                 entityName={entityName}
                 displayText={displayText}
                 onEntityClick={onEntityClick}
+                entities={entities}
+                onEntityNavigate={onEntityNavigate}
             >
                 {children}
             </WikiLinkInline>
         ),
-    }), [onEntityClick]);
+    }), [onEntityClick, entities, onEntityNavigate]);
 
     const clampSx: SxProps<Theme> = maxLines
         ? {

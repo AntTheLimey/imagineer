@@ -68,6 +68,12 @@ interface FullScreenLayoutProps {
     actions?: ReactNode;
     /** Whether to show the save buttons (default: true) */
     showSaveButtons?: boolean;
+    /**
+     * Optional render function for custom save buttons. When provided,
+     * replaces the default Save / Save & Close buttons with the returned
+     * content. When omitted, the default buttons render as before.
+     */
+    renderSaveButtons?: () => ReactNode;
 }
 
 /**
@@ -87,6 +93,7 @@ interface FullScreenLayoutProps {
  * @param backPath - Optional path to navigate to when Back is triggered and `onBack` is not provided
  * @param actions - Optional custom action nodes rendered in the header
  * @param showSaveButtons - Controls visibility of the save action buttons (defaults to true)
+ * @param renderSaveButtons - Optional render function that replaces the default Save / Save & Close buttons with custom content
  */
 export default function FullScreenLayout({
     title,
@@ -101,6 +108,7 @@ export default function FullScreenLayout({
     backPath,
     actions,
     showSaveButtons = true,
+    renderSaveButtons,
 }: FullScreenLayoutProps) {
     const navigate = useNavigate();
 
@@ -229,40 +237,42 @@ export default function FullScreenLayout({
 
                     {/* Save buttons */}
                     {showSaveButtons && (
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                            {onSave && (
-                                <Button
-                                    variant="outlined"
-                                    startIcon={
-                                        isSaving ? (
-                                            <CircularProgress size={16} />
-                                        ) : (
-                                            <SaveIcon />
-                                        )
-                                    }
-                                    onClick={onSave}
-                                    disabled={isSaving || !isDirty}
-                                >
-                                    Save
-                                </Button>
-                            )}
-                            {onSaveAndClose && (
-                                <Button
-                                    variant="contained"
-                                    startIcon={
-                                        isSaving ? (
-                                            <CircularProgress size={16} color="inherit" />
-                                        ) : (
-                                            <SaveCloseIcon />
-                                        )
-                                    }
-                                    onClick={onSaveAndClose}
-                                    disabled={isSaving}
-                                >
-                                    Save & Close
-                                </Button>
-                            )}
-                        </Box>
+                        renderSaveButtons ? renderSaveButtons() : (
+                            <Box sx={{ display: 'flex', gap: 1 }}>
+                                {onSave && (
+                                    <Button
+                                        variant="outlined"
+                                        startIcon={
+                                            isSaving ? (
+                                                <CircularProgress size={16} />
+                                            ) : (
+                                                <SaveIcon />
+                                            )
+                                        }
+                                        onClick={onSave}
+                                        disabled={isSaving || !isDirty}
+                                    >
+                                        Save
+                                    </Button>
+                                )}
+                                {onSaveAndClose && (
+                                    <Button
+                                        variant="contained"
+                                        startIcon={
+                                            isSaving ? (
+                                                <CircularProgress size={16} color="inherit" />
+                                            ) : (
+                                                <SaveCloseIcon />
+                                            )
+                                        }
+                                        onClick={onSaveAndClose}
+                                        disabled={isSaving}
+                                    >
+                                        Save & Close
+                                    </Button>
+                                )}
+                            </Box>
+                        )
                     )}
                 </Toolbar>
             </AppBar>

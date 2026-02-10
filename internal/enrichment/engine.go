@@ -101,6 +101,52 @@ func (e *Engine) EnrichEntity(
 	return items, nil
 }
 
+// DetectNewEntities analyses source content to identify named entities
+// that are mentioned but do not yet exist in the campaign database.
+// It returns ContentAnalysisItems with detection_type="new_entity_suggestion"
+// for each candidate. On LLM or parse errors it degrades gracefully,
+// returning an empty slice rather than propagating the error.
+func (e *Engine) DetectNewEntities(
+	ctx context.Context,
+	provider llm.Provider,
+	campaignID int64,
+	jobID int64,
+	sourceContent string,
+	knownEntities []models.Entity,
+) ([]models.ContentAnalysisItem, error) {
+	if sourceContent == "" {
+		return []models.ContentAnalysisItem{}, nil
+	}
+
+	systemPrompt := buildNewEntityDetectionSystemPrompt()
+	userPrompt := buildNewEntityDetectionUserPrompt(
+		sourceContent, knownEntities,
+	)
+
+	resp, err := provider.Complete(ctx, llm.CompletionRequest{
+		SystemPrompt: systemPrompt,
+		UserPrompt:   userPrompt,
+		MaxTokens:    2048,
+		Temperature:  0.3,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("LLM completion failed: %w", err)
+	}
+
+	parsed, err := parseNewEntityResponse(resp.Content)
+	if err != nil {
+		log.Printf(
+			"enrichment: failed to parse new-entity LLM response "+
+				"for campaign %d: %v",
+			campaignID, err,
+		)
+		return []models.ContentAnalysisItem{}, nil
+	}
+
+	items := convertNewEntitiesToItems(campaignID, jobID, parsed)
+	return items, nil
+}
+
 // convertToItems transforms a parsed enrichment response into a slice
 // of ContentAnalysisItems ready for triage.
 func convertToItems(input EnrichmentInput, resp *enrichmentResponse) []models.ContentAnalysisItem {

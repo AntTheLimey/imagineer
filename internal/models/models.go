@@ -621,6 +621,11 @@ type ContentAnalysisItem struct {
 	EntityType *EntityType `json:"entityType,omitempty"`
 }
 
+// Item type constants for content analysis items.
+const (
+	ItemTypeNewEntitySuggestion = "new_entity_suggestion"
+)
+
 // ResolveAnalysisItemRequest is the request body for resolving an analysis item.
 type ResolveAnalysisItemRequest struct {
 	Resolution               string                 `json:"resolution"`

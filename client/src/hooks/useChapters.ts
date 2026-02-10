@@ -105,11 +105,13 @@ export function useUpdateChapter() {
             campaignId,
             chapterId,
             input,
+            options,
         }: {
             campaignId: number;
             chapterId: number;
             input: UpdateChapterInput;
-        }) => chaptersApi.update(campaignId, chapterId, input),
+            options?: { analyze?: boolean; enrich?: boolean };
+        }) => chaptersApi.update(campaignId, chapterId, input, options),
         onSuccess: (data: Chapter) => {
             // Update the specific chapter in cache
             queryClient.setQueryData(

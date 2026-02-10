@@ -56,6 +56,7 @@ import {
     useCampaignOwnership,
 } from '../hooks';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
+import type { WikiLinkEntity } from '../components/MarkdownRenderer';
 import type { Entity, EntityType, SourceConfidence } from '../types';
 
 /**
@@ -201,6 +202,15 @@ export default function Entities() {
         }
     }, [campaignId, navigate]);
 
+    /**
+     * Navigate to the entity view page for a specific entity.
+     */
+    const handleEntityNavigate = useCallback((entityId: number) => {
+        if (campaignId) {
+            navigate(`/campaigns/${campaignId}/entities/${entityId}`);
+        }
+    }, [campaignId, navigate]);
+
     // Pagination state
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -246,6 +256,20 @@ export default function Entities() {
         pageSize: rowsPerPage,
         entityType: typeFilter === 'all' ? undefined : typeFilter,
     });
+
+    // Fetch all entities (unpaginated) for wiki link resolution
+    const { data: allEntitiesForLinks } = useEntities({
+        campaignId: campaignId ?? 0,
+    });
+
+    // Map entities to WikiLinkEntity shape for MarkdownRenderer
+    const wikiLinkEntities: WikiLinkEntity[] | undefined =
+        allEntitiesForLinks?.map((e) => ({
+            id: e.id,
+            name: e.name,
+            entityType: e.entityType,
+            description: e.description ?? null,
+        }));
 
     // Fetch single entity for view/edit
     const {
@@ -358,12 +382,6 @@ export default function Entities() {
         } catch (error) {
             console.error('Failed to delete entity:', error);
         }
-    };
-
-    // Open view dialog
-    const openViewDialog = (entity: Entity) => {
-        setSelectedEntityId(entity.id);
-        setViewDialogOpen(true);
     };
 
     // Open delete dialog
@@ -619,7 +637,7 @@ export default function Entities() {
                                                     size="small"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        openViewDialog(entity);
+                                                        navigate(`/campaigns/${campaignId}/entities/${entity.id}`);
                                                     }}
                                                 >
                                                     <ViewIcon fontSize="small" />
@@ -916,6 +934,8 @@ export default function Entities() {
                                         <MarkdownRenderer
                                             content={dialogEntity.description}
                                             onEntityClick={handleEntityClick}
+                                            entities={wikiLinkEntities}
+                                            onEntityNavigate={handleEntityNavigate}
                                         />
                                     </Box>
                                 </Box>

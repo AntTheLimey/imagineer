@@ -186,7 +186,7 @@ func TestRespondError(t *testing.T) {
 
 func TestNewHandler(t *testing.T) {
 	// Test that NewHandler creates a handler without panicking
-	handler := NewHandler(nil)
+	handler := NewHandler(nil, nil)
 	assert.NotNil(t, handler)
 }
 

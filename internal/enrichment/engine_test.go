@@ -626,3 +626,367 @@ func (c *capturingProvider) Complete(
 	*c.captured = req
 	return c.inner.Complete(ctx, req)
 }
+
+// ---------------------------------------------------------------------------
+// New-entity detection parser tests
+// ---------------------------------------------------------------------------
+
+func TestParseNewEntityResponse_Valid(t *testing.T) {
+	input := `{
+		"new_entities": [
+			{
+				"name": "Inspector Barrington",
+				"entity_type": "npc",
+				"description": "A Scotland Yard detective",
+				"reasoning": "Named character not in the known list"
+			},
+			{
+				"name": "The Blackwood Estate",
+				"entity_type": "location",
+				"description": "A manor house on the outskirts of town",
+				"reasoning": "Named location mentioned in paragraph 2"
+			}
+		]
+	}`
+
+	resp, err := parseNewEntityResponse(input)
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Len(t, resp.NewEntities, 2)
+	assert.Equal(t, "Inspector Barrington", resp.NewEntities[0].Name)
+	assert.Equal(t, "npc", resp.NewEntities[0].EntityType)
+	assert.Equal(t, "A Scotland Yard detective",
+		resp.NewEntities[0].Description)
+	assert.Equal(t, "The Blackwood Estate", resp.NewEntities[1].Name)
+	assert.Equal(t, "location", resp.NewEntities[1].EntityType)
+}
+
+func TestParseNewEntityResponse_Empty(t *testing.T) {
+	resp, err := parseNewEntityResponse("")
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Len(t, resp.NewEntities, 0)
+}
+
+func TestParseNewEntityResponse_NoEntities(t *testing.T) {
+	input := `{"new_entities": []}`
+
+	resp, err := parseNewEntityResponse(input)
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Len(t, resp.NewEntities, 0)
+}
+
+func TestParseNewEntityResponse_WithCodeFences(t *testing.T) {
+	input := "```json\n" + `{
+		"new_entities": [
+			{
+				"name": "Captain Holt",
+				"entity_type": "npc",
+				"description": "A ship captain",
+				"reasoning": "Named in dialogue"
+			}
+		]
+	}` + "\n```"
+
+	resp, err := parseNewEntityResponse(input)
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Len(t, resp.NewEntities, 1)
+	assert.Equal(t, "Captain Holt", resp.NewEntities[0].Name)
+}
+
+func TestParseNewEntityResponse_Malformed(t *testing.T) {
+	input := "Here are the entities I found in the text."
+
+	resp, err := parseNewEntityResponse(input)
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Len(t, resp.NewEntities, 0)
+}
+
+func TestParseNewEntityResponse_NullArray(t *testing.T) {
+	// JSON with null instead of array.
+	input := `{"new_entities": null}`
+
+	resp, err := parseNewEntityResponse(input)
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.NotNil(t, resp.NewEntities, "should normalise nil to empty slice")
+	assert.Len(t, resp.NewEntities, 0)
+}
+
+// ---------------------------------------------------------------------------
+// New-entity detection converter tests
+// ---------------------------------------------------------------------------
+
+func TestConvertNewEntitiesToItems(t *testing.T) {
+	resp := &newEntityResponse{
+		NewEntities: []newEntitySuggestion{
+			{
+				Name:        "Lady Ashworth",
+				EntityType:  "npc",
+				Description: "A wealthy patron of the arts",
+				Reasoning:   "Named in the chapter introduction",
+			},
+			{
+				Name:        "The Iron Key",
+				EntityType:  "item",
+				Description: "An ornate iron key found in the study",
+				Reasoning:   "Described as a named artefact",
+			},
+		},
+	}
+
+	items := convertNewEntitiesToItems(1, 42, resp)
+
+	require.Len(t, items, 2)
+
+	// First item.
+	assert.Equal(t, int64(42), items[0].JobID)
+	assert.Equal(t, "new_entity_suggestion", items[0].DetectionType)
+	assert.Equal(t, "Lady Ashworth", items[0].MatchedText)
+	assert.Equal(t, "pending", items[0].Resolution)
+	assert.Equal(t, "enrichment", items[0].Phase)
+	assert.Nil(t, items[0].EntityID)
+
+	var content0 map[string]string
+	require.NoError(t, json.Unmarshal(items[0].SuggestedContent, &content0))
+	assert.Equal(t, "npc", content0["entity_type"])
+	assert.Equal(t, "A wealthy patron of the arts", content0["description"])
+	assert.Equal(t, "Named in the chapter introduction",
+		content0["reasoning"])
+
+	// Second item.
+	assert.Equal(t, "The Iron Key", items[1].MatchedText)
+	var content1 map[string]string
+	require.NoError(t, json.Unmarshal(items[1].SuggestedContent, &content1))
+	assert.Equal(t, "item", content1["entity_type"])
+}
+
+func TestConvertNewEntitiesToItems_NilResponse(t *testing.T) {
+	items := convertNewEntitiesToItems(1, 42, nil)
+
+	require.NotNil(t, items)
+	assert.Empty(t, items)
+}
+
+func TestConvertNewEntitiesToItems_EmptyResponse(t *testing.T) {
+	resp := &newEntityResponse{
+		NewEntities: []newEntitySuggestion{},
+	}
+
+	items := convertNewEntitiesToItems(1, 42, resp)
+
+	require.NotNil(t, items)
+	assert.Empty(t, items)
+}
+
+// ---------------------------------------------------------------------------
+// New-entity detection prompt tests
+// ---------------------------------------------------------------------------
+
+func TestBuildNewEntityDetectionSystemPrompt(t *testing.T) {
+	prompt := buildNewEntityDetectionSystemPrompt()
+
+	assert.Contains(t, prompt, "TTRPG campaign analyst")
+	assert.Contains(t, prompt, "new_entities")
+	assert.Contains(t, prompt, "entity_type")
+	assert.Contains(t, prompt, "npc")
+	assert.Contains(t, prompt, "location")
+	assert.Contains(t, prompt, "valid JSON only")
+}
+
+func TestBuildNewEntityDetectionUserPrompt(t *testing.T) {
+	knownEntities := []models.Entity{
+		{
+			ID:         1,
+			Name:       "Viktor",
+			EntityType: models.EntityTypeNPC,
+		},
+		{
+			ID:         2,
+			Name:       "The Silver Fox Inn",
+			EntityType: models.EntityTypeLocation,
+		},
+	}
+
+	prompt := buildNewEntityDetectionUserPrompt(
+		"Viktor and Inspector Barrington met at The Silver Fox Inn.",
+		knownEntities,
+	)
+
+	assert.Contains(t, prompt, "## Source Content")
+	assert.Contains(t, prompt, "Viktor and Inspector Barrington")
+	assert.Contains(t, prompt, "## Known Entities")
+	assert.Contains(t, prompt, "Viktor (npc)")
+	assert.Contains(t, prompt, "The Silver Fox Inn (location)")
+	assert.Contains(t, prompt, "NOT in the known entities list")
+}
+
+func TestBuildNewEntityDetectionUserPrompt_NoKnownEntities(t *testing.T) {
+	prompt := buildNewEntityDetectionUserPrompt(
+		"A tale of adventure.",
+		nil,
+	)
+
+	assert.Contains(t, prompt, "## Source Content")
+	assert.NotContains(t, prompt, "## Known Entities")
+	assert.Contains(t, prompt, "NOT in the known entities list")
+}
+
+func TestBuildNewEntityDetectionUserPrompt_TruncatesLongContent(t *testing.T) {
+	longContent := strings.Repeat("x", maxContentChars+500)
+
+	prompt := buildNewEntityDetectionUserPrompt(longContent, nil)
+
+	// The content section should be truncated to maxContentChars runes.
+	assert.NotContains(t, prompt, strings.Repeat("x", maxContentChars+1))
+}
+
+// ---------------------------------------------------------------------------
+// DetectNewEntities engine tests
+// ---------------------------------------------------------------------------
+
+func TestDetectNewEntities_Success(t *testing.T) {
+	llmResponse := `{
+		"new_entities": [
+			{
+				"name": "Inspector Barrington",
+				"entity_type": "npc",
+				"description": "A Scotland Yard detective",
+				"reasoning": "Named character not in the known list"
+			}
+		]
+	}`
+
+	provider := &mockProvider{response: llmResponse}
+	engine := NewEngine(nil)
+
+	knownEntities := []models.Entity{
+		{ID: 1, Name: "Viktor", EntityType: models.EntityTypeNPC},
+	}
+
+	items, err := engine.DetectNewEntities(
+		context.Background(),
+		provider,
+		1,  // campaignID
+		42, // jobID
+		"Viktor met Inspector Barrington at the docks.",
+		knownEntities,
+	)
+
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, int64(42), items[0].JobID)
+	assert.Equal(t, "new_entity_suggestion", items[0].DetectionType)
+	assert.Equal(t, "Inspector Barrington", items[0].MatchedText)
+	assert.Equal(t, "pending", items[0].Resolution)
+	assert.Equal(t, "enrichment", items[0].Phase)
+	assert.Nil(t, items[0].EntityID)
+
+	var content map[string]string
+	require.NoError(t, json.Unmarshal(items[0].SuggestedContent, &content))
+	assert.Equal(t, "npc", content["entity_type"])
+	assert.Equal(t, "A Scotland Yard detective", content["description"])
+}
+
+func TestDetectNewEntities_EmptyContent(t *testing.T) {
+	provider := &mockProvider{response: `{"new_entities": []}`}
+	engine := NewEngine(nil)
+
+	items, err := engine.DetectNewEntities(
+		context.Background(), provider, 1, 42, "", nil,
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, items)
+	assert.Empty(t, items)
+}
+
+func TestDetectNewEntities_LLMError(t *testing.T) {
+	provider := &mockProvider{
+		err: errors.New("service unavailable"),
+	}
+	engine := NewEngine(nil)
+
+	items, err := engine.DetectNewEntities(
+		context.Background(), provider, 1, 42, "Some content.", nil,
+	)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "LLM completion failed")
+	assert.Nil(t, items)
+}
+
+func TestDetectNewEntities_MalformedResponse(t *testing.T) {
+	provider := &mockProvider{
+		response: "I found some entities for you!",
+	}
+	engine := NewEngine(nil)
+
+	items, err := engine.DetectNewEntities(
+		context.Background(), provider, 1, 42, "Some content.", nil,
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, items, "should return non-nil empty slice")
+	assert.Empty(t, items)
+}
+
+func TestDetectNewEntities_VerifiesProviderRequest(t *testing.T) {
+	var captured llm.CompletionRequest
+	provider := &mockProvider{
+		response: `{"new_entities": []}`,
+	}
+	captureProvider := &capturingProvider{
+		inner:    provider,
+		captured: &captured,
+	}
+	engine := NewEngine(nil)
+
+	knownEntities := []models.Entity{
+		{ID: 1, Name: "Raven", EntityType: models.EntityTypeNPC},
+	}
+
+	_, err := engine.DetectNewEntities(
+		context.Background(),
+		captureProvider,
+		1,
+		42,
+		"Content about Raven and the mysterious Dr. Crane.",
+		knownEntities,
+	)
+	require.NoError(t, err)
+
+	assert.Equal(t, 2048, captured.MaxTokens)
+	assert.InDelta(t, 0.3, captured.Temperature, 0.001)
+	assert.Contains(t, captured.SystemPrompt, "TTRPG campaign analyst")
+	assert.Contains(t, captured.UserPrompt, "Raven (npc)")
+	assert.Contains(t, captured.UserPrompt, "Dr. Crane")
+}
+
+func TestDetectNewEntities_NoNewEntitiesFound(t *testing.T) {
+	llmResponse := `{"new_entities": []}`
+
+	provider := &mockProvider{response: llmResponse}
+	engine := NewEngine(nil)
+
+	items, err := engine.DetectNewEntities(
+		context.Background(), provider, 1, 42,
+		"Nothing new here, just Viktor again.",
+		[]models.Entity{
+			{ID: 1, Name: "Viktor", EntityType: models.EntityTypeNPC},
+		},
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, items)
+	assert.Empty(t, items)
+}

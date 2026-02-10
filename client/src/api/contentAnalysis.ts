@@ -48,7 +48,8 @@ export interface ContentAnalysisItem {
         | 'misspelling'
         | 'description_update'
         | 'log_entry'
-        | 'relationship_suggestion';
+        | 'relationship_suggestion'
+        | 'new_entity_suggestion';
     matchedText: string;
     entityId?: number;
     similarity?: number;
@@ -204,6 +205,18 @@ export const contentAnalysisApi = {
             message?: string;
         }>(
             `/campaigns/${campaignId}/analysis/jobs/${jobId}/enrich`
+        );
+    },
+
+    /**
+     * Cancel a running LLM enrichment for a job.
+     */
+    cancelEnrichment(
+        campaignId: number,
+        jobId: number,
+    ): Promise<{ status: string }> {
+        return apiClient.post<{ status: string }>(
+            `/campaigns/${campaignId}/analysis/jobs/${jobId}/cancel-enrichment`
         );
     },
 

@@ -256,6 +256,30 @@ export function useTriggerEnrichment(campaignId: number) {
 }
 
 /**
+ * Mutation to cancel a running LLM enrichment for a job.
+ * Invalidates content analysis queries on success so the UI
+ * reflects the updated job status.
+ *
+ * @param campaignId - The campaign the job belongs to.
+ */
+export function useCancelEnrichment(campaignId: number) {
+    const queryClient = useQueryClient();
+    return useMutation<
+        { status: string },
+        Error,
+        number
+    >({
+        mutationFn: (jobId) =>
+            contentAnalysisApi.cancelEnrichment(campaignId, jobId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({
+                queryKey: contentAnalysisKeys.all,
+            });
+        },
+    });
+}
+
+/**
  * Polls the job status and items at a fixed interval while enrichment
  * is in progress. Invalidates the job and items queries every 2 seconds
  * so the UI stays up to date without requiring SSE.
