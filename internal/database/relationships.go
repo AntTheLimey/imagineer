@@ -101,12 +101,23 @@ func (db *DB) GetRelationship(ctx context.Context, id int64) (*models.Relationsh
 	return &r, nil
 }
 
-// CreateRelationship creates a new relationship.
+// CreateRelationship creates a new relationship or returns the existing one
+// if a duplicate is detected. When a conflict occurs on the unique constraint
+// (campaign_id, source_entity_id, target_entity_id, relationship_type), the
+// existing row is updated with any new description or tone values, making
+// this operation idempotent.
 func (db *DB) CreateRelationship(ctx context.Context, campaignID int64, req models.CreateRelationshipRequest) (*models.Relationship, error) {
 	query := `
         INSERT INTO relationships (campaign_id, source_entity_id, target_entity_id,
                                    relationship_type, tone, description, bidirectional, strength)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        ON CONFLICT (campaign_id, source_entity_id, target_entity_id, relationship_type)
+        DO UPDATE SET
+            description = COALESCE(EXCLUDED.description, relationships.description),
+            tone = COALESCE(EXCLUDED.tone, relationships.tone),
+            bidirectional = EXCLUDED.bidirectional,
+            strength = COALESCE(EXCLUDED.strength, relationships.strength),
+            updated_at = NOW()
         RETURNING id, campaign_id, source_entity_id, target_entity_id,
                   relationship_type, tone, description, bidirectional,
                   strength, created_at, updated_at`
@@ -221,7 +232,17 @@ func (db *DB) GetEntityRelationships(ctx context.Context, entityID int64) ([]mod
         FROM relationships r
         JOIN entities se ON r.source_entity_id = se.id
         JOIN entities te ON r.target_entity_id = te.id
-        WHERE r.source_entity_id = $1 OR r.target_entity_id = $1
+        WHERE (r.source_entity_id = $1 OR r.target_entity_id = $1)
+        AND (
+            r.source_entity_id = $1
+            OR NOT EXISTS (
+                SELECT 1 FROM relationships r2
+                WHERE r2.campaign_id = r.campaign_id
+                AND r2.source_entity_id = $1
+                AND r2.target_entity_id = r.source_entity_id
+                AND r2.relationship_type = r.relationship_type
+            )
+        )
         ORDER BY r.created_at DESC`
 
 	rows, err := db.Query(ctx, query, entityID)

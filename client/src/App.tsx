@@ -25,6 +25,7 @@ import CampaignOverview from './pages/CampaignOverview';
 import CreateCampaign from './pages/CreateCampaign';
 import Entities from './pages/Entities';
 import EntityEditor from './pages/EntityEditor';
+import EntityView from './pages/EntityView';
 import ChapterEditorPage from './pages/ChapterEditorPage';
 import SessionsManagement from './pages/SessionsManagement';
 import CampaignImport from './pages/CampaignImport';
@@ -168,6 +169,7 @@ function AppRoutes() {
                     {/* Campaign-specific routes */}
                     <Route path="/campaigns/:id/overview" element={<CampaignOverview />} />
                     <Route path="/campaigns/:id/entities" element={<Entities />} />
+                    <Route path="/campaigns/:campaignId/entities/:entityId" element={<EntityView />} />
                     <Route path="/campaigns/:id/sessions" element={<SessionsManagement />} />
                     <Route path="/campaigns/:id/import" element={<CampaignImport />} />
                     <Route path="/campaigns/:id/timeline" element={<Timeline />} />

@@ -111,10 +111,10 @@ export default function EntityPreviewPanel({
     };
 
     /**
-     * Navigate directly to an entity's edit page by ID.
+     * Navigate to the entity view page for a specific entity.
      */
     const handleEntityNavigate = (entityId: number) => {
-        navigate(`/campaigns/${campaignId}/entities/${entityId}/edit`);
+        navigate(`/campaigns/${campaignId}/entities/${entityId}`);
     };
 
     // Fetch all campaign entities for wiki link resolution

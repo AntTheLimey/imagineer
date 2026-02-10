@@ -523,6 +523,19 @@ function RelationshipTypeAutocomplete({
 }
 
 /**
+ * A left-panel entry is either an individual item or an entity group
+ * (for enrichment types that are grouped by entity in the left panel).
+ */
+type LeftPanelEntry =
+    | { kind: 'item'; item: ContentAnalysisItem }
+    | {
+          kind: 'entityGroup';
+          entityId: number;
+          detectionType: string;
+          itemIds: number[];
+      };
+
+/**
  * Full-screen triage page for reviewing content analysis results.
  *
  * Displays pending items grouped by detection type in a left panel and
@@ -853,6 +866,143 @@ export default function AnalysisTriagePage() {
     }, [campaignId, job]);
 
     /**
+     * Build a list representing the visual order of left-panel entries.
+     *
+     * Each entry is either:
+     * - An individual item (Phase 1 items, description_update,
+     *   new_entity_suggestion), or
+     * - An entity group (log_entry, relationship_suggestion grouped by
+     *   entityId).
+     *
+     * This mirrors the rendering order: DETECTION_GROUPS first, then
+     * ENRICHMENT_GROUPS, each containing their items/groups in order.
+     */
+    const leftPanelOrder = useMemo((): LeftPanelEntry[] => {
+        const entries: LeftPanelEntry[] = [];
+
+        // Phase 1: identification items listed individually per
+        // detection group.
+        for (const group of DETECTION_GROUPS) {
+            const groupItems = groupedPendingItems[group.key];
+            if (!groupItems || groupItems.length === 0) continue;
+            for (const item of groupItems) {
+                entries.push({ kind: 'item', item });
+            }
+        }
+
+        // Phase 2: enrichment items. log_entry and
+        // relationship_suggestion are grouped by entity; others
+        // are listed individually.
+        for (const group of ENRICHMENT_GROUPS) {
+            const groupItems = pendingEnrichmentItems.filter(
+                (item) => item.detectionType === group.key,
+            );
+            if (groupItems.length === 0) continue;
+
+            if (
+                group.key === 'log_entry' ||
+                group.key === 'relationship_suggestion'
+            ) {
+                const entityGroups = new Map<
+                    number,
+                    ContentAnalysisItem[]
+                >();
+                for (const item of groupItems) {
+                    const eid = item.entityId ?? 0;
+                    if (!entityGroups.has(eid))
+                        entityGroups.set(eid, []);
+                    entityGroups.get(eid)!.push(item);
+                }
+                for (const [entityId, entityItems] of entityGroups) {
+                    entries.push({
+                        kind: 'entityGroup',
+                        entityId,
+                        detectionType: group.key,
+                        itemIds: entityItems.map((i) => i.id),
+                    });
+                }
+            } else {
+                for (const item of groupItems) {
+                    entries.push({ kind: 'item', item });
+                }
+            }
+        }
+
+        return entries;
+    }, [groupedPendingItems, pendingEnrichmentItems]);
+
+    /**
+     * Advance the selection to the next pending item after a resolution,
+     * excluding the item(s) that were just resolved.
+     *
+     * Respects the left panel's visual order and grouping:
+     * - If the resolved item belongs to an entity group that still has
+     *   remaining pending items, stay on that entity group.
+     * - Otherwise, advance to the next visible entry in the left panel
+     *   (which may be an individual item or an entity group).
+     */
+    const advanceToNextPending = useCallback(
+        (resolvedIds: number | number[]) => {
+            const excluded = new Set(
+                Array.isArray(resolvedIds) ? resolvedIds : [resolvedIds],
+            );
+
+            // If we are currently viewing an entity group, check
+            // whether it still has pending items after excluding the
+            // resolved ones.
+            if (selectedEntityGroup) {
+                const remainingInGroup = leftPanelOrder.find(
+                    (entry) =>
+                        entry.kind === 'entityGroup' &&
+                        entry.entityId ===
+                            selectedEntityGroup.entityId &&
+                        entry.detectionType ===
+                            selectedEntityGroup.detectionType &&
+                        entry.itemIds.some(
+                            (id) => !excluded.has(id),
+                        ),
+                );
+                if (remainingInGroup) {
+                    // Group still has pending items -- stay on it.
+                    // Clear selectedItemId to ensure the group view
+                    // is shown rather than a single-item view.
+                    setSelectedItemId(null);
+                    return;
+                }
+            }
+
+            // Find the first left-panel entry that is not fully
+            // covered by the excluded set.
+            const nextEntry = leftPanelOrder.find((entry) => {
+                if (entry.kind === 'item') {
+                    return !excluded.has(entry.item.id);
+                }
+                // Entity group: at least one item must remain.
+                return entry.itemIds.some(
+                    (id) => !excluded.has(id),
+                );
+            });
+
+            if (nextEntry) {
+                if (nextEntry.kind === 'item') {
+                    setSelectedItemId(nextEntry.item.id);
+                    setSelectedEntityGroup(null);
+                } else {
+                    setSelectedItemId(null);
+                    setSelectedEntityGroup({
+                        entityId: nextEntry.entityId,
+                        detectionType: nextEntry.detectionType,
+                    });
+                }
+            } else {
+                setSelectedItemId(null);
+                setSelectedEntityGroup(null);
+            }
+        },
+        [leftPanelOrder, selectedEntityGroup],
+    );
+
+    /**
      * Handle resolving an enrichment item (Phase 2). For dismissed items,
      * simply mark as dismissed. For accepted items, mark as accepted; the
      * backend applies the suggestion when resolving.
@@ -863,21 +1013,31 @@ export default function AnalysisTriagePage() {
             resolution: 'accepted' | 'dismissed',
             item: ContentAnalysisItem,
         ) => {
+            const onSuccessAdvance = {
+                onSuccess: () => advanceToNextPending(itemId),
+            };
+
             if (resolution === 'dismissed') {
-                resolveItem.mutate({
-                    itemId,
-                    req: { resolution: 'dismissed' },
-                });
+                resolveItem.mutate(
+                    {
+                        itemId,
+                        req: { resolution: 'dismissed' },
+                    },
+                    onSuccessAdvance,
+                );
                 return;
             }
 
             try {
                 const suggestion = item.suggestedContent;
                 if (!suggestion) {
-                    resolveItem.mutate({
-                        itemId,
-                        req: { resolution: 'accepted' },
-                    });
+                    resolveItem.mutate(
+                        {
+                            itemId,
+                            req: { resolution: 'accepted' },
+                        },
+                        onSuccessAdvance,
+                    );
                     return;
                 }
 
@@ -892,13 +1052,16 @@ export default function AnalysisTriagePage() {
                           }
                         : undefined;
 
-                resolveItem.mutate({
-                    itemId,
-                    req: {
-                        resolution: 'accepted',
-                        suggestedContentOverride: override,
+                resolveItem.mutate(
+                    {
+                        itemId,
+                        req: {
+                            resolution: 'accepted',
+                            suggestedContentOverride: override,
+                        },
                     },
-                });
+                    onSuccessAdvance,
+                );
             } catch (error) {
                 console.error(
                     'Failed to apply enrichment suggestion:',
@@ -906,7 +1069,7 @@ export default function AnalysisTriagePage() {
                 );
             }
         },
-        [resolveItem, editedRelTypes],
+        [resolveItem, editedRelTypes, advanceToNextPending],
     );
 
     if (Number.isNaN(numericCampaignId) || Number.isNaN(numericJobId)) {
@@ -966,14 +1129,19 @@ export default function AnalysisTriagePage() {
         entityName?: string,
         entityType?: EntityType
     ) => {
-        resolveItem.mutate({
-            itemId,
-            req: {
-                resolution,
-                ...(entityName && { entityName }),
-                ...(entityType && { entityType }),
+        resolveItem.mutate(
+            {
+                itemId,
+                req: {
+                    resolution,
+                    ...(entityName && { entityName }),
+                    ...(entityType && { entityType }),
+                },
             },
-        });
+            {
+                onSuccess: () => advanceToNextPending(itemId),
+            },
+        );
         setShowNewEntityForm(false);
     };
 
@@ -981,11 +1149,19 @@ export default function AnalysisTriagePage() {
      * Handle batch-resolving all pending items of a detection type.
      */
     const handleBatchResolve = (detectionType: string) => {
-        batchResolve.mutate({
-            jobId: numericJobId,
-            detectionType,
-            resolution: 'accepted',
-        });
+        const resolvedIds = pendingItems
+            .filter((item) => item.detectionType === detectionType)
+            .map((item) => item.id);
+        batchResolve.mutate(
+            {
+                jobId: numericJobId,
+                detectionType,
+                resolution: 'accepted',
+            },
+            {
+                onSuccess: () => advanceToNextPending(resolvedIds),
+            },
+        );
     };
 
     /**
@@ -1060,6 +1236,10 @@ export default function AnalysisTriagePage() {
     }
 
     if (!items || items.length === 0) {
+        const jobInProgress = job?.status === 'enriching'
+            || job?.status === 'analyzing'
+            || awaitingEnrichment;
+
         return (
             <FullScreenLayout
                 title="Content Analysis"
@@ -1074,14 +1254,33 @@ export default function AnalysisTriagePage() {
                 <Box
                     sx={{
                         display: 'flex',
+                        flexDirection: 'column',
                         justifyContent: 'center',
                         alignItems: 'center',
                         height: '100%',
+                        gap: 2,
                     }}
                 >
-                    <Typography color="text.secondary">
-                        No items to review
-                    </Typography>
+                    {jobInProgress ? (
+                        <>
+                            <Alert
+                                severity="info"
+                                icon={<CircularProgress size={20} />}
+                                sx={{ maxWidth: 520 }}
+                            >
+                                Enrichment in progress — analysing
+                                content with AI. New suggestions will
+                                appear automatically.
+                            </Alert>
+                            <LinearProgress
+                                sx={{ width: '100%', maxWidth: 520 }}
+                            />
+                        </>
+                    ) : (
+                        <Typography color="text.secondary">
+                            No items to review
+                        </Typography>
+                    )}
                 </Box>
             </FullScreenLayout>
         );

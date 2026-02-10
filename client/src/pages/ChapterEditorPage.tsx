@@ -184,6 +184,7 @@ export default function ChapterEditorPage() {
         open: boolean;
         jobId: number;
         count: number;
+        message?: string;
     }>({ open: false, jobId: 0, count: 0 });
 
     // Calculate next sort order for new chapters
@@ -342,7 +343,10 @@ export default function ChapterEditorPage() {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const analysisResult = (result as any)?._analysis;
                 if (mode !== 'save' && analysisResult) {
-                    if (analysisResult.pendingCount > 0) {
+                    if (mode === 'enrich' && analysisResult.jobId) {
+                        // Go directly to triage — no snackbar
+                        navigate(`/campaigns/${campaignId}/analysis/${analysisResult.jobId}`);
+                    } else if (analysisResult.pendingCount > 0) {
                         setAnalysisSnackbar({
                             open: true,
                             jobId: analysisResult.jobId,
@@ -353,6 +357,7 @@ export default function ChapterEditorPage() {
                             open: true,
                             jobId: analysisResult.jobId,
                             count: 0,
+                            message: 'Analysis complete: no issues found.',
                         });
                     }
                 }
@@ -738,7 +743,7 @@ export default function ChapterEditorPage() {
                         severity="success"
                         onClose={() => setAnalysisSnackbar(prev => ({ ...prev, open: false }))}
                     >
-                        Analysis complete: no issues found
+                        {analysisSnackbar.message ?? 'Analysis complete: no issues found.'}
                     </Alert>
                 ) : (
                     <Alert

@@ -85,11 +85,11 @@ export default function CampaignOverview() {
     }, [campaignId, navigate]);
 
     /**
-     * Navigate directly to an entity's edit page by ID.
+     * Navigate to the entity view page for a specific entity.
      */
     const handleEntityNavigate = useCallback((entityId: number) => {
         if (campaignId) {
-            navigate(`/campaigns/${campaignId}/entities/${entityId}/edit`);
+            navigate(`/campaigns/${campaignId}/entities/${entityId}`);
         }
     }, [campaignId, navigate]);
 
@@ -145,6 +145,7 @@ export default function CampaignOverview() {
         open: boolean;
         jobId: number;
         count: number;
+        message?: string;
     }>({ open: false, jobId: 0, count: 0 });
 
     // Initialize form data when campaign loads
@@ -295,7 +296,10 @@ export default function CampaignOverview() {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const analysisResult = (result as any)?._analysis;
             if (mode !== 'save' && analysisResult) {
-                if (analysisResult.pendingCount > 0) {
+                if (mode === 'enrich' && analysisResult.jobId) {
+                    // Go directly to triage — no snackbar
+                    navigate(`/campaigns/${campaignId}/analysis/${analysisResult.jobId}`);
+                } else if (analysisResult.pendingCount > 0) {
                     setAnalysisSnackbar({
                         open: true,
                         jobId: analysisResult.jobId,
@@ -306,6 +310,7 @@ export default function CampaignOverview() {
                         open: true,
                         jobId: analysisResult.jobId,
                         count: 0,
+                        message: 'Analysis complete: no issues found.',
                     });
                 }
             }
@@ -314,7 +319,7 @@ export default function CampaignOverview() {
         } catch (error) {
             console.error('Failed to save campaign:', error);
         }
-    }, [campaignId, formData, updateCampaign]);
+    }, [campaignId, formData, updateCampaign, navigate]);
 
     /**
      * Update form field.
@@ -746,7 +751,7 @@ export default function CampaignOverview() {
                         severity="success"
                         onClose={() => setAnalysisSnackbar(prev => ({ ...prev, open: false }))}
                     >
-                        Analysis complete: no issues found
+                        {analysisSnackbar.message ?? 'Analysis complete: no issues found.'}
                     </Alert>
                 ) : (
                     <Alert
