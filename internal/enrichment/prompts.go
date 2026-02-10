@@ -13,6 +13,8 @@ package enrichment
 import (
 	"fmt"
 	"strings"
+
+	"github.com/antonypegg/imagineer/internal/models"
 )
 
 // maxContentChars is the default maximum number of characters to include
@@ -200,4 +202,76 @@ func truncateContent(content string, entityName string, maxChars int) string {
 	}
 
 	return result.String()
+}
+
+// buildNewEntityDetectionSystemPrompt returns the system prompt for the
+// new-entity detection LLM call. It instructs the model to identify named
+// entities in content that are not already in the campaign database.
+func buildNewEntityDetectionSystemPrompt() string {
+	return `You are a TTRPG campaign analyst. Analyse content to identify
+named entities (NPCs, locations, items, factions, creatures, organizations,
+events, documents, clues) mentioned but NOT in the campaign database.
+
+Rules:
+- Only identify proper nouns and clear named entities.
+- Do NOT identify generic references like "the tavern", "a guard",
+  "the stranger", or "some soldiers".
+- Only identify entities that are clearly distinct from any entity in the
+  known entities list.
+
+Supported entity types:
+  npc, location, item, faction, clue, creature, organization, event,
+  document, other
+
+You MUST respond with valid JSON only. No markdown, no commentary outside
+the JSON object.
+
+Response format:
+{
+  "new_entities": [
+    {
+      "name": "Inspector Barrington",
+      "entity_type": "npc",
+      "description": "A Scotland Yard detective mentioned in the chapter",
+      "reasoning": "Named character appearing in paragraph 3 who is not in the known entities list"
+    }
+  ]
+}
+
+If no new entities are found, return:
+{"new_entities": []}`
+}
+
+// buildNewEntityDetectionUserPrompt constructs the user prompt for new-
+// entity detection. It includes the source content (truncated to
+// maxContentChars from the start) and a list of known entity names and
+// types so the LLM can avoid suggesting entities already in the database.
+func buildNewEntityDetectionUserPrompt(
+	sourceContent string,
+	knownEntities []models.Entity,
+) string {
+	var b strings.Builder
+
+	// Source content, truncated from the start if too long.
+	runes := []rune(sourceContent)
+	if len(runes) > maxContentChars {
+		runes = runes[:maxContentChars]
+	}
+	fmt.Fprintf(&b, "## Source Content\n\n%s\n\n", string(runes))
+
+	// Known entities already in the campaign database.
+	if len(knownEntities) > 0 {
+		fmt.Fprintf(&b, "## Known Entities (already in database)\n\n")
+		for _, ent := range knownEntities {
+			fmt.Fprintf(&b, "- %s (%s)\n",
+				ent.Name, string(ent.EntityType))
+		}
+		b.WriteString("\n")
+	}
+
+	b.WriteString("Identify named entities in the content above that ")
+	b.WriteString("are NOT in the known entities list. ")
+	b.WriteString("Respond with JSON only.")
+
+	return b.String()
 }

@@ -23,7 +23,6 @@ import {
     Card,
     CardContent,
     Chip,
-    CircularProgress,
     FormControl,
     IconButton,
     InputLabel,
@@ -31,17 +30,19 @@ import {
     Paper,
     Select,
     Skeleton,
+    Snackbar,
     TextField,
     Tooltip,
     Typography,
 } from '@mui/material';
 import {
     Edit as EditIcon,
-    Save as SaveIcon,
     Close as CancelIcon,
     Check as CheckIcon,
 } from '@mui/icons-material';
 import { AnalysisBadge } from '../components/AnalysisBadge';
+import { SaveSplitButton } from '../components/SaveSplitButton';
+import type { SaveMode } from '../components/SaveSplitButton';
 import { MarkdownEditor } from '../components/MarkdownEditor';
 import { GENRE_OPTIONS } from '../components/CampaignSettings';
 import {
@@ -49,9 +50,11 @@ import {
     useUpdateCampaign,
     useGameSystems,
     useCampaignStats,
+    useEntities,
 } from '../hooks';
 import { useCampaignContext } from '../contexts/CampaignContext';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
+import type { WikiLinkEntity } from '../components/MarkdownRenderer';
 import type { GameSystem } from '../types';
 
 /**
@@ -81,6 +84,15 @@ export default function CampaignOverview() {
         }
     }, [campaignId, navigate]);
 
+    /**
+     * Navigate directly to an entity's edit page by ID.
+     */
+    const handleEntityNavigate = useCallback((entityId: number) => {
+        if (campaignId) {
+            navigate(`/campaigns/${campaignId}/entities/${entityId}/edit`);
+        }
+    }, [campaignId, navigate]);
+
     // Editing state
     const [isEditing, setIsEditing] = useState(false);
     const [editingField, setEditingField] = useState<EditableField | null>(null);
@@ -102,6 +114,21 @@ export default function CampaignOverview() {
         enabled: !!campaignId,
     });
 
+    // Fetch entities for wiki link resolution
+    const { data: entitiesData } = useEntities({
+        campaignId: campaignId ?? 0,
+    });
+
+    // Map entities to WikiLinkEntity shape for MarkdownRenderer
+    const wikiLinkEntities: WikiLinkEntity[] | undefined = entitiesData?.map(
+        (e) => ({
+            id: e.id,
+            name: e.name,
+            entityType: e.entityType,
+            description: e.description ?? null,
+        })
+    );
+
     // Fetch campaign stats
     const { data: stats } = useCampaignStats(campaignId ?? 0, {
         enabled: !!campaignId,
@@ -112,6 +139,13 @@ export default function CampaignOverview() {
 
     // Update campaign mutation
     const updateCampaign = useUpdateCampaign();
+
+    // Analysis snackbar state
+    const [analysisSnackbar, setAnalysisSnackbar] = useState<{
+        open: boolean;
+        jobId: number;
+        count: number;
+    }>({ open: false, jobId: 0, count: 0 });
 
     // Initialize form data when campaign loads
     useEffect(() => {
@@ -225,9 +259,14 @@ export default function CampaignOverview() {
     };
 
     /**
-     * Save all changes.
+     * Save all changes with an optional save mode that controls whether
+     * analysis and enrichment pipelines are triggered after saving.
+     *
+     * @param mode - The save mode: "save" (no analysis), "analyze"
+     *   (phase 1 only), or "enrich" (phase 1 + phase 2). Defaults to
+     *   "analyze" to preserve the existing auto-analyze behavior.
      */
-    const handleSaveAll = useCallback(async () => {
+    const handleSaveAll = useCallback(async (mode: SaveMode = 'analyze') => {
         if (!campaignId) return;
 
         if (!formData.name.trim()) {
@@ -246,22 +285,36 @@ export default function CampaignOverview() {
                         imageStylePrompt: formData.imageStylePrompt.trim() || undefined,
                     },
                 },
+                options: {
+                    analyze: mode !== 'save',
+                    enrich: mode === 'enrich',
+                },
             });
 
             // Check for analysis results
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const analysisResult = (result as any)?._analysis;
-            if (analysisResult?.pendingCount > 0) {
-                setIsEditing(false);
-                navigate(`/campaigns/${campaignId}/analysis/${analysisResult.jobId}`);
-                return;
+            if (mode !== 'save' && analysisResult) {
+                if (analysisResult.pendingCount > 0) {
+                    setAnalysisSnackbar({
+                        open: true,
+                        jobId: analysisResult.jobId,
+                        count: analysisResult.pendingCount,
+                    });
+                } else {
+                    setAnalysisSnackbar({
+                        open: true,
+                        jobId: analysisResult.jobId,
+                        count: 0,
+                    });
+                }
             }
 
             setIsEditing(false);
         } catch (error) {
             console.error('Failed to save campaign:', error);
         }
-    }, [campaignId, formData, updateCampaign, navigate]);
+    }, [campaignId, formData, updateCampaign]);
 
     /**
      * Update form field.
@@ -331,20 +384,21 @@ export default function CampaignOverview() {
                 <Typography variant="h4" sx={{ fontFamily: 'Cinzel' }}>
                     Campaign Overview
                 </Typography>
-                <Button
-                    variant={isEditing ? 'contained' : 'outlined'}
-                    startIcon={isEditing ? <SaveIcon /> : <EditIcon />}
-                    onClick={isEditing ? handleSaveAll : handleToggleEdit}
-                    disabled={updateCampaign.isPending}
-                >
-                    {updateCampaign.isPending ? (
-                        <CircularProgress size={20} />
-                    ) : isEditing ? (
-                        'Save & Analyze'
-                    ) : (
-                        'Edit Campaign'
-                    )}
-                </Button>
+                {isEditing ? (
+                    <SaveSplitButton
+                        onSave={handleSaveAll}
+                        isDirty={isEditing}
+                        isSaving={updateCampaign.isPending}
+                    />
+                ) : (
+                    <Button
+                        variant="outlined"
+                        startIcon={<EditIcon />}
+                        onClick={handleToggleEdit}
+                    >
+                        Edit Campaign
+                    </Button>
+                )}
             </Box>
 
             {/* Error alert */}
@@ -589,6 +643,8 @@ export default function CampaignOverview() {
                             <MarkdownRenderer
                                 content={campaign.description}
                                 onEntityClick={handleEntityClick}
+                                entities={wikiLinkEntities}
+                                onEntityNavigate={handleEntityNavigate}
                             />
                         </Box>
                     ) : (
@@ -678,6 +734,41 @@ export default function CampaignOverview() {
                     </Typography>
                 </Box>
             </Box>
+
+            {/* Analysis results snackbar */}
+            <Snackbar
+                open={analysisSnackbar.open}
+                autoHideDuration={analysisSnackbar.count === 0 ? 4000 : 10000}
+                onClose={() => setAnalysisSnackbar(prev => ({ ...prev, open: false }))}
+            >
+                {analysisSnackbar.count === 0 ? (
+                    <Alert
+                        severity="success"
+                        onClose={() => setAnalysisSnackbar(prev => ({ ...prev, open: false }))}
+                    >
+                        Analysis complete: no issues found
+                    </Alert>
+                ) : (
+                    <Alert
+                        severity="warning"
+                        onClose={() => setAnalysisSnackbar(prev => ({ ...prev, open: false }))}
+                        action={
+                            <Button
+                                color="inherit"
+                                size="small"
+                                onClick={() => {
+                                    setAnalysisSnackbar(prev => ({ ...prev, open: false }));
+                                    navigate(`/campaigns/${campaignId}/analysis/${analysisSnackbar.jobId}`);
+                                }}
+                            >
+                                Review Now
+                            </Button>
+                        }
+                    >
+                        {`Analysis found ${analysisSnackbar.count} item${analysisSnackbar.count === 1 ? '' : 's'} to review`}
+                    </Alert>
+                )}
+            </Snackbar>
 
         </Box>
     );

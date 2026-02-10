@@ -111,11 +111,13 @@ export function useUpdateEntity() {
             campaignId,
             entityId,
             input,
+            options,
         }: {
             campaignId: number;
             entityId: number;
             input: UpdateEntityInput;
-        }) => entitiesApi.update(campaignId, entityId, input),
+            options?: { analyze?: boolean; enrich?: boolean };
+        }) => entitiesApi.update(campaignId, entityId, input, options),
         onSuccess: (data: Entity) => {
             // Update the specific entity in cache
             queryClient.setQueryData(

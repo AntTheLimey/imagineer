@@ -104,8 +104,18 @@ export const entitiesApi = {
      * Note: campaignId is kept for API consistency but not used in the URL.
      * The server verifies campaign ownership via the entity's campaign_id.
      */
-    update(_campaignId: number, entityId: number, input: UpdateEntityInput): Promise<Entity> {
-        return apiClient.put<Entity>(`/entities/${entityId}`, input);
+    update(
+        _campaignId: number,
+        entityId: number,
+        input: UpdateEntityInput,
+        options?: { analyze?: boolean; enrich?: boolean },
+    ): Promise<Entity> {
+        const params: Record<string, string> = {};
+        if (options?.analyze) params.analyze = 'true';
+        if (options?.enrich) params.enrich = 'true';
+        return apiClient.put<Entity>(
+            `/entities/${entityId}`, input, params,
+        );
     },
 
     /**

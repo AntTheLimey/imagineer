@@ -31,6 +31,8 @@ import {
 } from '@mui/material';
 import { Link } from 'react-router-dom';
 import { FullScreenLayout } from '../layouts';
+import { SaveSplitButton } from '../components/SaveSplitButton';
+import type { SaveMode } from '../components/SaveSplitButton';
 import { MarkdownEditor } from '../components/MarkdownEditor';
 import {
     useChapter,
@@ -274,9 +276,14 @@ export default function ChapterEditorPage() {
     }, [formData]);
 
     /**
-     * Save the chapter.
+     * Save the chapter with an optional save mode that controls whether
+     * analysis and enrichment pipelines are triggered after saving.
+     *
+     * @param mode - The save mode: "save" (no analysis), "analyze"
+     *   (phase 1 only), or "enrich" (phase 1 + phase 2). Defaults to
+     *   "analyze" to preserve the existing auto-analyze behavior.
      */
-    const handleSave = useCallback(async (): Promise<boolean> => {
+    const handleSave = useCallback(async (mode: SaveMode = 'analyze'): Promise<boolean> => {
         if (!validateForm() || !campaignId) {
             return false;
         }
@@ -325,17 +332,29 @@ export default function ChapterEditorPage() {
                         overview: formData.overview || undefined,
                         sortOrder: formData.sortOrder,
                     },
+                    options: {
+                        analyze: mode !== 'save',
+                        enrich: mode === 'enrich',
+                    },
                 });
 
                 // Check for analysis results
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const analysisResult = (result as any)?._analysis;
-                if (analysisResult?.pendingCount > 0) {
-                    setAnalysisSnackbar({
-                        open: true,
-                        jobId: analysisResult.jobId,
-                        count: analysisResult.pendingCount,
-                    });
+                if (mode !== 'save' && analysisResult) {
+                    if (analysisResult.pendingCount > 0) {
+                        setAnalysisSnackbar({
+                            open: true,
+                            jobId: analysisResult.jobId,
+                            count: analysisResult.pendingCount,
+                        });
+                    } else {
+                        setAnalysisSnackbar({
+                            open: true,
+                            jobId: analysisResult.jobId,
+                            count: 0,
+                        });
+                    }
                 }
 
                 deleteDraft(draftKey);
@@ -362,16 +381,6 @@ export default function ChapterEditorPage() {
         clearDirty,
         navigate,
     ]);
-
-    /**
-     * Save and close.
-     */
-    const handleSaveAndClose = useCallback(async () => {
-        const saved = await handleSave();
-        if (saved) {
-            navigate(`/campaigns/${campaignId}/sessions`);
-        }
-    }, [handleSave, navigate, campaignId]);
 
     /**
      * Handle back navigation with unsaved changes check.
@@ -516,10 +525,15 @@ export default function ChapterEditorPage() {
             breadcrumbs={breadcrumbs}
             isDirty={isDirty}
             isSaving={isSaving}
-            onSave={handleSave}
-            onSaveAndClose={handleSaveAndClose}
             onBack={handleBack}
             subtitle={lastSaved ? `Auto-saved ${formatRelativeTime(lastSaved)}` : undefined}
+            renderSaveButtons={() => (
+                <SaveSplitButton
+                    onSave={handleSave}
+                    isDirty={isDirty}
+                    isSaving={isSaving}
+                />
+            )}
         >
             {/* Draft recovery alert */}
             {showDraftRecovery && (
@@ -716,22 +730,37 @@ export default function ChapterEditorPage() {
             {/* Analysis results snackbar */}
             <Snackbar
                 open={analysisSnackbar.open}
-                autoHideDuration={10000}
+                autoHideDuration={analysisSnackbar.count === 0 ? 4000 : 10000}
                 onClose={() => setAnalysisSnackbar(prev => ({ ...prev, open: false }))}
-                message={`Analysis found ${analysisSnackbar.count} item${analysisSnackbar.count === 1 ? '' : 's'} to review`}
-                action={
-                    <Button
-                        color="warning"
-                        size="small"
-                        onClick={() => {
-                            setAnalysisSnackbar(prev => ({ ...prev, open: false }));
-                            navigate(`/campaigns/${campaignId}/analysis/${analysisSnackbar.jobId}`);
-                        }}
+            >
+                {analysisSnackbar.count === 0 ? (
+                    <Alert
+                        severity="success"
+                        onClose={() => setAnalysisSnackbar(prev => ({ ...prev, open: false }))}
                     >
-                        Review Now
-                    </Button>
-                }
-            />
+                        Analysis complete: no issues found
+                    </Alert>
+                ) : (
+                    <Alert
+                        severity="warning"
+                        onClose={() => setAnalysisSnackbar(prev => ({ ...prev, open: false }))}
+                        action={
+                            <Button
+                                color="inherit"
+                                size="small"
+                                onClick={() => {
+                                    setAnalysisSnackbar(prev => ({ ...prev, open: false }));
+                                    navigate(`/campaigns/${campaignId}/analysis/${analysisSnackbar.jobId}`);
+                                }}
+                            >
+                                Review Now
+                            </Button>
+                        }
+                    >
+                        {`Analysis found ${analysisSnackbar.count} item${analysisSnackbar.count === 1 ? '' : 's'} to review`}
+                    </Alert>
+                )}
+            </Snackbar>
 
             {/* Navigation confirmation dialog */}
             {ConfirmDialog}

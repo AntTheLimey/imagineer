@@ -11,3 +11,4 @@
 export { default } from './MarkdownRenderer';
 export { default as MarkdownRenderer } from './MarkdownRenderer';
 export type { MarkdownRendererProps } from './MarkdownRenderer';
+export type { WikiLinkEntity } from './WikiLinkInline';

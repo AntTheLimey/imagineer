@@ -54,6 +54,7 @@ import {
     AddCircle,
     Close,
     DoneAll,
+    PersonAdd,
     Undo,
     ExpandMore,
 } from '@mui/icons-material';
@@ -66,6 +67,7 @@ import {
     useRevertItem,
     useEnrichmentStream,
     useTriggerEnrichment,
+    useCancelEnrichment,
 } from '../hooks/useContentAnalysis';
 import { useUserSettings } from '../hooks/useUserSettings';
 import {
@@ -128,6 +130,11 @@ const ENRICHMENT_GROUPS = [
         key: 'relationship_suggestion' as const,
         label: 'Relationships',
         color: '#ef6c00',
+    },
+    {
+        key: 'new_entity_suggestion' as const,
+        label: 'New Entity Suggestions',
+        color: '#7b1fa2',
     },
 ];
 
@@ -547,6 +554,7 @@ export default function AnalysisTriagePage() {
     const { data: userSettings } = useUserSettings();
     // Available for future use: trigger enrichment manually
     useTriggerEnrichment(numericCampaignId);
+    const cancelEnrichment = useCancelEnrichment(numericCampaignId);
 
     // Determine if enrichment is in progress
     const isEnriching = job?.status === 'enriching';
@@ -579,6 +587,7 @@ export default function AnalysisTriagePage() {
     const [newEntityType, setNewEntityType] = useState<EntityType>('npc');
     const [showNewEntityForm, setShowNewEntityForm] = useState(false);
     const [showDoneDialog, setShowDoneDialog] = useState(false);
+    const [showCancelEnrichDialog, setShowCancelEnrichDialog] = useState(false);
     const [, setEditedDescription] = useState<string>('');
     const [selectedEntityGroup, setSelectedEntityGroup] = useState<{
         entityId: number;
@@ -915,8 +924,11 @@ export default function AnalysisTriagePage() {
      * resolved, otherwise show the confirmation dialog.
      */
     const handleDone = () => {
-        // If enrichment is running or about to start, don't leave
-        if (isEnriching) return;
+        // If enrichment is running, show confirmation dialog
+        if (isEnriching) {
+            setShowCancelEnrichDialog(true);
+            return;
+        }
         if (hasLLMConfigured && job &&
             job.resolvedItems === job.totalItems &&
             job.totalItems > 0 &&
@@ -930,6 +942,19 @@ export default function AnalysisTriagePage() {
         } else {
             setShowDoneDialog(true);
         }
+    };
+
+    /**
+     * Handle confirming cancellation of enrichment and leaving.
+     */
+    const handleCancelEnrichAndLeave = async () => {
+        setShowCancelEnrichDialog(false);
+        try {
+            await cancelEnrichment.mutateAsync(numericJobId);
+        } catch (error) {
+            console.error('Failed to cancel enrichment:', error);
+        }
+        navigate(getReturnPath());
     };
 
     /**
@@ -1579,9 +1604,28 @@ export default function AnalysisTriagePage() {
                                                                 }}
                                                             />
                                                         )}
+                                                        {!item.entityType &&
+                                                            item.detectionType === 'new_entity_suggestion' &&
+                                                            !!item.suggestedContent?.entity_type && (
+                                                            <Chip
+                                                                label={formatEntityType(
+                                                                    item.suggestedContent.entity_type as EntityType,
+                                                                )}
+                                                                size="small"
+                                                                sx={{
+                                                                    height: 20,
+                                                                    backgroundColor: entityTypeColors[item.suggestedContent.entity_type as EntityType] || '#757575',
+                                                                    color: 'white',
+                                                                }}
+                                                            />
+                                                        )}
                                                     </Box>
                                                 }
-                                                secondary="Description update suggestion"
+                                                secondary={
+                                                    item.detectionType === 'new_entity_suggestion'
+                                                        ? 'New entity suggestion'
+                                                        : 'Description update suggestion'
+                                                }
                                             />
                                             <Box
                                                 sx={{
@@ -1590,20 +1634,32 @@ export default function AnalysisTriagePage() {
                                                     ml: 1,
                                                 }}
                                             >
-                                                <Tooltip title="Accept">
+                                                <Tooltip title={item.detectionType === 'new_entity_suggestion' ? 'Create Entity' : 'Accept'}>
                                                     <IconButton
                                                         size="small"
                                                         color="success"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            handleEnrichmentResolve(
-                                                                item.id,
-                                                                'accepted',
-                                                                item,
-                                                            );
+                                                            if (item.detectionType === 'new_entity_suggestion') {
+                                                                handleResolve(
+                                                                    item.id,
+                                                                    'new_entity',
+                                                                    item.matchedText,
+                                                                    (item.suggestedContent?.entity_type as EntityType) || 'npc',
+                                                                );
+                                                            } else {
+                                                                handleEnrichmentResolve(
+                                                                    item.id,
+                                                                    'accepted',
+                                                                    item,
+                                                                );
+                                                            }
                                                         }}
                                                     >
-                                                        <Check fontSize="small" />
+                                                        {item.detectionType === 'new_entity_suggestion'
+                                                            ? <PersonAdd fontSize="small" />
+                                                            : <Check fontSize="small" />
+                                                        }
                                                     </IconButton>
                                                 </Tooltip>
                                                 <Tooltip title="Dismiss">
@@ -1612,11 +1668,15 @@ export default function AnalysisTriagePage() {
                                                         color="error"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            handleEnrichmentResolve(
-                                                                item.id,
-                                                                'dismissed',
-                                                                item,
-                                                            );
+                                                            if (item.detectionType === 'new_entity_suggestion') {
+                                                                handleResolve(item.id, 'dismissed');
+                                                            } else {
+                                                                handleEnrichmentResolve(
+                                                                    item.id,
+                                                                    'dismissed',
+                                                                    item,
+                                                                );
+                                                            }
                                                         }}
                                                     >
                                                         <Close fontSize="small" />
@@ -2076,7 +2136,10 @@ export default function AnalysisTriagePage() {
                                               : selectedItem.detectionType ===
                                                 'relationship_suggestion'
                                                 ? 'Suggested relationship'
-                                                : 'Enrichment suggestion'}
+                                                : selectedItem.detectionType ===
+                                                  'new_entity_suggestion'
+                                                  ? 'New entity suggestion'
+                                                  : 'Enrichment suggestion'}
                                     </Typography>
                                 </Box>
 
@@ -2416,6 +2479,40 @@ export default function AnalysisTriagePage() {
                                         );
                                     })()}
 
+                                {/* New entity suggestion detail */}
+                                {selectedItem.detectionType ===
+                                    'new_entity_suggestion' && (
+                                    <Box sx={{ mt: 1 }}>
+                                        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                                            <PersonAdd fontSize="small" sx={{ color: '#7b1fa2' }} />
+                                            <Typography variant="subtitle2">
+                                                {selectedItem.matchedText}
+                                            </Typography>
+                                            {!!selectedItem.suggestedContent?.entity_type && (
+                                                <Chip
+                                                    label={formatEntityType(selectedItem.suggestedContent.entity_type as EntityType)}
+                                                    size="small"
+                                                    sx={{
+                                                        backgroundColor: entityTypeColors[selectedItem.suggestedContent.entity_type as EntityType] || '#757575',
+                                                        color: 'white',
+                                                        fontSize: '0.7rem',
+                                                    }}
+                                                />
+                                            )}
+                                        </Stack>
+                                        {!!selectedItem.suggestedContent?.description && (
+                                            <Typography variant="body2" sx={{ mb: 0.5 }}>
+                                                {String(selectedItem.suggestedContent.description)}
+                                            </Typography>
+                                        )}
+                                        {!!selectedItem.suggestedContent?.reasoning && (
+                                            <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary', mb: 1 }}>
+                                                {String(selectedItem.suggestedContent.reasoning)}
+                                            </Typography>
+                                        )}
+                                    </Box>
+                                )}
+
                                 {/* Resolution status */}
                                 {selectedItem.resolution !== 'pending' && (
                                     <Alert severity="info">
@@ -2428,7 +2525,8 @@ export default function AnalysisTriagePage() {
                                 )}
 
                                 {/* Enrichment action buttons */}
-                                {selectedItem.resolution === 'pending' && (
+                                {selectedItem.resolution === 'pending' &&
+                                 selectedItem.detectionType !== 'new_entity_suggestion' && (
                                     <Stack
                                         direction="row"
                                         spacing={1}
@@ -2464,6 +2562,38 @@ export default function AnalysisTriagePage() {
                                             disabled={
                                                 resolveItem.isPending
                                             }
+                                        >
+                                            Dismiss
+                                        </Button>
+                                    </Stack>
+                                )}
+
+                                {/* New entity suggestion action buttons */}
+                                {selectedItem.resolution === 'pending' &&
+                                 selectedItem.detectionType === 'new_entity_suggestion' && (
+                                    <Stack direction="row" spacing={1}>
+                                        <Button
+                                            size="small"
+                                            variant="contained"
+                                            color="success"
+                                            startIcon={<Check />}
+                                            onClick={() => handleResolve(
+                                                selectedItem.id,
+                                                'new_entity',
+                                                selectedItem.matchedText,
+                                                (selectedItem.suggestedContent?.entity_type as EntityType) || 'npc',
+                                            )}
+                                            disabled={resolveItem.isPending}
+                                        >
+                                            Create Entity
+                                        </Button>
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            color="error"
+                                            startIcon={<Close />}
+                                            onClick={() => handleResolve(selectedItem.id, 'dismissed')}
+                                            disabled={resolveItem.isPending}
                                         >
                                             Dismiss
                                         </Button>
@@ -2748,6 +2878,35 @@ export default function AnalysisTriagePage() {
                         onClick={() => navigate(getReturnPath())}
                     >
                         Finish Anyway
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Cancel enrichment confirmation dialog */}
+            <Dialog
+                open={showCancelEnrichDialog}
+                onClose={() => setShowCancelEnrichDialog(false)}
+            >
+                <DialogTitle>Enrichment in Progress</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        LLM enrichment is still running. Leaving now will
+                        cancel enrichment to save tokens. Any suggestions
+                        already generated will be kept.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button
+                        onClick={() => setShowCancelEnrichDialog(false)}
+                    >
+                        Stay
+                    </Button>
+                    <Button
+                        onClick={handleCancelEnrichAndLeave}
+                        color="warning"
+                        variant="contained"
+                    >
+                        Cancel Enrichment &amp; Leave
                     </Button>
                 </DialogActions>
             </Dialog>

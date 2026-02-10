@@ -27,15 +27,18 @@ import (
 
 // Handler provides HTTP handlers for the API.
 type Handler struct {
-	db       *database.DB
-	analyzer *analysis.Analyzer
+	db        *database.DB
+	analyzer  *analysis.Analyzer
+	caHandler *ContentAnalysisHandler
 }
 
-// NewHandler creates a new Handler with the given database connection.
-func NewHandler(db *database.DB) *Handler {
+// NewHandler creates a new Handler with the given database connection
+// and content analysis handler for auto-enrichment support.
+func NewHandler(db *database.DB, caHandler *ContentAnalysisHandler) *Handler {
 	return &Handler{
-		db:       db,
-		analyzer: analysis.NewAnalyzer(db),
+		db:        db,
+		analyzer:  analysis.NewAnalyzer(db),
+		caHandler: caHandler,
 	}
 }
 
@@ -292,23 +295,27 @@ func (h *Handler) UpdateCampaign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	shouldAnalyze := r.URL.Query().Get("analyze") == "true"
+	shouldEnrich := r.URL.Query().Get("enrich") == "true"
+
 	response := CampaignWithAnalysis{Campaign: campaign}
-	if req.Description != nil {
-		content := ""
-		if req.Description != nil {
-			content = *req.Description
-		}
-		job, items, analyzeErr := h.analyzer.AnalyzeContent(
+	if shouldAnalyze && req.Description != nil {
+		content := *req.Description
+		job, _, analyzeErr := h.analyzer.AnalyzeContent(
 			r.Context(), campaign.ID,
 			"campaigns", "description", campaign.ID,
 			content,
 		)
 		if analyzeErr != nil {
 			log.Printf("Content analysis failed for campaign %d: %v", campaign.ID, analyzeErr)
-		} else if len(items) > 0 {
+		} else {
 			response.Analysis = &models.AnalysisSummary{
 				JobID:        job.ID,
 				PendingCount: job.TotalItems,
+			}
+			if shouldEnrich && h.caHandler != nil {
+				userID, _ := auth.GetUserIDFromContext(r.Context())
+				h.caHandler.TryAutoEnrich(r.Context(), job.ID, userID)
 			}
 		}
 	}
@@ -487,44 +494,49 @@ func (h *Handler) UpdateEntity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Trigger content analysis if description changed
+	shouldAnalyze := r.URL.Query().Get("analyze") == "true"
+	shouldEnrich := r.URL.Query().Get("enrich") == "true"
+
+	// Trigger content analysis if description changed and analysis requested
 	response := EntityWithAnalysis{Entity: entity}
-	if req.Description != nil {
-		content := ""
-		if req.Description != nil {
-			content = *req.Description
-		}
-		job, items, analyzeErr := h.analyzer.AnalyzeContent(
+	if shouldAnalyze && req.Description != nil {
+		content := *req.Description
+		job, _, analyzeErr := h.analyzer.AnalyzeContent(
 			r.Context(), entity.CampaignID,
 			"entities", "description", entity.ID,
 			content,
 		)
 		if analyzeErr != nil {
 			log.Printf("Content analysis failed for entity %d description: %v", entity.ID, analyzeErr)
-		} else if len(items) > 0 {
+		} else {
 			response.Analysis = &models.AnalysisSummary{
 				JobID:        job.ID,
 				PendingCount: job.TotalItems,
 			}
+			if shouldEnrich && h.caHandler != nil {
+				userID, _ := auth.GetUserIDFromContext(r.Context())
+				h.caHandler.TryAutoEnrich(r.Context(), job.ID, userID)
+			}
 		}
 	}
-	// Also analyze GM notes if changed
-	if req.GMNotes != nil {
-		content := ""
-		if req.GMNotes != nil {
-			content = *req.GMNotes
-		}
-		job, items, analyzeErr := h.analyzer.AnalyzeContent(
+	// Also analyze GM notes if changed and analysis requested
+	if shouldAnalyze && req.GMNotes != nil {
+		content := *req.GMNotes
+		job, _, analyzeErr := h.analyzer.AnalyzeContent(
 			r.Context(), entity.CampaignID,
 			"entities", "gm_notes", entity.ID,
 			content,
 		)
 		if analyzeErr != nil {
 			log.Printf("Content analysis failed for entity %d gm_notes: %v", entity.ID, analyzeErr)
-		} else if response.Analysis == nil && len(items) > 0 {
+		} else if response.Analysis == nil {
 			response.Analysis = &models.AnalysisSummary{
 				JobID:        job.ID,
 				PendingCount: job.TotalItems,
+			}
+			if shouldEnrich && h.caHandler != nil {
+				userID, _ := auth.GetUserIDFromContext(r.Context())
+				h.caHandler.TryAutoEnrich(r.Context(), job.ID, userID)
 			}
 		}
 	}
@@ -1722,23 +1734,27 @@ func (h *Handler) UpdateChapter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	shouldAnalyze := r.URL.Query().Get("analyze") == "true"
+	shouldEnrich := r.URL.Query().Get("enrich") == "true"
+
 	response := ChapterWithAnalysis{Chapter: chapter}
-	if req.Overview != nil {
-		content := ""
-		if req.Overview != nil {
-			content = *req.Overview
-		}
-		job, items, analyzeErr := h.analyzer.AnalyzeContent(
+	if shouldAnalyze && req.Overview != nil {
+		content := *req.Overview
+		job, _, analyzeErr := h.analyzer.AnalyzeContent(
 			r.Context(), chapter.CampaignID,
 			"chapters", "overview", chapter.ID,
 			content,
 		)
 		if analyzeErr != nil {
 			log.Printf("Content analysis failed for chapter %d: %v", chapter.ID, analyzeErr)
-		} else if len(items) > 0 {
+		} else {
 			response.Analysis = &models.AnalysisSummary{
 				JobID:        job.ID,
 				PendingCount: job.TotalItems,
+			}
+			if shouldEnrich && h.caHandler != nil {
+				userID, _ := auth.GetUserIDFromContext(r.Context())
+				h.caHandler.TryAutoEnrich(r.Context(), job.ID, userID)
 			}
 		}
 	}
@@ -2002,42 +2018,47 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	shouldAnalyze := r.URL.Query().Get("analyze") == "true"
+	shouldEnrich := r.URL.Query().Get("enrich") == "true"
+
 	response := SessionWithAnalysis{Session: session}
-	if req.PrepNotes != nil {
-		content := ""
-		if req.PrepNotes != nil {
-			content = *req.PrepNotes
-		}
-		job, items, analyzeErr := h.analyzer.AnalyzeContent(
+	if shouldAnalyze && req.PrepNotes != nil {
+		content := *req.PrepNotes
+		job, _, analyzeErr := h.analyzer.AnalyzeContent(
 			r.Context(), session.CampaignID,
 			"sessions", "prep_notes", session.ID,
 			content,
 		)
 		if analyzeErr != nil {
 			log.Printf("Content analysis failed for session %d prep_notes: %v", session.ID, analyzeErr)
-		} else if len(items) > 0 {
+		} else {
 			response.Analysis = &models.AnalysisSummary{
 				JobID:        job.ID,
 				PendingCount: job.TotalItems,
 			}
+			if shouldEnrich && h.caHandler != nil {
+				userID, _ := auth.GetUserIDFromContext(r.Context())
+				h.caHandler.TryAutoEnrich(r.Context(), job.ID, userID)
+			}
 		}
 	}
-	if req.ActualNotes != nil {
-		content := ""
-		if req.ActualNotes != nil {
-			content = *req.ActualNotes
-		}
-		job, items, analyzeErr := h.analyzer.AnalyzeContent(
+	if shouldAnalyze && req.ActualNotes != nil {
+		content := *req.ActualNotes
+		job, _, analyzeErr := h.analyzer.AnalyzeContent(
 			r.Context(), session.CampaignID,
 			"sessions", "actual_notes", session.ID,
 			content,
 		)
 		if analyzeErr != nil {
 			log.Printf("Content analysis failed for session %d actual_notes: %v", session.ID, analyzeErr)
-		} else if response.Analysis == nil && len(items) > 0 {
+		} else if response.Analysis == nil {
 			response.Analysis = &models.AnalysisSummary{
 				JobID:        job.ID,
 				PendingCount: job.TotalItems,
+			}
+			if shouldEnrich && h.caHandler != nil {
+				userID, _ := auth.GetUserIDFromContext(r.Context())
+				h.caHandler.TryAutoEnrich(r.Context(), job.ID, userID)
 			}
 		}
 	}

@@ -70,8 +70,17 @@ export const campaignsApi = {
     /**
      * Update an existing campaign.
      */
-    update(id: number, input: UpdateCampaignInput): Promise<Campaign> {
-        return apiClient.put<Campaign>(`/campaigns/${id}`, input);
+    update(
+        id: number,
+        input: UpdateCampaignInput,
+        options?: { analyze?: boolean; enrich?: boolean },
+    ): Promise<Campaign> {
+        const params: Record<string, string> = {};
+        if (options?.analyze) params.analyze = 'true';
+        if (options?.enrich) params.enrich = 'true';
+        return apiClient.put<Campaign>(
+            `/campaigns/${id}`, input, params,
+        );
     },
 
     /**

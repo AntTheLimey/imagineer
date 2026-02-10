@@ -47,8 +47,8 @@ const similarityThresholdResolved = 0.9
 // fuzzy match to be considered a possible suggestion.
 const similarityThresholdMinimum = 0.6
 
-// wikiLinkRange represents the plain-text position range of a
-// stripped wiki link.
+// wikiLinkRange represents a position range of a wiki link in
+// content coordinates.
 type wikiLinkRange struct {
 	start, end int
 }
@@ -83,20 +83,19 @@ func (a *Analyzer) AnalyzeContent(
 		wikiItems, resolvedNames := a.scanWikiLinks(ctx, campaignID, content)
 		items = append(items, wikiItems...)
 
-		// Build a plain-text version of the content with wiki
-		// link markup removed, used for scans 2 and 3. Also
-		// collect position ranges of stripped wiki links so
-		// scan 2 can skip occurrences that fall inside them.
-		plainText, wikiRanges := stripWikiLinksWithRanges(content)
+		// Compute original-coordinate ranges of existing wiki
+		// links so scans 2 and 3 can skip matches that fall
+		// inside them.
+		origRanges := wikiLinkOriginalRanges(content)
 
-		// Scan 2: detect untagged entity name mentions in plain
-		// text.
-		untaggedItems := a.scanUntaggedMentions(ctx, campaignID, plainText, wikiRanges)
+		// Scan 2: detect untagged entity name mentions in
+		// content.
+		untaggedItems := a.scanUntaggedMentions(ctx, campaignID, content, origRanges)
 		items = append(items, untaggedItems...)
 
 		// Scan 3: detect possible misspellings of entity names.
 		matchedNames := buildMatchedNames(resolvedNames, untaggedItems)
-		misspellingItems := a.scanMisspellings(ctx, campaignID, plainText, matchedNames, wikiRanges)
+		misspellingItems := a.scanMisspellings(ctx, campaignID, content, matchedNames, origRanges)
 		items = append(items, misspellingItems...)
 	}
 
@@ -209,14 +208,14 @@ func (a *Analyzer) scanWikiLinks(
 	return items, resolvedNames
 }
 
-// scanUntaggedMentions searches the plain text for entity names that
-// appear without wiki link markup. Each occurrence is checked against
-// the wiki link ranges; occurrences that overlap a stripped wiki link
-// are skipped so only genuinely untagged mentions are flagged.
+// scanUntaggedMentions searches the content for entity names that
+// appear without wiki link markup. It receives the original content
+// (with [[...]] brackets intact) and wiki link ranges in the same
+// coordinate space, so matches inside existing links are skipped.
 func (a *Analyzer) scanUntaggedMentions(
 	ctx context.Context,
 	campaignID int64,
-	plainText string,
+	content string,
 	wikiRanges []wikiLinkRange,
 ) []models.ContentAnalysisItem {
 	entities, err := a.db.ListEntitiesByCampaign(ctx, campaignID)
@@ -233,7 +232,7 @@ func (a *Analyzer) scanUntaggedMentions(
 		}
 
 		// Use case-insensitive regex matching against the
-		// original plainText to avoid byte-offset misalignment
+		// original content to avoid byte-offset misalignment
 		// that occurs when strings.ToLower changes byte lengths
 		// for certain Unicode characters.
 		pattern := "(?i)" + regexp.QuoteMeta(entity.Name)
@@ -242,24 +241,24 @@ func (a *Analyzer) scanUntaggedMentions(
 			continue
 		}
 
-		matches := re.FindAllStringIndex(plainText, -1)
+		matches := re.FindAllStringIndex(content, -1)
 		for _, match := range matches {
 			idx := match[0]
 			end := match[1]
 
 			// Skip if this occurrence overlaps with any wiki
-			// link range in plain-text coordinates.
+			// link range in original-content coordinates.
 			if overlapsWikiRange(idx, end, wikiRanges) {
 				continue
 			}
 
 			sim := 1.0
 			entityID := entity.ID
-			snippet := extractContextSnippet(plainText, idx, end)
+			snippet := extractContextSnippet(content, idx, end)
 
 			items = append(items, models.ContentAnalysisItem{
 				DetectionType:  "untagged_mention",
-				MatchedText:    plainText[idx:end],
+				MatchedText:    content[idx:end],
 				EntityID:       &entityID,
 				Similarity:     &sim,
 				ContextSnippet: &snippet,
@@ -285,7 +284,7 @@ func overlapsWikiRange(start, end int, ranges []wikiLinkRange) bool {
 	return false
 }
 
-// scanMisspellings extracts capitalized phrases from plain text and
+// scanMisspellings extracts capitalized phrases from content and
 // checks each against the entity list using fuzzy matching. Only
 // results with similarity between the minimum threshold and the
 // resolved threshold are kept. Matches are classified as
@@ -294,19 +293,19 @@ func overlapsWikiRange(start, end int, ranges []wikiLinkRange) bool {
 func (a *Analyzer) scanMisspellings(
 	ctx context.Context,
 	campaignID int64,
-	plainText string,
+	content string,
 	matchedNames map[string]bool,
 	wikiRanges []wikiLinkRange,
 ) []models.ContentAnalysisItem {
 	var items []models.ContentAnalysisItem
 
-	candidates := capitalizedPhraseRe.FindAllStringIndex(plainText, -1)
+	candidates := capitalizedPhraseRe.FindAllStringIndex(content, -1)
 	for _, loc := range candidates {
 		if len(items) >= maxMisspellingCandidates {
 			break
 		}
 
-		phrase := plainText[loc[0]:loc[1]]
+		phrase := content[loc[0]:loc[1]]
 
 		// Skip single-character results or phrases already
 		// matched in earlier scans.
@@ -317,8 +316,8 @@ func (a *Analyzer) scanMisspellings(
 			continue
 		}
 
-		// Skip phrases that overlap with a stripped wiki link
-		// range to avoid false matches across link boundaries.
+		// Skip phrases that overlap with a wiki link range to
+		// avoid false matches inside existing links.
 		if overlapsWikiRange(loc[0], loc[1], wikiRanges) {
 			continue
 		}
@@ -346,7 +345,7 @@ func (a *Analyzer) scanMisspellings(
 			continue
 		}
 
-		snippet := extractContextSnippet(plainText, loc[0], loc[1])
+		snippet := extractContextSnippet(content, loc[0], loc[1])
 		entityID := r.ID
 
 		// Classify as alias or misspelling based on substring
@@ -441,6 +440,21 @@ func stripWikiLinksWithRanges(content string) (string, []wikiLinkRange) {
 func stripWikiLinks(content string) string {
 	text, _ := stripWikiLinksWithRanges(content)
 	return text
+}
+
+// wikiLinkOriginalRanges returns the position ranges of wiki link
+// markup in the original content coordinate space. Each range covers
+// the full [[...]] syntax including brackets.
+func wikiLinkOriginalRanges(content string) []wikiLinkRange {
+	matches := wikiLinkRe.FindAllStringSubmatchIndex(content, -1)
+	ranges := make([]wikiLinkRange, 0, len(matches))
+	for _, loc := range matches {
+		ranges = append(ranges, wikiLinkRange{
+			start: loc[0],
+			end:   loc[1],
+		})
+	}
+	return ranges
 }
 
 // buildMatchedNames collects the lowercased names of all entities that
