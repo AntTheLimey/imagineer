@@ -87,7 +87,7 @@ storage. Every MVP feature includes its AI component.
   - Fuzzy entity name matching via `pg_trgm`
   - Toolbar insert button with entity search popover
   - Visual indicator for linked entities in text
-  - Click wiki link to navigate to entity search
+  - Click wiki link to navigate to entity view page
   - Entity rename propagation updates all wiki links across
     campaign content in a single transaction
 - [ ] `[MVP-1]` Text storage architecture for vectorization
@@ -612,10 +612,12 @@ Features planned for after initial release.
   - Inline autocomplete triggered by `[[` with `pg_trgm` fuzzy
     matching.
   - Toolbar insert button with entity search popover.
-  - Clickable wiki links in MarkdownRenderer with entity
-    navigation.
+  - Clickable wiki links in MarkdownRenderer navigate to the
+    entity view page.
   - Entity rename propagation across all campaign content.
   - Entity resolve API endpoint for fuzzy name matching.
+  - Hover popover shows entity type chip, description snippet,
+    and View link.
 - [x] Convert rich text editor output to Markdown before saving
   - The MarkdownEditor uses tiptap-markdown for native Markdown
     round-trip serialization.
@@ -638,3 +640,29 @@ Features planned for after initial release.
 - [x] API key encryption at rest (AES-256-GCM)
   - `internal/crypto` package, transparent DB-layer encryption,
     `ENCRYPTION_KEY` env var, migration 007
+- [x] Save Options (SaveSplitButton)
+  - SaveSplitButton component with Save, Save & Analyze, and
+    Save, Analyze & Enrich modes.
+  - Content analysis is now conditional, gated behind
+    `?analyze=true&enrich=true` query params.
+- [x] Entity View Page
+  - Read-only entity detail page at
+    `/campaigns/{id}/entities/{entityId}` showing header,
+    description, GM notes, attributes, relationships, event
+    log, and metadata.
+  - Wiki links and entity list view icon navigate to the
+    entity view page.
+- [x] Content Enrichment Improvements
+  - `RunContentEnrichment` runs independently of Phase 1
+    analysis, enabling on-demand entity mention scanning.
+  - Enrichment progress indicator on the triage page.
+  - Auto-advance to next pending item after accepting or
+    dismissing a suggestion.
+  - Accepted description updates and log entries apply to
+    entities immediately.
+- [x] Duplicate Relationship Prevention
+  - Unique constraint on `(campaign_id, source_entity_id,
+    target_entity_id, relationship_type)`.
+  - `CreateRelationship` uses `ON CONFLICT DO UPDATE` for
+    idempotent upsert.
+  - `GetEntityRelationships` deduplicates inverse pairs.

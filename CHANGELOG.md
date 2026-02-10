@@ -8,6 +8,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Save Options (SaveSplitButton)
+  - SaveSplitButton component offering three save modes: Save,
+    Save & Analyze, and Save, Analyze & Enrich.
+  - The backend gates analysis behind `?analyze=true&enrich=true`
+    query params on entity, chapter, campaign, and session
+    update endpoints.
+  - Zero-item analysis results show a green success snackbar
+    ("Analysis complete: no issues found") instead of silent
+    nothing.
+- Entity View Page
+  - Read-only entity detail page at
+    `/campaigns/{id}/entities/{entityId}` showing entity
+    header, description, GM notes, attributes, relationships,
+    event log, and metadata.
+  - Wiki links and the entity list view icon now navigate to
+    the entity view page instead of opening a dialog or
+    navigating to edit.
+- Content Enrichment Improvements
+  - `RunContentEnrichment` method scans content for entity
+    mentions independently of Phase 1 analysis, enabling
+    discovery of new relationships and descriptions on demand.
+  - The enrichment progress indicator on the triage page shows
+    real-time status while enrichment runs in the background.
+  - Auto-advance to next pending item after accepting or
+    dismissing a suggestion on the triage page.
+  - Accepted description updates and log entries now apply to
+    entities immediately.
+- Wiki Link Navigation
+  - Wiki links navigate directly to the entity view page
+    instead of the entities list.
+  - The hover popover shows entity type chip, description
+    snippet, and View link with 300 ms open / 200 ms close
+    delays.
+- Duplicate Relationship Prevention
+  - Unique constraint on `(campaign_id, source_entity_id,
+    target_entity_id, relationship_type)` prevents duplicate
+    relationships.
+  - `CreateRelationship` uses `ON CONFLICT DO UPDATE` for
+    idempotent upsert.
+  - `GetEntityRelationships` query deduplicates inverse
+    relationship pairs.
 - API Key Encryption at Rest
   - AES-256-GCM encryption for user API keys stored in
     `user_settings` (content generation, embedding, and image
@@ -55,7 +96,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     matching via `pg_trgm`.
   - Toolbar insert button for wiki-link insertion via entity
     search.
-  - Clickable wiki links in read mode navigate to entity search.
+  - Clickable wiki links in read mode navigate to entity view.
   - Entity rename propagation updates all wiki links across
     campaign content (entities, chapters, sessions, memories,
     timelines, relationships) in a single transaction.
@@ -218,6 +259,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Enrichment skipping when triggered via "Save, Analyze &
+  Enrich" button; the system now runs `RunContentEnrichment`
+  independently of Phase 1 analysis results.
+- Triage page showing "no items to review" while enrichment
+  was still running; the page now shows a progress indicator.
+- Accepted description updates and log entries silently
+  discarded instead of applied to entities.
+- Auto-advance after accepting a triage item not respecting
+  grouped entity display order.
+- View icon on entities list opening a popup dialog instead of
+  navigating to the entity view page.
 - Current description invisible in dark theme on triage UI;
   fixed by using theme-aware background color.
 - Suggested description blank in MarkdownEditor due to TipTap
