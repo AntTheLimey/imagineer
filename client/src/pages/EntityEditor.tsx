@@ -374,15 +374,26 @@ export default function EntityEditor() {
                 // Create pending relationships after entity is created using Promise.allSettled
                 if (pendingRelationships.length > 0) {
                     const relationshipResults = await Promise.allSettled(
-                        pendingRelationships.map((rel) =>
-                            createRelationship.mutateAsync({
+                        pendingRelationships.map((rel) => {
+                            // When direction is incoming (isReversed),
+                            // swap source and target so the stored row
+                            // is always in the canonical forward
+                            // direction.
+                            const srcId = rel.isReversed
+                                ? rel.targetEntityId
+                                : newEntity.id;
+                            const tgtId = rel.isReversed
+                                ? newEntity.id
+                                : rel.targetEntityId;
+
+                            return createRelationship.mutateAsync({
                                 campaignId,
-                                sourceEntityId: newEntity.id,
-                                targetEntityId: rel.targetEntityId,
-                                relationshipType: rel.relationshipType,
+                                sourceEntityId: srcId,
+                                targetEntityId: tgtId,
+                                relationshipTypeId: rel.relationshipTypeId!,
                                 description: rel.description,
-                                bidirectional: rel.bidirectional,
-                            })
+                            });
+                        }
                         )
                     );
                     const failures = relationshipResults.filter(

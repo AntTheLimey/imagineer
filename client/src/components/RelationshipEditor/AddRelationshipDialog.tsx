@@ -79,8 +79,8 @@ const ADD_CUSTOM_TYPE_VALUE = '__add_custom__';
  * Dialog for adding or editing relationships.
  *
  * Provides form fields for selecting a target entity, relationship direction,
- * relationship type from API-provided types, optional description, and
- * bidirectional flag. Includes a mini-dialog for creating custom types.
+ * relationship type from API-provided types, and optional description.
+ * Includes a mini-dialog for creating custom types.
  *
  * @param props - The component props.
  * @returns A React element containing the add/edit relationship dialog.
@@ -111,7 +111,6 @@ export default function AddRelationshipDialog({
     const [direction, setDirection] = useState<RelationshipDirection>('outgoing');
     const [selectedTypeId, setSelectedTypeId] = useState<string>('');
     const [description, setDescription] = useState('');
-    const [bidirectional, setBidirectional] = useState(false);
     const [errors, setErrors] = useState<{
         targetEntity?: string;
         relationshipType?: string;
@@ -192,7 +191,6 @@ export default function AddRelationshipDialog({
                 } as Entity);
                 setDirection('outgoing'); // Default to outgoing when editing
                 setDescription(existingRelationship.description ?? '');
-                setBidirectional(existingRelationship.bidirectional);
                 // Try to find matching type by name
                 if (relationshipTypes) {
                     const matchingType = relationshipTypes.find(
@@ -214,7 +212,6 @@ export default function AddRelationshipDialog({
                 setDirection('outgoing');
                 setSelectedTypeId('');
                 setDescription('');
-                setBidirectional(false);
             }
             setErrors({});
         }
@@ -272,7 +269,6 @@ export default function AddRelationshipDialog({
             relationshipType: typeName,
             relationshipTypeId: selectedType.id,
             description: description.trim() || undefined,
-            bidirectional: selectedType.isSymmetric || bidirectional,
             isReversed: direction === 'incoming',
         };
 
@@ -507,20 +503,6 @@ export default function AddRelationshipDialog({
                             helperText="Optional: Add context about this relationship"
                         />
 
-                        {/* Bidirectional (only show if type is not symmetric) */}
-                        {selectedType && !selectedType.isSymmetric && (
-                            <FormControlLabel
-                                control={
-                                    <Checkbox
-                                        checked={bidirectional}
-                                        onChange={(e) =>
-                                            setBidirectional(e.target.checked)
-                                        }
-                                    />
-                                }
-                                label="Bidirectional relationship (applies in both directions)"
-                            />
-                        )}
                     </Box>
                 </DialogContent>
                 <DialogActions>

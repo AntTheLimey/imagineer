@@ -204,12 +204,12 @@ func TestBuildUserPrompt(t *testing.T) {
 		},
 		Relationships: []models.Relationship{
 			{
-				ID:               1,
-				CampaignID:       1,
-				SourceEntityID:   100,
-				TargetEntityID:   200,
-				RelationshipType: "knows",
-				Description:      &relDesc,
+				ID:                   1,
+				CampaignID:           1,
+				SourceEntityID:       100,
+				TargetEntityID:       200,
+				RelationshipTypeName: "knows",
+				Description:          &relDesc,
 				SourceEntity: &models.Entity{
 					ID:   100,
 					Name: "Viktor",
