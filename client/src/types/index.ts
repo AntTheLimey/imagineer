@@ -69,11 +69,17 @@ export interface Relationship {
     campaignId: number;
     sourceEntityId: number;
     targetEntityId: number;
+    relationshipTypeId: number;
     relationshipType: string;
     tone?: RelationshipTone;
     description?: string;
-    bidirectional: boolean;
     strength?: number;
+    displayLabel?: string;
+    direction?: 'forward' | 'inverse';
+    sourceEntityName?: string;
+    sourceEntityType?: string;
+    targetEntityName?: string;
+    targetEntityType?: string;
     createdAt: string;
     updatedAt: string;
 }
@@ -171,7 +177,7 @@ export interface ImportResult {
 // Relationship type definition types
 export interface RelationshipType {
     id: number;
-    campaignId?: number | null; // null = system default
+    campaignId: number;
     name: string;
     inverseName: string;
     isSymmetric: boolean;

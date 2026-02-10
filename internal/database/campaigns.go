@@ -305,6 +305,19 @@ func (db *DB) CreateCampaignWithOwner(ctx context.Context, req models.CreateCamp
 		c.Genre = &g
 	}
 
+	// Copy relationship type templates for the new campaign
+	err = db.Exec(ctx, `
+		INSERT INTO relationship_types
+			(campaign_id, name, inverse_name, is_symmetric,
+			 display_label, inverse_display_label, description)
+		SELECT $1, name, inverse_name, is_symmetric,
+			   display_label, inverse_display_label, description
+		FROM relationship_type_templates
+	`, c.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to seed relationship types: %w", err)
+	}
+
 	return &c, nil
 }
 

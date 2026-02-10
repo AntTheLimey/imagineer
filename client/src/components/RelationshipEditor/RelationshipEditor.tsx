@@ -41,8 +41,6 @@ export interface PendingRelationship {
     relationshipTypeId?: number;
     /** Optional description of the relationship. */
     description?: string;
-    /** If true, the relationship applies in both directions. */
-    bidirectional: boolean;
     /** If true, the direction is reversed (target -> source). */
     isReversed?: boolean;
 }
@@ -379,16 +377,21 @@ function RelationshipRowWithName({
         relationship.targetEntityId
     );
 
-    // Determine if the current entity is the source or target
-    const isCurrentEntitySource = relationship.sourceEntityId === currentEntityId;
+    // Determine if the current entity is the source or target.
+    // The backend view returns relationships oriented from the
+    // queried entity's perspective with a direction field.
+    const isReversed = relationship.direction === 'inverse'
+        || relationship.sourceEntityId !== currentEntityId;
 
     const resolvedRelationship: PendingRelationship = {
         targetEntityId: relationship.targetEntityId,
-        targetEntityName: targetEntity?.name ?? 'Loading...',
+        targetEntityName: relationship.targetEntityName
+            ?? targetEntity?.name
+            ?? 'Loading...',
         relationshipType: relationship.relationshipType,
+        relationshipTypeId: relationship.relationshipTypeId,
         description: relationship.description,
-        bidirectional: relationship.bidirectional,
-        isReversed: !isCurrentEntitySource,
+        isReversed,
     };
 
     return (

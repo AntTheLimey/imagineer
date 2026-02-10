@@ -20,16 +20,17 @@ import (
 // ListRelationshipsByCampaign retrieves all relationships for a campaign.
 func (db *DB) ListRelationshipsByCampaign(ctx context.Context, campaignID int64) ([]models.Relationship, error) {
 	query := `
-        SELECT r.id, r.campaign_id, r.source_entity_id, r.target_entity_id,
-               r.relationship_type, r.tone, r.description, r.bidirectional,
-               r.strength, r.created_at, r.updated_at,
-               se.id, se.name, se.entity_type,
-               te.id, te.name, te.entity_type
-        FROM relationships r
-        JOIN entities se ON r.source_entity_id = se.id
-        JOIN entities te ON r.target_entity_id = te.id
-        WHERE r.campaign_id = $1
-        ORDER BY r.created_at DESC`
+		SELECT r.id, r.campaign_id, r.source_entity_id, r.target_entity_id,
+		       r.relationship_type_id, rt.name, r.tone, r.description,
+		       r.strength, r.created_at, r.updated_at,
+		       se.id, se.name, se.entity_type,
+		       te.id, te.name, te.entity_type
+		FROM relationships r
+		JOIN relationship_types rt ON r.relationship_type_id = rt.id
+		JOIN entities se ON r.source_entity_id = se.id
+		JOIN entities te ON r.target_entity_id = te.id
+		WHERE r.campaign_id = $1
+		ORDER BY r.created_at DESC`
 
 	rows, err := db.Query(ctx, query, campaignID)
 	if err != nil {
@@ -49,7 +50,7 @@ func (db *DB) ListRelationshipsByCampaign(ctx context.Context, campaignID int64)
 
 		err := rows.Scan(
 			&r.ID, &r.CampaignID, &r.SourceEntityID, &r.TargetEntityID,
-			&r.RelationshipType, &r.Tone, &r.Description, &r.Bidirectional,
+			&r.RelationshipTypeID, &r.RelationshipTypeName, &r.Tone, &r.Description,
 			&r.Strength, &r.CreatedAt, &r.UpdatedAt,
 			&seID, &seName, &seType,
 			&teID, &teName, &teType,
@@ -82,16 +83,17 @@ func (db *DB) ListRelationshipsByCampaign(ctx context.Context, campaignID int64)
 // GetRelationship retrieves a relationship by ID.
 func (db *DB) GetRelationship(ctx context.Context, id int64) (*models.Relationship, error) {
 	query := `
-        SELECT id, campaign_id, source_entity_id, target_entity_id,
-               relationship_type, tone, description, bidirectional,
-               strength, created_at, updated_at
-        FROM relationships
-        WHERE id = $1`
+		SELECT r.id, r.campaign_id, r.source_entity_id, r.target_entity_id,
+		       r.relationship_type_id, rt.name, r.tone, r.description,
+		       r.strength, r.created_at, r.updated_at
+		FROM relationships r
+		JOIN relationship_types rt ON r.relationship_type_id = rt.id
+		WHERE r.id = $1`
 
 	var r models.Relationship
 	err := db.QueryRow(ctx, query, id).Scan(
 		&r.ID, &r.CampaignID, &r.SourceEntityID, &r.TargetEntityID,
-		&r.RelationshipType, &r.Tone, &r.Description, &r.Bidirectional,
+		&r.RelationshipTypeID, &r.RelationshipTypeName, &r.Tone, &r.Description,
 		&r.Strength, &r.CreatedAt, &r.UpdatedAt,
 	)
 	if err != nil {
@@ -103,32 +105,31 @@ func (db *DB) GetRelationship(ctx context.Context, id int64) (*models.Relationsh
 
 // CreateRelationship creates a new relationship or returns the existing one
 // if a duplicate is detected. When a conflict occurs on the unique constraint
-// (campaign_id, source_entity_id, target_entity_id, relationship_type), the
-// existing row is updated with any new description or tone values, making
+// (campaign_id, source_entity_id, target_entity_id, relationship_type_id),
+// the existing row is updated with any new description or tone values, making
 // this operation idempotent.
 func (db *DB) CreateRelationship(ctx context.Context, campaignID int64, req models.CreateRelationshipRequest) (*models.Relationship, error) {
 	query := `
-        INSERT INTO relationships (campaign_id, source_entity_id, target_entity_id,
-                                   relationship_type, tone, description, bidirectional, strength)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        ON CONFLICT (campaign_id, source_entity_id, target_entity_id, relationship_type)
-        DO UPDATE SET
-            description = COALESCE(EXCLUDED.description, relationships.description),
-            tone = COALESCE(EXCLUDED.tone, relationships.tone),
-            bidirectional = EXCLUDED.bidirectional,
-            strength = COALESCE(EXCLUDED.strength, relationships.strength),
-            updated_at = NOW()
-        RETURNING id, campaign_id, source_entity_id, target_entity_id,
-                  relationship_type, tone, description, bidirectional,
-                  strength, created_at, updated_at`
+		INSERT INTO relationships (campaign_id, source_entity_id, target_entity_id,
+		                           relationship_type_id, tone, description, strength)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (campaign_id, source_entity_id, target_entity_id, relationship_type_id)
+		DO UPDATE SET
+		    description = COALESCE(EXCLUDED.description, relationships.description),
+		    tone = COALESCE(EXCLUDED.tone, relationships.tone),
+		    strength = COALESCE(EXCLUDED.strength, relationships.strength),
+		    updated_at = NOW()
+		RETURNING id, campaign_id, source_entity_id, target_entity_id,
+		          relationship_type_id, tone, description,
+		          strength, created_at, updated_at`
 
 	var r models.Relationship
 	err := db.QueryRow(ctx, query,
 		campaignID, req.SourceEntityID, req.TargetEntityID,
-		req.RelationshipType, req.Tone, req.Description, req.Bidirectional, req.Strength,
+		req.RelationshipTypeID, req.Tone, req.Description, req.Strength,
 	).Scan(
 		&r.ID, &r.CampaignID, &r.SourceEntityID, &r.TargetEntityID,
-		&r.RelationshipType, &r.Tone, &r.Description, &r.Bidirectional,
+		&r.RelationshipTypeID, &r.Tone, &r.Description,
 		&r.Strength, &r.CreatedAt, &r.UpdatedAt,
 	)
 	if err != nil {
@@ -147,9 +148,9 @@ func (db *DB) UpdateRelationship(ctx context.Context, id int64, req models.Updat
 	}
 
 	// Apply updates
-	relationshipType := existing.RelationshipType
-	if req.RelationshipType != nil {
-		relationshipType = *req.RelationshipType
+	relationshipTypeID := existing.RelationshipTypeID
+	if req.RelationshipTypeID != nil {
+		relationshipTypeID = *req.RelationshipTypeID
 	}
 
 	tone := existing.Tone
@@ -162,31 +163,26 @@ func (db *DB) UpdateRelationship(ctx context.Context, id int64, req models.Updat
 		description = req.Description
 	}
 
-	bidirectional := existing.Bidirectional
-	if req.Bidirectional != nil {
-		bidirectional = *req.Bidirectional
-	}
-
 	strength := existing.Strength
 	if req.Strength != nil {
 		strength = req.Strength
 	}
 
 	query := `
-        UPDATE relationships
-        SET relationship_type = $2, tone = $3, description = $4,
-            bidirectional = $5, strength = $6
-        WHERE id = $1
-        RETURNING id, campaign_id, source_entity_id, target_entity_id,
-                  relationship_type, tone, description, bidirectional,
-                  strength, created_at, updated_at`
+		UPDATE relationships
+		SET relationship_type_id = $2, tone = $3, description = $4,
+		    strength = $5, updated_at = NOW()
+		WHERE id = $1
+		RETURNING id, campaign_id, source_entity_id, target_entity_id,
+		          relationship_type_id, tone, description,
+		          strength, created_at, updated_at`
 
 	var r models.Relationship
 	err = db.QueryRow(ctx, query,
-		id, relationshipType, tone, description, bidirectional, strength,
+		id, relationshipTypeID, tone, description, strength,
 	).Scan(
 		&r.ID, &r.CampaignID, &r.SourceEntityID, &r.TargetEntityID,
-		&r.RelationshipType, &r.Tone, &r.Description, &r.Bidirectional,
+		&r.RelationshipTypeID, &r.Tone, &r.Description,
 		&r.Strength, &r.CreatedAt, &r.UpdatedAt,
 	)
 	if err != nil {
@@ -222,67 +218,43 @@ func (db *DB) CountRelationships(ctx context.Context) (int, error) {
 }
 
 // GetEntityRelationships retrieves all relationships for a specific entity.
+// It queries the entity_relationships_view which provides both forward and
+// inverse perspectives. The view's from_entity_id/to_entity_id are mapped
+// to SourceEntityID/TargetEntityID for API consistency.
 func (db *DB) GetEntityRelationships(ctx context.Context, entityID int64) ([]models.Relationship, error) {
 	query := `
-        SELECT r.id, r.campaign_id, r.source_entity_id, r.target_entity_id,
-               r.relationship_type, r.tone, r.description, r.bidirectional,
-               r.strength, r.created_at, r.updated_at,
-               se.id, se.name, se.entity_type,
-               te.id, te.name, te.entity_type
-        FROM relationships r
-        JOIN entities se ON r.source_entity_id = se.id
-        JOIN entities te ON r.target_entity_id = te.id
-        WHERE (r.source_entity_id = $1 OR r.target_entity_id = $1)
-        AND (
-            r.source_entity_id = $1
-            OR NOT EXISTS (
-                SELECT 1 FROM relationships r2
-                WHERE r2.campaign_id = r.campaign_id
-                AND r2.source_entity_id = $1
-                AND r2.target_entity_id = r.source_entity_id
-                AND r2.relationship_type = r.relationship_type
-            )
-        )
-        ORDER BY r.created_at DESC`
+		SELECT id, campaign_id, from_entity_id, to_entity_id,
+			relationship_type_id, relationship_type, display_label,
+			tone, description, strength,
+			created_at, updated_at,
+			from_entity_name, from_entity_type,
+			to_entity_name, to_entity_type,
+			direction
+		FROM entity_relationships_view
+		WHERE from_entity_id = $1
+		ORDER BY relationship_type, to_entity_name`
 
 	rows, err := db.Query(ctx, query, entityID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query entity relationships: %w", err)
+		return nil, fmt.Errorf("failed to get entity relationships: %w", err)
 	}
 	defer rows.Close()
 
 	var relationships []models.Relationship
 	for rows.Next() {
 		var r models.Relationship
-		var seID int64
-		var seName string
-		var seType models.EntityType
-		var teID int64
-		var teName string
-		var teType models.EntityType
-
 		err := rows.Scan(
 			&r.ID, &r.CampaignID, &r.SourceEntityID, &r.TargetEntityID,
-			&r.RelationshipType, &r.Tone, &r.Description, &r.Bidirectional,
-			&r.Strength, &r.CreatedAt, &r.UpdatedAt,
-			&seID, &seName, &seType,
-			&teID, &teName, &teType,
+			&r.RelationshipTypeID, &r.RelationshipTypeName, &r.DisplayLabel,
+			&r.Tone, &r.Description, &r.Strength,
+			&r.CreatedAt, &r.UpdatedAt,
+			&r.SourceEntityName, &r.SourceEntityType,
+			&r.TargetEntityName, &r.TargetEntityType,
+			&r.Direction,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan relationship: %w", err)
 		}
-
-		r.SourceEntity = &models.Entity{
-			ID:         seID,
-			Name:       seName,
-			EntityType: seType,
-		}
-		r.TargetEntity = &models.Entity{
-			ID:         teID,
-			Name:       teName,
-			EntityType: teType,
-		}
-
 		relationships = append(relationships, r)
 	}
 

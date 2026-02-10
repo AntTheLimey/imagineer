@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/antonypegg/imagineer/internal/analysis"
 	"github.com/antonypegg/imagineer/internal/auth"
@@ -1186,8 +1187,9 @@ func (h *ContentAnalysisHandler) revertContentFix(
 }
 
 // handleRelationshipSuggestion creates a relationship from an accepted
-// relationship_suggestion enrichment item and auto-resolves any pending
-// inverse suggestion in the same job.
+// relationship_suggestion enrichment item. The single-edge model stores
+// only the canonical forward direction; the database view provides both
+// perspectives, so no inverse row is needed.
 func (h *ContentAnalysisHandler) handleRelationshipSuggestion(
 	ctx context.Context,
 	campaignID int64,
@@ -1203,24 +1205,54 @@ func (h *ContentAnalysisHandler) handleRelationshipSuggestion(
 		return
 	}
 
-	// Determine the final relationship type, allowing the user to
+	// Determine the final relationship type name, allowing the user to
 	// override the LLM-suggested type from the triage UI.
-	finalType := suggestion.RelationshipType
+	relationshipType := suggestion.RelationshipType
 	if override != nil {
 		if overriddenType, ok := override["relationshipType"].(string); ok && overriddenType != "" {
-			finalType = overriddenType
+			relationshipType = overriddenType
 		}
 	}
 
-	// Create the relationship.
+	// Look up the relationship type ID by name.
+	relTypes, err := h.db.ListRelationshipTypes(ctx, campaignID)
+	if err != nil {
+		log.Printf("Error listing relationship types for campaign %d: %v",
+			campaignID, err)
+		return
+	}
+
+	var relTypeID int64
+	for _, rt := range relTypes {
+		if rt.Name == relationshipType {
+			relTypeID = rt.ID
+			break
+		}
+	}
+	if relTypeID == 0 {
+		log.Printf("Relationship type %q not found for campaign %d",
+			relationshipType, campaignID)
+		return
+	}
+
+	// Create the forward relationship only. The entity_relationships_view
+	// automatically provides the inverse perspective.
 	desc := suggestion.Description
-	_, err := h.db.CreateRelationship(ctx, campaignID, models.CreateRelationshipRequest{
-		SourceEntityID:   suggestion.SourceEntityID,
-		TargetEntityID:   suggestion.TargetEntityID,
-		RelationshipType: finalType,
-		Description:      &desc,
+	_, err = h.db.CreateRelationship(ctx, campaignID, models.CreateRelationshipRequest{
+		SourceEntityID:     suggestion.SourceEntityID,
+		TargetEntityID:     suggestion.TargetEntityID,
+		RelationshipTypeID: relTypeID,
+		Description:        &desc,
 	})
 	if err != nil {
+		// Gracefully handle unique_violation from the inverse-pair
+		// trigger. This occurs when the inverse edge already exists.
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			log.Printf("Relationship already exists (unique_violation) "+
+				"for item %d, skipping: %v", itemID, err)
+			return
+		}
 		log.Printf("Error creating relationship from suggestion (item %d): %v",
 			itemID, err)
 		return
@@ -1228,55 +1260,7 @@ func (h *ContentAnalysisHandler) handleRelationshipSuggestion(
 
 	log.Printf("Created relationship %s -> %s (%s) from enrichment item %d",
 		suggestion.SourceEntityName, suggestion.TargetEntityName,
-		finalType, itemID)
-
-	// Auto-resolve inverse: look for a pending relationship_suggestion
-	// where source/target are swapped.
-	inverseItem, err := h.db.FindPendingInverseRelationship(
-		ctx, jobID, suggestion.SourceEntityID, suggestion.TargetEntityID,
-	)
-	if err != nil {
-		return
-	}
-
-	// Determine the inverse relationship type name.
-	inverseTypeName := finalType
-	inverseName, err := h.db.GetInverseType(ctx, campaignID, finalType)
-	if err != nil {
-		log.Printf("Could not find inverse type for %q in campaign %d: %v",
-			finalType, campaignID, err)
-	} else {
-		inverseTypeName = inverseName
-	}
-
-	// Build the inverse description.
-	inverseDesc := fmt.Sprintf("Inverse of: %s", suggestion.Description)
-
-	// Create the inverse relationship.
-	_, err = h.db.CreateRelationship(ctx, campaignID, models.CreateRelationshipRequest{
-		SourceEntityID:   suggestion.TargetEntityID,
-		TargetEntityID:   suggestion.SourceEntityID,
-		RelationshipType: inverseTypeName,
-		Description:      &inverseDesc,
-	})
-	if err != nil {
-		log.Printf("Error creating inverse relationship for item %d: %v",
-			inverseItem.ID, err)
-	} else {
-		log.Printf(
-			"Created inverse relationship %s -> %s (%s) from auto-resolved item %d",
-			suggestion.TargetEntityName, suggestion.SourceEntityName,
-			inverseTypeName, inverseItem.ID)
-	}
-
-	// Auto-resolve the inverse item.
-	if err := h.db.ResolveAnalysisItem(ctx, inverseItem.ID, "accepted", nil); err != nil {
-		log.Printf("Error auto-resolving inverse item %d: %v",
-			inverseItem.ID, err)
-	} else {
-		log.Printf("Auto-resolved inverse relationship suggestion item %d",
-			inverseItem.ID)
-	}
+		relationshipType, itemID)
 }
 
 // handleDescriptionUpdate applies an accepted description update to

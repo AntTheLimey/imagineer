@@ -745,18 +745,8 @@ func (h *Handler) CreateRelationship(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.SourceEntityID == 0 {
-		respondError(w, http.StatusBadRequest, "Source entity ID is required")
-		return
-	}
-
-	if req.TargetEntityID == 0 {
-		respondError(w, http.StatusBadRequest, "Target entity ID is required")
-		return
-	}
-
-	if req.RelationshipType == "" {
-		respondError(w, http.StatusBadRequest, "Relationship type is required")
+	if req.SourceEntityID == 0 || req.TargetEntityID == 0 || req.RelationshipTypeID == 0 {
+		respondError(w, http.StatusBadRequest, "sourceEntityId, targetEntityId, and relationshipTypeId are required")
 		return
 	}
 
@@ -1341,14 +1331,8 @@ func (h *Handler) DeleteRelationshipType(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Check if it's a system default (campaign_id is nil)
-	if relType.CampaignID == nil {
-		respondError(w, http.StatusForbidden, "Cannot delete system default relationship types")
-		return
-	}
-
 	// Check if the type belongs to the specified campaign
-	if *relType.CampaignID != campaignID {
+	if relType.CampaignID != campaignID {
 		respondError(w, http.StatusNotFound, "Relationship type not found")
 		return
 	}

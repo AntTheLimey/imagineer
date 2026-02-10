@@ -32,10 +32,9 @@ export interface CreateRelationshipInput {
     campaignId: number;
     sourceEntityId: number;
     targetEntityId: number;
-    relationshipType: string;
+    relationshipTypeId: number;
     tone?: RelationshipTone;
     description?: string;
-    bidirectional?: boolean;
     strength?: number;
 }
 
@@ -43,10 +42,9 @@ export interface CreateRelationshipInput {
  * Input for updating an existing relationship.
  */
 export interface UpdateRelationshipInput {
-    relationshipType?: string;
+    relationshipTypeId?: number;
     tone?: RelationshipTone;
     description?: string;
-    bidirectional?: boolean;
     strength?: number;
 }
 

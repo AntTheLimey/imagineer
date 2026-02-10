@@ -19,7 +19,6 @@ import {
 import {
     Delete as DeleteIcon,
     Edit as EditIcon,
-    SwapHoriz as BidirectionalIcon,
     ArrowForward as DirectionalIcon,
 } from '@mui/icons-material';
 import type { Relationship, RelationshipType } from '../../types';
@@ -104,7 +103,6 @@ export default function RelationshipRow({
         ? relationship.targetEntityName
         : targetEntityName ?? relationship.targetEntityId;
 
-    const bidirectional = relationship.bidirectional;
     const relationshipType = relationship.relationshipType;
     const description = relationship.description;
     const isReversed = isPendingRelationship(relationship)
@@ -140,38 +138,12 @@ export default function RelationshipRow({
 
     /**
      * Build the natural sentence describing the relationship.
+     *
+     * The sentence always reads "Source displayLabel Target". When the
+     * relationship is reversed (viewed from the target entity's
+     * perspective), the inverse display label is used instead.
      */
     const relationshipSentence = useMemo(() => {
-        if (bidirectional) {
-            // For bidirectional relationships, show both entities connected
-            return (
-                <>
-                    <Typography
-                        component="span"
-                        variant="body2"
-                        fontWeight={500}
-                    >
-                        {currentEntityName}
-                    </Typography>
-                    <Typography
-                        component="span"
-                        variant="body2"
-                        sx={{ mx: 0.5 }}
-                    >
-                        {displayLabel}
-                    </Typography>
-                    <Typography
-                        component="span"
-                        variant="body2"
-                        fontWeight={500}
-                    >
-                        {targetName}
-                    </Typography>
-                </>
-            );
-        }
-
-        // For directional relationships, the sentence depends on direction
         if (isReversed) {
             // Target -> Current entity (e.g., "Thornwood Farm is owned by Billy Bob")
             return (
@@ -227,7 +199,7 @@ export default function RelationshipRow({
                 </Typography>
             </>
         );
-    }, [bidirectional, isReversed, currentEntityName, targetName, displayLabel]);
+    }, [isReversed, currentEntityName, targetName, displayLabel]);
 
     return (
         <Paper
@@ -245,25 +217,15 @@ export default function RelationshipRow({
             }}
         >
             {/* Direction indicator */}
-            <Tooltip
-                title={
-                    bidirectional
-                        ? 'Bidirectional relationship'
-                        : 'One-way relationship'
-                }
-            >
+            <Tooltip title="Relationship">
                 <Box
                     sx={{
                         display: 'flex',
                         alignItems: 'center',
-                        color: bidirectional ? 'primary.main' : 'text.secondary',
+                        color: 'text.secondary',
                     }}
                 >
-                    {bidirectional ? (
-                        <BidirectionalIcon fontSize="small" />
-                    ) : (
-                        <DirectionalIcon fontSize="small" />
-                    )}
+                    <DirectionalIcon fontSize="small" />
                 </Box>
             </Tooltip>
 

@@ -150,48 +150,61 @@ const (
 )
 
 // Relationship represents a connection between two entities.
+// A single row stores the canonical forward direction; the
+// entity_relationships_view provides both forward and inverse
+// perspectives.
 type Relationship struct {
-	ID               int64             `json:"id"`
-	CampaignID       int64             `json:"campaignId"`
-	SourceEntityID   int64             `json:"sourceEntityId"`
-	TargetEntityID   int64             `json:"targetEntityId"`
-	RelationshipType string            `json:"relationshipType"`
-	Tone             *RelationshipTone `json:"tone,omitempty"`
-	Description      *string           `json:"description,omitempty"`
-	Bidirectional    bool              `json:"bidirectional"`
-	Strength         *int              `json:"strength,omitempty"`
-	CreatedAt        time.Time         `json:"createdAt"`
-	UpdatedAt        time.Time         `json:"updatedAt"`
+	ID                 int64             `json:"id"`
+	CampaignID         int64             `json:"campaignId"`
+	SourceEntityID     int64             `json:"sourceEntityId"`
+	TargetEntityID     int64             `json:"targetEntityId"`
+	RelationshipTypeID int64             `json:"relationshipTypeId"`
+	Tone               *RelationshipTone `json:"tone,omitempty"`
+	Description        *string           `json:"description,omitempty"`
+	Strength           *int              `json:"strength,omitempty"`
+	CreatedAt          time.Time         `json:"createdAt"`
+	UpdatedAt          time.Time         `json:"updatedAt"`
 
-	// Joined fields (not in database)
-	SourceEntity *Entity `json:"sourceEntity,omitempty"`
-	TargetEntity *Entity `json:"targetEntity,omitempty"`
+	// Joined fields from entity_relationships_view
+	RelationshipTypeName string `json:"relationshipType,omitempty"`
+	DisplayLabel         string `json:"displayLabel,omitempty"`
+	Direction            string `json:"direction,omitempty"`
+
+	// Joined entity fields
+	SourceEntity     *Entity `json:"sourceEntity,omitempty"`
+	TargetEntity     *Entity `json:"targetEntity,omitempty"`
+	SourceEntityName string  `json:"sourceEntityName,omitempty"`
+	SourceEntityType string  `json:"sourceEntityType,omitempty"`
+	TargetEntityName string  `json:"targetEntityName,omitempty"`
+	TargetEntityType string  `json:"targetEntityType,omitempty"`
 }
 
-// CreateRelationshipRequest represents the request body for creating a relationship.
+// CreateRelationshipRequest represents the request body for
+// creating a relationship.
 type CreateRelationshipRequest struct {
-	SourceEntityID   int64             `json:"sourceEntityId"`
-	TargetEntityID   int64             `json:"targetEntityId"`
-	RelationshipType string            `json:"relationshipType"`
-	Tone             *RelationshipTone `json:"tone,omitempty"`
-	Description      *string           `json:"description,omitempty"`
-	Bidirectional    bool              `json:"bidirectional"`
-	Strength         *int              `json:"strength,omitempty"`
+	SourceEntityID     int64             `json:"sourceEntityId"`
+	TargetEntityID     int64             `json:"targetEntityId"`
+	RelationshipTypeID int64             `json:"relationshipTypeId"`
+	Tone               *RelationshipTone `json:"tone,omitempty"`
+	Description        *string           `json:"description,omitempty"`
+	Strength           *int              `json:"strength,omitempty"`
 }
 
-// UpdateRelationshipRequest represents the request body for updating a relationship.
+// UpdateRelationshipRequest represents the request body for
+// updating a relationship.
 type UpdateRelationshipRequest struct {
-	RelationshipType *string           `json:"relationshipType,omitempty"`
-	Tone             *RelationshipTone `json:"tone,omitempty"`
-	Description      *string           `json:"description,omitempty"`
-	Bidirectional    *bool             `json:"bidirectional,omitempty"`
-	Strength         *int              `json:"strength,omitempty"`
+	RelationshipTypeID *int64            `json:"relationshipTypeId,omitempty"`
+	Tone               *RelationshipTone `json:"tone,omitempty"`
+	Description        *string           `json:"description,omitempty"`
+	Strength           *int              `json:"strength,omitempty"`
 }
 
-// RelationshipType defines a relationship type with its inverse mapping.
+// RelationshipType defines a relationship type with its inverse
+// mapping. Each campaign has its own set of types, seeded from
+// relationship_type_templates on creation.
 type RelationshipType struct {
 	ID                  int64     `json:"id"`
-	CampaignID          *int64    `json:"campaignId,omitempty"` // nil = system default
+	CampaignID          int64     `json:"campaignId"`
 	Name                string    `json:"name"`
 	InverseName         string    `json:"inverseName"`
 	IsSymmetric         bool      `json:"isSymmetric"`

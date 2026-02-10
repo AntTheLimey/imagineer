@@ -17,8 +17,8 @@ import (
 	"github.com/antonypegg/imagineer/internal/models"
 )
 
-// ListRelationshipTypes returns all relationship types available for a campaign.
-// This includes system defaults (campaign_id IS NULL) and campaign-specific types.
+// ListRelationshipTypes returns all relationship types for a campaign.
+// All types are campaign-scoped, seeded from templates on campaign creation.
 // Results are sorted by name.
 func (db *DB) ListRelationshipTypes(ctx context.Context, campaignID int64) ([]models.RelationshipType, error) {
 	query := `
@@ -26,7 +26,7 @@ func (db *DB) ListRelationshipTypes(ctx context.Context, campaignID int64) ([]mo
 		       display_label, inverse_display_label, description,
 		       created_at, updated_at
 		FROM relationship_types
-		WHERE campaign_id IS NULL OR campaign_id = $1
+		WHERE campaign_id = $1
 		ORDER BY name`
 
 	rows, err := db.Query(ctx, query, campaignID)
@@ -104,25 +104,24 @@ func (db *DB) CreateRelationshipType(ctx context.Context, campaignID int64, req 
 	return &rt, nil
 }
 
-// DeleteRelationshipType deletes a campaign-specific relationship type.
-// System default types (campaign_id IS NULL) cannot be deleted.
+// DeleteRelationshipType deletes a relationship type by ID.
+// All types are campaign-scoped and deletable.
 func (db *DB) DeleteRelationshipType(ctx context.Context, id int64) error {
-	// Only delete if it's a campaign-specific type (not a system default)
-	query := `DELETE FROM relationship_types WHERE id = $1 AND campaign_id IS NOT NULL`
+	query := `DELETE FROM relationship_types WHERE id = $1`
 	result, err := db.Pool.Exec(ctx, query, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete relationship type: %w", err)
 	}
 
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("relationship type not found or is a system default")
+		return fmt.Errorf("relationship type not found")
 	}
 
 	return nil
 }
 
 // GetRelationshipTypeByName retrieves a relationship type by its name for a
-// given campaign. Campaign-specific types take precedence over system defaults.
+// given campaign. All types are campaign-scoped.
 func (db *DB) GetRelationshipTypeByName(ctx context.Context, campaignID int64, name string) (*models.RelationshipType, error) {
 	query := `
 		SELECT id, campaign_id, name, inverse_name, is_symmetric,
@@ -130,9 +129,7 @@ func (db *DB) GetRelationshipTypeByName(ctx context.Context, campaignID int64, n
 		       created_at, updated_at
 		FROM relationship_types
 		WHERE name = $1
-		  AND (campaign_id = $2 OR campaign_id IS NULL)
-		ORDER BY campaign_id DESC NULLS LAST
-		LIMIT 1`
+		  AND campaign_id = $2`
 
 	var rt models.RelationshipType
 	err := db.QueryRow(ctx, query, name, campaignID).Scan(

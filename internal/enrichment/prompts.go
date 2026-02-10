@@ -44,7 +44,10 @@ Rules:
 - Do not invent information not present in the source material.
 - Keep descriptions concise and in a style consistent with TTRPG notes.
 - For relationships, use descriptive types like "ally_of", "enemy_of",
-  "located_in", "member_of", "owns", "works_for", "knows", etc.
+  "located_at", "member_of", "owns", "works_for", "knows", etc.
+- Use only canonical forward relationship types (e.g., "located_at" not
+  "contains", "owns" not "owned_by", "member_of" not "has_member"). The
+  system automatically handles the inverse direction.
 - If the content does not reveal new information about the entity, return
   empty arrays.
 - Do not duplicate existing relationships listed in the input.
@@ -122,7 +125,7 @@ func buildUserPrompt(input EnrichmentInput) string {
 			}
 
 			fmt.Fprintf(&b, "- %s -[%s]-> %s",
-				sourceName, rel.RelationshipType, targetName)
+				sourceName, rel.RelationshipTypeName, targetName)
 			if desc != "" {
 				fmt.Fprintf(&b, " (%s)", desc)
 			}

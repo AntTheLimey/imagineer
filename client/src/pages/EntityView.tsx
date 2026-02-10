@@ -447,13 +447,18 @@ export default function EntityView() {
                             }}
                         >
                             {relationships!.map((rel) => {
-                                const isSource =
-                                    rel.sourceEntityId === entityId;
-                                const relatedId = isSource
-                                    ? rel.targetEntityId
-                                    : rel.sourceEntityId;
+                                // The backend view returns relationships
+                                // oriented from the queried entity's
+                                // perspective. Use targetEntityId (the
+                                // "other" entity) for navigation and
+                                // displayLabel for the type chip.
+                                const relatedId = rel.targetEntityId;
                                 const relatedName =
-                                    resolveEntityName(relatedId);
+                                    rel.targetEntityName
+                                    ?? resolveEntityName(relatedId);
+                                const typeLabel =
+                                    rel.displayLabel
+                                    ?? rel.relationshipType;
 
                                 return (
                                     <Box
@@ -469,7 +474,7 @@ export default function EntityView() {
                                             color="action"
                                         />
                                         <Chip
-                                            label={rel.relationshipType}
+                                            label={typeLabel}
                                             size="small"
                                             variant="outlined"
                                         />
