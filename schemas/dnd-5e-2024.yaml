@@ -1,0 +1,297 @@
+# D&D 5th Edition (2024 Revision) Schema
+system:
+  name: "D&D 5th Edition (2024 Revision)"
+  code: "dnd-5e-2024"
+  publisher: "Wizards of the Coast"
+
+dice_conventions:
+  primary: "d20"
+  damage: ["d4", "d6", "d8", "d10", "d12"]
+  percentile: "d100"
+
+ability_scores:
+  STR:
+    name: "Strength"
+    type: "standard"
+    range: [1, 30]
+    default: 10
+  DEX:
+    name: "Dexterity"
+    type: "standard"
+    range: [1, 30]
+    default: 10
+  CON:
+    name: "Constitution"
+    type: "standard"
+    range: [1, 30]
+    default: 10
+  INT:
+    name: "Intelligence"
+    type: "standard"
+    range: [1, 30]
+    default: 10
+  WIS:
+    name: "Wisdom"
+    type: "standard"
+    range: [1, 30]
+    default: 10
+  CHA:
+    name: "Charisma"
+    type: "standard"
+    range: [1, 30]
+    default: 10
+
+derived_attributes:
+  AC:
+    name: "Armor Class"
+    formula: "10 + DEX_modifier"
+    note: "Unarmored; varies by armor type"
+  HP:
+    name: "Hit Points"
+    formula: "hit_die + CON_modifier at level 1"
+  Initiative:
+    name: "Initiative"
+    formula: "DEX_modifier"
+  Proficiency_Bonus:
+    name: "Proficiency Bonus"
+    lookup_table: "level_proficiency"
+  Spell_Save_DC:
+    name: "Spell Save DC"
+    formula: "8 + proficiency_bonus + spellcasting_modifier"
+  Passive_Perception:
+    name: "Passive Perception"
+    formula: "10 + Perception_modifier"
+
+skill_categories:
+  - "STR-based"
+  - "DEX-based"
+  - "INT-based"
+  - "WIS-based"
+  - "CHA-based"
+
+sample_skills:
+  Acrobatics:
+    base: 0
+    category: "DEX-based"
+  Animal_Handling:
+    base: 0
+    category: "WIS-based"
+  Arcana:
+    base: 0
+    category: "INT-based"
+  Athletics:
+    base: 0
+    category: "STR-based"
+  Deception:
+    base: 0
+    category: "CHA-based"
+  History:
+    base: 0
+    category: "INT-based"
+  Insight:
+    base: 0
+    category: "WIS-based"
+  Intimidation:
+    base: 0
+    category: "CHA-based"
+  Investigation:
+    base: 0
+    category: "INT-based"
+  Medicine:
+    base: 0
+    category: "WIS-based"
+  Nature:
+    base: 0
+    category: "INT-based"
+  Perception:
+    base: 0
+    category: "WIS-based"
+  Performance:
+    base: 0
+    category: "CHA-based"
+  Persuasion:
+    base: 0
+    category: "CHA-based"
+  Religion:
+    base: 0
+    category: "INT-based"
+  Sleight_of_Hand:
+    base: 0
+    category: "DEX-based"
+  Stealth:
+    base: 0
+    category: "DEX-based"
+  Survival:
+    base: 0
+    category: "WIS-based"
+
+roll_mechanics:
+  success_levels:
+    - name: "Critical Success"
+      threshold: "natural 20"
+    - name: "Success"
+      threshold: ">= DC"
+    - name: "Failure"
+      threshold: "< DC"
+    - name: "Critical Failure"
+      threshold: "natural 1"
+
+  advantage_disadvantage:
+    description: "Roll 2d20, take highest (advantage) or lowest (disadvantage). Do not stack; cancel if both apply."
+
+  difficulty_classes:
+    very_easy: 5
+    easy: 10
+    medium: 15
+    hard: 20
+    very_hard: 25
+    nearly_impossible: 30
+
+classes:
+  Barbarian:
+    hit_die: "d12"
+    primary_ability: "STR"
+    saving_throws: ["STR", "CON"]
+  Bard:
+    hit_die: "d8"
+    primary_ability: "CHA"
+    saving_throws: ["DEX", "CHA"]
+  Cleric:
+    hit_die: "d8"
+    primary_ability: "WIS"
+    saving_throws: ["WIS", "CHA"]
+  Druid:
+    hit_die: "d8"
+    primary_ability: "WIS"
+    saving_throws: ["INT", "WIS"]
+  Fighter:
+    hit_die: "d10"
+    primary_ability: ["STR", "DEX"]
+    saving_throws: ["STR", "CON"]
+  Monk:
+    hit_die: "d8"
+    primary_ability: ["DEX", "WIS"]
+    saving_throws: ["STR", "DEX"]
+  Paladin:
+    hit_die: "d10"
+    primary_ability: ["STR", "CHA"]
+    saving_throws: ["WIS", "CHA"]
+  Ranger:
+    hit_die: "d10"
+    primary_ability: ["DEX", "WIS"]
+    saving_throws: ["STR", "DEX"]
+  Rogue:
+    hit_die: "d8"
+    primary_ability: "DEX"
+    saving_throws: ["DEX", "INT"]
+  Sorcerer:
+    hit_die: "d6"
+    primary_ability: "CHA"
+    saving_throws: ["CON", "CHA"]
+  Warlock:
+    hit_die: "d8"
+    primary_ability: "CHA"
+    saving_throws: ["WIS", "CHA"]
+  Wizard:
+    hit_die: "d6"
+    primary_ability: "INT"
+    saving_throws: ["INT", "WIS"]
+
+weapon_mastery:
+  Cleave:
+    description: "Damage a second creature on hit"
+  Graze:
+    description: "Deal ability modifier damage on a miss"
+  Nick:
+    description: "Extra light weapon attack as bonus action"
+  Push:
+    description: "Push target 10 ft away on hit"
+  Sap:
+    description: "Disadvantage on target's next attack"
+  Slow:
+    description: "Reduce target's speed by 10 ft"
+  Topple:
+    description: "Target must save or fall prone"
+  Vex:
+    description: "Advantage on next attack against target"
+
+level_progression:
+  proficiency_bonus:
+    1: 2
+    5: 3
+    9: 4
+    13: 5
+    17: 6
+
+  tiers:
+    - name: "Local Heroes"
+      levels: [1, 4]
+    - name: "Heroes of the Realm"
+      levels: [5, 10]
+    - name: "Masters of the Realm"
+      levels: [11, 16]
+    - name: "Masters of the World"
+      levels: [17, 20]
+
+entity_attributes:
+  pc:
+    required:
+      - name
+      - species
+      - class
+      - level
+    optional:
+      - subclass
+      - background
+      - alignment
+      - ability_scores
+      - armor_class
+      - hit_points
+      - speed
+      - proficiency_bonus
+      - saving_throw_proficiencies
+      - skill_proficiencies
+      - feats
+      - equipment
+      - spells_known
+      - weapon_masteries
+
+  npc:
+    required:
+      - name
+    optional:
+      - species
+      - challenge_rating
+      - armor_class
+      - hit_points
+      - ability_scores
+      - speed
+      - skills
+      - damage_resistances
+      - condition_immunities
+      - senses
+      - languages
+      - actions
+      - legendary_actions
+      - alignment
+
+  creature:
+    required:
+      - name
+      - challenge_rating
+      - armor_class
+      - hit_points
+    optional:
+      - size
+      - type
+      - ability_scores
+      - speed
+      - damage_vulnerabilities
+      - damage_resistances
+      - damage_immunities
+      - condition_immunities
+      - senses
+      - languages
+      - traits
+      - actions
+      - legendary_actions
