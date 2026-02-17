@@ -12,9 +12,11 @@ package database
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/antonypegg/imagineer/internal/models"
+	"github.com/jackc/pgx/v5"
 )
 
 // ListSessionsByCampaign retrieves all sessions for a campaign.
@@ -96,6 +98,8 @@ func (db *DB) ListSessionsByChapter(ctx context.Context, chapterID int64) ([]mod
 }
 
 // GetSession retrieves a session by ID.
+// Returns pgx.ErrNoRows (unwrapped) when the session does not exist so
+// callers can distinguish 404 from 500 with errors.Is().
 func (db *DB) GetSession(ctx context.Context, id int64) (*models.Session, error) {
 	query := `
         SELECT id, campaign_id, chapter_id, title, session_number, planned_date, actual_date,
@@ -110,6 +114,9 @@ func (db *DB) GetSession(ctx context.Context, id int64) (*models.Session, error)
 		&s.Status, &stage, &s.PrepNotes, &s.ActualNotes, &s.PlayNotes, &s.CreatedAt, &s.UpdatedAt,
 	)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, pgx.ErrNoRows
+		}
 		return nil, fmt.Errorf("failed to get session: %w", err)
 	}
 	if stage != nil {
@@ -155,11 +162,39 @@ func (db *DB) CreateSession(ctx context.Context, campaignID int64, req models.Cr
 }
 
 // UpdateSession updates an existing session.
+// The entire read-modify-write is wrapped in a transaction with
+// SELECT ... FOR UPDATE to prevent concurrent lost updates.
 func (db *DB) UpdateSession(ctx context.Context, id int64, req models.UpdateSessionRequest) (*models.Session, error) {
-	// First get the existing session
-	existing, err := db.GetSession(ctx, id)
+	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	// Fetch the existing session inside the transaction with a row lock.
+	selectQuery := `
+        SELECT id, campaign_id, chapter_id, title, session_number, planned_date, actual_date,
+               status, stage, prep_notes, actual_notes, play_notes, created_at, updated_at
+        FROM sessions
+        WHERE id = $1
+        FOR UPDATE`
+
+	var existing models.Session
+	var existingStage *string
+	err = tx.QueryRow(ctx, selectQuery, id).Scan(
+		&existing.ID, &existing.CampaignID, &existing.ChapterID, &existing.Title,
+		&existing.SessionNumber, &existing.PlannedDate, &existing.ActualDate,
+		&existing.Status, &existingStage, &existing.PrepNotes, &existing.ActualNotes,
+		&existing.PlayNotes, &existing.CreatedAt, &existing.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, pgx.ErrNoRows
+		}
+		return nil, fmt.Errorf("failed to get session for update: %w", err)
+	}
+	if existingStage != nil {
+		existing.Stage = models.SessionStage(*existingStage)
 	}
 
 	// Apply updates - for pointer fields, nil means "no change"
@@ -213,7 +248,7 @@ func (db *DB) UpdateSession(ctx context.Context, id int64, req models.UpdateSess
 		playNotes = req.PlayNotes
 	}
 
-	query := `
+	updateQuery := `
         UPDATE sessions
         SET chapter_id = $2, title = $3, session_number = $4, planned_date = $5,
             actual_date = $6, status = $7, stage = $8, prep_notes = $9,
@@ -224,7 +259,7 @@ func (db *DB) UpdateSession(ctx context.Context, id int64, req models.UpdateSess
 
 	var s models.Session
 	var retStage *string
-	err = db.QueryRow(ctx, query, id, chapterID, title, sessionNumber, plannedDate,
+	err = tx.QueryRow(ctx, updateQuery, id, chapterID, title, sessionNumber, plannedDate,
 		actualDate, status, stage, prepNotes, actualNotes, playNotes).Scan(
 		&s.ID, &s.CampaignID, &s.ChapterID, &s.Title, &s.SessionNumber, &s.PlannedDate, &s.ActualDate,
 		&s.Status, &retStage, &s.PrepNotes, &s.ActualNotes, &s.PlayNotes, &s.CreatedAt, &s.UpdatedAt,
@@ -234,6 +269,10 @@ func (db *DB) UpdateSession(ctx context.Context, id int64, req models.UpdateSess
 	}
 	if retStage != nil {
 		s.Stage = models.SessionStage(*retStage)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return &s, nil

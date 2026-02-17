@@ -18,7 +18,6 @@ import (
 
 	"github.com/antonypegg/imagineer/internal/models"
 	"github.com/jackc/pgx/v5"
-	"github.com/lib/pq"
 )
 
 // sceneColumns is the standard column list for scene queries.
@@ -34,7 +33,7 @@ func scanScene(row pgx.Row) (*models.Scene, error) {
 	err := row.Scan(
 		&s.ID, &s.SessionID, &s.CampaignID, &s.Title, &s.Description,
 		&s.SceneType, &s.Status, &s.SortOrder, &s.Objective, &s.GMNotes,
-		pq.Array(&entityIDs), &s.SystemData, &s.Source, &s.SourceConfidence,
+		&entityIDs, &s.SystemData, &s.Source, &s.SourceConfidence,
 		&s.Connections, &s.CreatedAt, &s.UpdatedAt,
 	)
 	if err != nil {
@@ -56,7 +55,7 @@ func scanScenes(rows pgx.Rows) ([]models.Scene, error) {
 		err := rows.Scan(
 			&s.ID, &s.SessionID, &s.CampaignID, &s.Title, &s.Description,
 			&s.SceneType, &s.Status, &s.SortOrder, &s.Objective, &s.GMNotes,
-			pq.Array(&entityIDs), &s.SystemData, &s.Source, &s.SourceConfidence,
+			&entityIDs, &s.SystemData, &s.Source, &s.SourceConfidence,
 			&s.Connections, &s.CreatedAt, &s.UpdatedAt,
 		)
 		if err != nil {
@@ -138,7 +137,7 @@ func (db *DB) CreateScene(ctx context.Context, sessionID, campaignID int64, req 
 		source = *req.Source
 	}
 
-	sourceConfidence := "DRAFT"
+	sourceConfidence := models.SourceConfidenceDraft
 	if req.SourceConfidence != nil {
 		sourceConfidence = *req.SourceConfidence
 	}
@@ -170,7 +169,7 @@ func (db *DB) CreateScene(ctx context.Context, sessionID, campaignID int64, req 
 		s, err := scanScene(db.QueryRow(ctx, insertQuery,
 			sessionID, campaignID, req.Title, req.Description,
 			sceneType, *req.SortOrder, req.Objective, req.GMNotes,
-			pq.Array(entityIDs), systemData, source, sourceConfidence, connections,
+			entityIDs, systemData, source, sourceConfidence, connections,
 		))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create scene: %w", err)
@@ -209,7 +208,7 @@ func (db *DB) CreateScene(ctx context.Context, sessionID, campaignID int64, req 
 	s, err := scanScene(tx.QueryRow(ctx, insertQuery,
 		sessionID, campaignID, req.Title, req.Description,
 		sceneType, sortOrder, req.Objective, req.GMNotes,
-		pq.Array(entityIDs), systemData, source, sourceConfidence, connections,
+		entityIDs, systemData, source, sourceConfidence, connections,
 	))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create scene: %w", err)
@@ -323,7 +322,7 @@ func (db *DB) UpdateScene(ctx context.Context, id int64, req models.UpdateSceneR
 	s, err := scanScene(tx.QueryRow(ctx, updateQuery,
 		id, title, description, sceneType, status,
 		sortOrder, objective, gmNotes,
-		pq.Array(entityIDs), systemData, source,
+		entityIDs, systemData, source,
 		sourceConfidence, connections,
 	))
 	if err != nil {
@@ -338,6 +337,16 @@ func (db *DB) UpdateScene(ctx context.Context, id int64, req models.UpdateSceneR
 }
 
 // DeleteScene deletes a scene by ID.
+// Returns pgx.ErrNoRows when no scene matches the given ID.
 func (db *DB) DeleteScene(ctx context.Context, id int64) error {
-	return db.Exec(ctx, "DELETE FROM scenes WHERE id = $1", id)
+	result, err := db.Pool.Exec(ctx, "DELETE FROM scenes WHERE id = $1", id)
+	if err != nil {
+		return fmt.Errorf("failed to delete scene: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+
+	return nil
 }

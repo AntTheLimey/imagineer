@@ -18,7 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     inline add/edit/delete in the session editor sidebar.
   - Database migration 011 adds the scenes table,
     session_chat_messages table, and play_notes column on
-    sessions. The migration also adds vectorisation for the
+    sessions. The migration also adds vectorization for the
     new tables, updates the `search_campaign_content()`
     function, and drops legacy JSONB columns (planned_scenes,
     discoveries, player_decisions, consequences).

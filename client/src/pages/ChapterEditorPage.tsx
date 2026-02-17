@@ -275,6 +275,15 @@ export default function ChapterEditorPage() {
     );
 
     /**
+     * Close the import dialog and reset its state.
+     */
+    const closeImportDialog = useCallback(() => {
+        setImportDialogOpen(false);
+        setImportContent('');
+        setImportMode('append');
+    }, []);
+
+    /**
      * Handle importing content into the chapter overview.
      */
     const handleImport = useCallback(() => {
@@ -290,9 +299,8 @@ export default function ChapterEditorPage() {
             updateField('overview', newContent);
         }
 
-        setImportContent('');
-        setImportDialogOpen(false);
-    }, [importContent, importMode, formData.overview, updateField]);
+        closeImportDialog();
+    }, [importContent, importMode, formData.overview, updateField, closeImportDialog]);
 
     /**
      * Validate the form.
@@ -777,7 +785,7 @@ export default function ChapterEditorPage() {
             {/* Import dialog */}
             <Dialog
                 open={importDialogOpen}
-                onClose={() => setImportDialogOpen(false)}
+                onClose={closeImportDialog}
                 maxWidth="md"
                 fullWidth
             >
@@ -809,7 +817,7 @@ export default function ChapterEditorPage() {
                     />
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setImportDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={closeImportDialog}>Cancel</Button>
                     <Button
                         variant="contained"
                         onClick={handleImport}

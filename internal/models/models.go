@@ -313,54 +313,54 @@ type UpdateSessionRequest struct {
 
 // Scene represents a structured scene within a game session.
 type Scene struct {
-	ID               int64           `json:"id"`
-	SessionID        int64           `json:"sessionId"`
-	CampaignID       int64           `json:"campaignId"`
-	Title            string          `json:"title"`
-	Description      *string         `json:"description,omitempty"`
-	SceneType        string          `json:"sceneType"`
-	Status           string          `json:"status"`
-	SortOrder        int             `json:"sortOrder"`
-	Objective        *string         `json:"objective,omitempty"`
-	GMNotes          *string         `json:"gmNotes,omitempty"`
-	EntityIDs        []int64         `json:"entityIds"`
-	SystemData       json.RawMessage `json:"systemData,omitempty"`
-	Source           string          `json:"source"`
-	SourceConfidence string          `json:"sourceConfidence"`
-	Connections      json.RawMessage `json:"connections,omitempty"`
-	CreatedAt        time.Time       `json:"createdAt"`
-	UpdatedAt        time.Time       `json:"updatedAt"`
+	ID               int64            `json:"id"`
+	SessionID        int64            `json:"sessionId"`
+	CampaignID       int64            `json:"campaignId"`
+	Title            string           `json:"title"`
+	Description      *string          `json:"description,omitempty"`
+	SceneType        string           `json:"sceneType"`
+	Status           string           `json:"status"`
+	SortOrder        int              `json:"sortOrder"`
+	Objective        *string          `json:"objective,omitempty"`
+	GMNotes          *string          `json:"gmNotes,omitempty"`
+	EntityIDs        []int64          `json:"entityIds"`
+	SystemData       json.RawMessage  `json:"systemData,omitempty"`
+	Source           string           `json:"source"`
+	SourceConfidence SourceConfidence `json:"sourceConfidence"`
+	Connections      json.RawMessage  `json:"connections,omitempty"`
+	CreatedAt        time.Time        `json:"createdAt"`
+	UpdatedAt        time.Time        `json:"updatedAt"`
 }
 
 // CreateSceneRequest represents the request body for creating a scene.
 type CreateSceneRequest struct {
-	Title            string          `json:"title"`
-	Description      *string         `json:"description,omitempty"`
-	SceneType        *string         `json:"sceneType,omitempty"`
-	SortOrder        *int            `json:"sortOrder,omitempty"`
-	Objective        *string         `json:"objective,omitempty"`
-	GMNotes          *string         `json:"gmNotes,omitempty"`
-	EntityIDs        []int64         `json:"entityIds,omitempty"`
-	SystemData       json.RawMessage `json:"systemData,omitempty"`
-	Source           *string         `json:"source,omitempty"`
-	SourceConfidence *string         `json:"sourceConfidence,omitempty"`
-	Connections      json.RawMessage `json:"connections,omitempty"`
+	Title            string            `json:"title"`
+	Description      *string           `json:"description,omitempty"`
+	SceneType        *string           `json:"sceneType,omitempty"`
+	SortOrder        *int              `json:"sortOrder,omitempty"`
+	Objective        *string           `json:"objective,omitempty"`
+	GMNotes          *string           `json:"gmNotes,omitempty"`
+	EntityIDs        []int64           `json:"entityIds,omitempty"`
+	SystemData       json.RawMessage   `json:"systemData,omitempty"`
+	Source           *string           `json:"source,omitempty"`
+	SourceConfidence *SourceConfidence `json:"sourceConfidence,omitempty"`
+	Connections      json.RawMessage   `json:"connections,omitempty"`
 }
 
 // UpdateSceneRequest represents the request body for updating a scene.
 type UpdateSceneRequest struct {
-	Title            *string         `json:"title,omitempty"`
-	Description      *string         `json:"description,omitempty"`
-	SceneType        *string         `json:"sceneType,omitempty"`
-	Status           *string         `json:"status,omitempty"`
-	SortOrder        *int            `json:"sortOrder,omitempty"`
-	Objective        *string         `json:"objective,omitempty"`
-	GMNotes          *string         `json:"gmNotes,omitempty"`
-	EntityIDs        []int64         `json:"entityIds,omitempty"`
-	SystemData       json.RawMessage `json:"systemData,omitempty"`
-	Source           *string         `json:"source,omitempty"`
-	SourceConfidence *string         `json:"sourceConfidence,omitempty"`
-	Connections      json.RawMessage `json:"connections,omitempty"`
+	Title            *string           `json:"title,omitempty"`
+	Description      *string           `json:"description,omitempty"`
+	SceneType        *string           `json:"sceneType,omitempty"`
+	Status           *string           `json:"status,omitempty"`
+	SortOrder        *int              `json:"sortOrder,omitempty"`
+	Objective        *string           `json:"objective,omitempty"`
+	GMNotes          *string           `json:"gmNotes,omitempty"`
+	EntityIDs        []int64           `json:"entityIds,omitempty"`
+	SystemData       json.RawMessage   `json:"systemData,omitempty"`
+	Source           *string           `json:"source,omitempty"`
+	SourceConfidence *SourceConfidence `json:"sourceConfidence,omitempty"`
+	Connections      json.RawMessage   `json:"connections,omitempty"`
 }
 
 // SessionChatMessage represents a chat message within a session workflow.

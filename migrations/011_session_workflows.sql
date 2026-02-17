@@ -40,8 +40,8 @@ CREATE TABLE scenes (
     source            TEXT NOT NULL DEFAULT 'manual',
     source_confidence TEXT NOT NULL DEFAULT 'DRAFT',
     connections       JSONB DEFAULT '[]',
-    created_at        TIMESTAMPTZ DEFAULT NOW(),
-    updated_at        TIMESTAMPTZ DEFAULT NOW()
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 COMMENT ON TABLE scenes IS 'Structured scenes within game sessions for planning and tracking';
@@ -62,7 +62,7 @@ CREATE TRIGGER update_scenes_updated_at
 -- ============================================
 -- Add play_notes to sessions
 -- ============================================
-ALTER TABLE sessions ADD COLUMN play_notes TEXT;
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS play_notes TEXT;
 
 COMMENT ON COLUMN sessions.play_notes IS 'Notes taken during active play';
 
@@ -79,7 +79,8 @@ CREATE TABLE session_chat_messages (
     role        TEXT NOT NULL,
     content     TEXT NOT NULL,
     sort_order  INT NOT NULL DEFAULT 0,
-    created_at  TIMESTAMPTZ DEFAULT NOW()
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 COMMENT ON TABLE session_chat_messages IS 'AI chat messages within session workflow for prep, play, and wrap-up';

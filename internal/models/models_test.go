@@ -607,7 +607,7 @@ func TestScene_JSONMarshalUnmarshal(t *testing.T) {
 		EntityIDs:        []int64{5, 6, 7},
 		SystemData:       json.RawMessage(`{"encounter_type": "investigation"}`),
 		Source:           "manual",
-		SourceConfidence: "DRAFT",
+		SourceConfidence: SourceConfidenceDraft,
 		Connections:      json.RawMessage(`[]`),
 		CreatedAt:        time.Date(2025, 7, 1, 10, 0, 0, 0, time.UTC),
 		UpdatedAt:        time.Date(2025, 7, 1, 10, 0, 0, 0, time.UTC),

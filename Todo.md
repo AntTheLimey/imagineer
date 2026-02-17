@@ -318,7 +318,7 @@ Features planned for after the initial release.
 - [x] Scene CRUD (full stack: migration, Go model, database,
   handlers, routes, React API, hooks, and UI).
 - [x] Database migration 011 with scenes,
-  session_chat_messages, play_notes, vectorisation, and
+  session_chat_messages, play_notes, vectorization, and
   search function update.
 - [x] SessionsManagement navigation to full-screen editor.
 - [x] Chapter editor import button.

@@ -106,6 +106,73 @@ const sceneTypeOptions = [
 ];
 
 /**
+ * Props for the SceneEditForm component.
+ */
+interface SceneEditFormProps {
+    sceneForm: { title: string; sceneType: string; description: string };
+    setSceneForm: React.Dispatch<React.SetStateAction<{ title: string; sceneType: string; description: string }>>;
+    sceneTypeOptions: string[];
+    handleCancelScene: () => void;
+    handleSaveScene: () => void;
+}
+
+/**
+ * Inline scene edit/add form component.
+ *
+ * Extracted as a standalone component so that the "add scene" and
+ * "edit scene" usages receive distinct React element identities,
+ * preventing accidental state sharing between the two instances.
+ */
+function SceneEditForm({ sceneForm, setSceneForm, sceneTypeOptions: typeOptions, handleCancelScene, handleSaveScene }: SceneEditFormProps) {
+    return (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            <TextField
+                size="small"
+                label="Scene Title"
+                value={sceneForm.title}
+                onChange={(e) => setSceneForm((prev) => ({ ...prev, title: e.target.value }))}
+                autoFocus
+            />
+            <FormControl size="small">
+                <InputLabel>Scene Type</InputLabel>
+                <Select
+                    value={sceneForm.sceneType}
+                    label="Scene Type"
+                    onChange={(e) => setSceneForm((prev) => ({ ...prev, sceneType: e.target.value }))}
+                >
+                    {typeOptions.map((type) => (
+                        <MenuItem key={type} value={type}>
+                            {type.charAt(0).toUpperCase() + type.slice(1)}
+                        </MenuItem>
+                    ))}
+                </Select>
+            </FormControl>
+            <TextField
+                size="small"
+                label="Description"
+                value={sceneForm.description}
+                onChange={(e) => setSceneForm((prev) => ({ ...prev, description: e.target.value }))}
+                multiline
+                rows={2}
+            />
+            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                <Button size="small" onClick={handleCancelScene}>
+                    Cancel
+                </Button>
+                <Button
+                    size="small"
+                    variant="contained"
+                    onClick={handleSaveScene}
+                    disabled={!sceneForm.title.trim()}
+                >
+                    Save
+                </Button>
+            </Box>
+        </Box>
+    );
+}
+
+/**
  * Produce a human-friendly label for how long ago an ISO timestamp occurred.
  *
  * @param isoString - An ISO 8601 timestamp string
@@ -473,56 +540,6 @@ export default function SessionEditorPage() {
         [campaign, campaignId, isNewSession, session]
     );
 
-    /**
-     * Inline scene edit/add form component.
-     */
-    const SceneEditForm = (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-            <TextField
-                size="small"
-                label="Scene Title"
-                value={sceneForm.title}
-                onChange={(e) => setSceneForm((prev) => ({ ...prev, title: e.target.value }))}
-                autoFocus
-            />
-            <FormControl size="small">
-                <InputLabel>Scene Type</InputLabel>
-                <Select
-                    value={sceneForm.sceneType}
-                    label="Scene Type"
-                    onChange={(e) => setSceneForm((prev) => ({ ...prev, sceneType: e.target.value }))}
-                >
-                    {sceneTypeOptions.map((type) => (
-                        <MenuItem key={type} value={type}>
-                            {type.charAt(0).toUpperCase() + type.slice(1)}
-                        </MenuItem>
-                    ))}
-                </Select>
-            </FormControl>
-            <TextField
-                size="small"
-                label="Description"
-                value={sceneForm.description}
-                onChange={(e) => setSceneForm((prev) => ({ ...prev, description: e.target.value }))}
-                multiline
-                rows={2}
-            />
-            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-                <Button size="small" onClick={handleCancelScene}>
-                    Cancel
-                </Button>
-                <Button
-                    size="small"
-                    variant="contained"
-                    onClick={handleSaveScene}
-                    disabled={!sceneForm.title.trim()}
-                >
-                    Save
-                </Button>
-            </Box>
-        </Box>
-    );
-
     // Loading state
     if (!isNewSession && sessionLoading) {
         return (
@@ -667,7 +684,14 @@ export default function SessionEditorPage() {
                                 value={formData.sessionNumber ?? ''}
                                 onChange={(e) => {
                                     const val = e.target.value;
-                                    updateField('sessionNumber', val === '' ? null : parseInt(val, 10));
+                                    if (val === '') {
+                                        updateField('sessionNumber', null);
+                                        return;
+                                    }
+                                    const parsed = parseInt(val, 10);
+                                    if (!Number.isNaN(parsed)) {
+                                        updateField('sessionNumber', parsed);
+                                    }
                                 }}
                                 sx={{ mb: 3 }}
                             />
@@ -712,7 +736,13 @@ export default function SessionEditorPage() {
                             {/* Add scene form */}
                             {addingScene && (
                                 <Paper variant="outlined" sx={{ p: 1.5, mb: 1 }}>
-                                    {SceneEditForm}
+                                    <SceneEditForm
+                                        sceneForm={sceneForm}
+                                        setSceneForm={setSceneForm}
+                                        sceneTypeOptions={sceneTypeOptions}
+                                        handleCancelScene={handleCancelScene}
+                                        handleSaveScene={handleSaveScene}
+                                    />
                                 </Paper>
                             )}
 
@@ -725,7 +755,13 @@ export default function SessionEditorPage() {
                                 scenes.map((scene) => (
                                     <Paper key={scene.id} variant="outlined" sx={{ p: 1.5, mb: 1 }}>
                                         {editingSceneId === scene.id ? (
-                                            SceneEditForm
+                                            <SceneEditForm
+                                                sceneForm={sceneForm}
+                                                setSceneForm={setSceneForm}
+                                                sceneTypeOptions={sceneTypeOptions}
+                                                handleCancelScene={handleCancelScene}
+                                                handleSaveScene={handleSaveScene}
+                                            />
                                         ) : (
                                             <Box>
                                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

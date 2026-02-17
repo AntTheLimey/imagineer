@@ -12,12 +12,14 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 
 	"github.com/antonypegg/imagineer/internal/auth"
 	"github.com/antonypegg/imagineer/internal/database"
 	"github.com/antonypegg/imagineer/internal/models"
+	"github.com/jackc/pgx/v5"
 )
 
 // SceneHandler handles scene CRUD API requests.
@@ -40,7 +42,12 @@ func (h *SceneHandler) verifySessionBelongsToCampaign(
 ) bool {
 	session, err := h.db.GetSession(r.Context(), sessionID)
 	if err != nil {
-		respondError(w, http.StatusNotFound, "Session not found")
+		if errors.Is(err, pgx.ErrNoRows) {
+			respondError(w, http.StatusNotFound, "Session not found")
+			return false
+		}
+		log.Printf("Error verifying session ownership: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to verify session")
 		return false
 	}
 	if session.CampaignID != campaignID {
@@ -132,8 +139,12 @@ func (h *SceneHandler) GetScene(w http.ResponseWriter, r *http.Request) {
 
 	scene, err := h.db.GetScene(r.Context(), sceneID)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			respondError(w, http.StatusNotFound, "Scene not found")
+			return
+		}
 		log.Printf("Error getting scene: %v", err)
-		respondError(w, http.StatusNotFound, "Scene not found")
+		respondError(w, http.StatusInternalServerError, "Failed to get scene")
 		return
 	}
 
@@ -235,8 +246,12 @@ func (h *SceneHandler) UpdateScene(w http.ResponseWriter, r *http.Request) {
 	// Verify the scene exists and belongs to this session
 	existingScene, err := h.db.GetScene(r.Context(), sceneID)
 	if err != nil {
-		log.Printf("Error getting scene: %v", err)
-		respondError(w, http.StatusNotFound, "Scene not found")
+		if errors.Is(err, pgx.ErrNoRows) {
+			respondError(w, http.StatusNotFound, "Scene not found")
+			return
+		}
+		log.Printf("Error getting scene for update: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to get scene")
 		return
 	}
 
@@ -300,8 +315,12 @@ func (h *SceneHandler) DeleteScene(w http.ResponseWriter, r *http.Request) {
 	// Verify the scene exists and belongs to this session
 	existingScene, err := h.db.GetScene(r.Context(), sceneID)
 	if err != nil {
-		log.Printf("Error getting scene: %v", err)
-		respondError(w, http.StatusNotFound, "Scene not found")
+		if errors.Is(err, pgx.ErrNoRows) {
+			respondError(w, http.StatusNotFound, "Scene not found")
+			return
+		}
+		log.Printf("Error getting scene for delete: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to get scene")
 		return
 	}
 
@@ -311,6 +330,10 @@ func (h *SceneHandler) DeleteScene(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.db.DeleteScene(r.Context(), sceneID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			respondError(w, http.StatusNotFound, "Scene not found")
+			return
+		}
 		log.Printf("Error deleting scene: %v", err)
 		respondError(w, http.StatusInternalServerError, "Failed to delete scene")
 		return
