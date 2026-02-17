@@ -110,14 +110,14 @@ export interface PlayEntitySidebarProps {
  * />
  * ```
  */
-export function PlayEntitySidebar({
-    campaignId: _campaignId,
-    sceneEntityIds,
-    allEntities,
-    onEntitySelect,
-    collapsed,
-    onToggle,
-}: PlayEntitySidebarProps) {
+export function PlayEntitySidebar(props: PlayEntitySidebarProps) {
+    const {
+        sceneEntityIds,
+        allEntities,
+        onEntitySelect,
+        collapsed,
+        onToggle,
+    } = props;
     /**
      * Filter entities to the active scene when scene entity IDs are
      * provided; otherwise show the full campaign entity set.
