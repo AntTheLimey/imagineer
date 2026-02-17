@@ -942,7 +942,7 @@ export default function SessionEditorPage() {
                         {/* Scene/Notes viewer (~40%) */}
                         <Box
                             sx={{
-                                flex: '0 0 40%',
+                                flex: '4 1 0',
                                 overflow: 'auto',
                                 borderRight: 1,
                                 borderColor: 'divider',
@@ -961,7 +961,7 @@ export default function SessionEditorPage() {
                         {/* Entity drawer (~30%) */}
                         <Box
                             sx={{
-                                flex: '0 0 30%',
+                                flex: '3 1 0',
                                 overflow: 'auto',
                                 borderRight: 1,
                                 borderColor: 'divider',
@@ -976,7 +976,7 @@ export default function SessionEditorPage() {
                         {/* Scratchpad (~30%) */}
                         <Box
                             sx={{
-                                flex: '0 0 30%',
+                                flex: '3 1 0',
                                 overflow: 'auto',
                             }}
                         >

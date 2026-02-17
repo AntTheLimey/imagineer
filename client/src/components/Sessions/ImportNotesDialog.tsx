@@ -112,6 +112,9 @@ export function ImportNotesDialog({
                 setContent(text);
             }
         };
+        reader.onerror = () => {
+            console.error('Failed to read file:', reader.error);
+        };
         reader.readAsText(file);
     };
 
