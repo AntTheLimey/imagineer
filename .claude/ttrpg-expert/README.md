@@ -11,6 +11,9 @@ This knowledge base provides:
 - Entity type definitions
 - Relationship modeling patterns
 - RPG terminology across different systems
+- Scene and encounter design patterns
+- During-session active play management
+- System-specific session procedures
 
 ## Documents
 
@@ -21,6 +24,7 @@ Overview of supported game systems:
 - Call of Cthulhu 7th Edition
 - GURPS 4th Edition
 - Forged in the Dark
+- D&D 5th Edition (2024 Revision)
 
 ### [entity-types.md](entity-types.md)
 
@@ -62,6 +66,44 @@ GM session preparation and management:
 - Campaign hierarchies (arcs, adventures, sessions, scenes)
 - Progress clocks and fronts
 - Pre-session and post-session checklists
+
+### [scene-encounter-patterns.md](scene-encounter-patterns.md)
+
+Scene and encounter design patterns:
+
+- Scene types (combat, social, investigation, exploration,
+  downtime, chase, puzzle)
+- Scene framing techniques (cut in late, cliffhangers,
+  transitions)
+- Encounter design principles (situation-based,
+  action-oriented, multi-stage)
+- Node-based scenario design (The Alexandrian)
+- Pacing and spotlight management
+
+### [active-play-management.md](active-play-management.md)
+
+During-session active play management:
+
+- Real-time note-taking and player knowledge tracking
+- Improvisation frameworks (Yes/And, fail forward,
+  improv NPCs)
+- Spotlight management and split party handling
+- Pacing, flow, and reading the table
+- Mid-session difficulty adjustments
+- Player decision and faction reaction tracking
+
+### [system-session-procedures.md](system-session-procedures.md)
+
+System-specific session procedures:
+
+- Call of Cthulhu 7e: node-based investigation, handout
+  design, sanity pacing, NPC interaction patterns
+- D&D 5e: encounter building (2024 XP budgets),
+  action-oriented monsters, exploration, skill challenges
+- GURPS 4e: combat resolution tiers, skill challenge
+  design, character advancement, genre-specific flows
+- Blades in the Dark: score structure, flashback
+  mechanics, clock management, downtime phase
 
 ### [rpg-terminology.md](rpg-terminology.md)
 
@@ -108,4 +150,4 @@ Comprehensive terminology reference:
 | fearful | Fear-based |
 | respectful | Admiration |
 
-Last Updated: 2026-02-02
+Last Updated: 2026-02-10
