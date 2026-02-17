@@ -41,6 +41,8 @@ export interface SaveSplitButtonProps {
     isDirty: boolean;
     /** Whether a save operation is currently in progress. */
     isSaving: boolean;
+    /** Optional default save mode to pre-select instead of "Save & Analyze". */
+    defaultMode?: SaveMode;
 }
 
 /**
@@ -88,9 +90,15 @@ export default function SaveSplitButton({
     onSave,
     isDirty,
     isSaving,
+    defaultMode,
 }: SaveSplitButtonProps) {
     const [open, setOpen] = useState(false);
-    const [selectedIndex, setSelectedIndex] = useState(DEFAULT_SELECTED_INDEX);
+    const initialIndex = defaultMode
+        ? options.findIndex(o => o.mode === defaultMode)
+        : DEFAULT_SELECTED_INDEX;
+    const [selectedIndex, setSelectedIndex] = useState(
+        initialIndex >= 0 ? initialIndex : DEFAULT_SELECTED_INDEX
+    );
     const anchorRef = useRef<HTMLDivElement>(null);
 
     const selectedOption = options[selectedIndex];

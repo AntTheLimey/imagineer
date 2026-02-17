@@ -37,14 +37,27 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import {
+    Edit as EditIcon,
+    Delete as DeleteIcon,
+    Upload as UploadIcon,
+} from '@mui/icons-material';
 import { FullScreenLayout } from '../layouts';
 import { SaveSplitButton } from '../components/SaveSplitButton';
 import type { SaveMode } from '../components/SaveSplitButton';
 import { MarkdownEditor } from '../components/MarkdownEditor';
 import {
+    SceneStrip,
+    SceneViewer,
+    PlayEntityDrawer,
+    PlayScratchpad,
+    PlayEntitySidebar,
+} from '../components/Play';
+import { ImportNotesDialog } from '../components/Sessions';
+import {
     useCampaign,
     useChapters,
+    useEntities,
     useDraft,
     useAutosave,
     useUnsavedChanges,
@@ -52,6 +65,7 @@ import {
 import { useSession, useCreateSession, useUpdateSession } from '../hooks/useSessions';
 import { useScenes, useCreateScene, useUpdateScene, useDeleteScene } from '../hooks/useScenes';
 import type { SessionStage } from '../types';
+import type { Entity } from '../types';
 
 /**
  * Form data structure for session editing.
@@ -240,6 +254,9 @@ export default function SessionEditorPage() {
     const updateScene = useUpdateScene(campaignId ?? 0, sessionId ?? 0);
     const deleteScene = useDeleteScene(campaignId ?? 0, sessionId ?? 0);
 
+    // Fetch entities for Play mode
+    const { data: entities } = useEntities({ campaignId: campaignId ?? 0 });
+
     // Form state
     const [formData, setFormData] = useState<SessionFormData>(DEFAULT_FORM_DATA);
     const [formErrors, setFormErrors] = useState<
@@ -250,6 +267,12 @@ export default function SessionEditorPage() {
     const [addingScene, setAddingScene] = useState(false);
     const [editingSceneId, setEditingSceneId] = useState<number | null>(null);
     const [sceneForm, setSceneForm] = useState({ title: '', sceneType: 'other', description: '' });
+
+    // Play mode state
+    const [activeSceneId, setActiveSceneId] = useState<number | null>(null);
+    const [selectedEntity, setSelectedEntity] = useState<Entity | null>(null);
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+    const [importDialogOpen, setImportDialogOpen] = useState(false);
 
     // Draft management
     const { getDraft, deleteDraft } = useDraft();
@@ -271,6 +294,25 @@ export default function SessionEditorPage() {
         key: draftKey,
         enabled: isDirty,
     });
+
+    // Play mode derived values
+    const activeScene = useMemo(
+        () => scenes?.find((s) => s.id === activeSceneId) ?? null,
+        [scenes, activeSceneId]
+    );
+    const playMode: 'scene' | 'notes' | 'mixed' = !scenes?.length
+        ? 'notes'
+        : activeSceneId
+            ? 'scene'
+            : 'mixed';
+
+    // Auto-select first active scene when entering Play
+    useEffect(() => {
+        if (formData.stage === 'play' && scenes?.length && !activeSceneId) {
+            const first = scenes.find((s) => s.status === 'active');
+            setActiveSceneId(first?.id ?? scenes[0].id);
+        }
+    }, [formData.stage, scenes, activeSceneId]);
 
     // Mutations
     const createSession = useCreateSession();
@@ -438,6 +480,54 @@ export default function SessionEditorPage() {
     ]);
 
     /**
+     * Cycle a scene's status: planned -> active -> completed -> skipped -> planned.
+     */
+    const handleSceneStatusChange = useCallback(
+        async (id: number, status: string) => {
+            const cycle: Record<string, string> = {
+                planned: 'active',
+                active: 'completed',
+                completed: 'skipped',
+                skipped: 'planned',
+            };
+            const next = cycle[status] ?? 'planned';
+            await updateScene.mutateAsync({ sceneId: id, input: { status: next } });
+        },
+        [updateScene]
+    );
+
+    /**
+     * Handle entity selection from wiki links, chips, or sidebar.
+     */
+    const handleEntitySelect = useCallback(
+        (entityOrId: Entity | number) => {
+            if (typeof entityOrId === 'number') {
+                const entity = entities?.find((e) => e.id === entityOrId);
+                setSelectedEntity(entity ?? null);
+            } else {
+                setSelectedEntity(entityOrId);
+            }
+        },
+        [entities]
+    );
+
+    /**
+     * Import notes into actualNotes field.
+     */
+    const handleImportNotes = useCallback(
+        (content: string, mode: 'append' | 'replace') => {
+            if (mode === 'replace') {
+                updateField('actualNotes', content);
+            } else {
+                const separator = formData.actualNotes ? '\n\n---\n**Imported notes:**\n' : '';
+                updateField('actualNotes', formData.actualNotes + separator + content);
+            }
+            setImportDialogOpen(false);
+        },
+        [formData.actualNotes, updateField]
+    );
+
+    /**
      * Handle back navigation with unsaved changes check.
      */
     const handleBack = useCallback(() => {
@@ -588,11 +678,24 @@ export default function SessionEditorPage() {
             isSaving={isSaving}
             onBack={handleBack}
             subtitle={lastSaved ? `Auto-saved ${formatRelativeTime(lastSaved)}` : undefined}
+            actions={
+                formData.stage === 'play' ? (
+                    <Button
+                        startIcon={<UploadIcon />}
+                        variant="outlined"
+                        size="small"
+                        onClick={() => setImportDialogOpen(true)}
+                    >
+                        Import Notes
+                    </Button>
+                ) : undefined
+            }
             renderSaveButtons={() => (
                 <SaveSplitButton
                     onSave={handleSave}
                     isDirty={isDirty}
                     isSaving={isSaving}
+                    defaultMode={formData.stage === 'play' ? 'save' : undefined}
                 />
             )}
         >
@@ -796,17 +899,109 @@ export default function SessionEditorPage() {
                         </Paper>
                     </Box>
                 </Box>
+            ) : formData.stage === 'play' ? (
+                /* Play mode layout */
+                <Box
+                    sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        height: 'calc(100vh - 64px - 48px)',
+                        overflow: 'hidden',
+                        mx: -3,
+                        mt: -3,
+                        mb: -3,
+                    }}
+                >
+                    {/* Scene strip */}
+                    {scenes && scenes.length > 0 && (
+                        <SceneStrip
+                            scenes={scenes}
+                            activeSceneId={activeSceneId}
+                            onSceneSelect={setActiveSceneId}
+                            onSceneStatusChange={handleSceneStatusChange}
+                            onAddScene={handleAddScene}
+                        />
+                    )}
+
+                    {/* Main panels */}
+                    <Box sx={{ display: 'flex', flexGrow: 1, overflow: 'hidden' }}>
+                        {/* Entity sidebar */}
+                        <PlayEntitySidebar
+                            campaignId={campaignId ?? 0}
+                            sceneEntityIds={activeScene?.entityIds ?? []}
+                            allEntities={entities ?? []}
+                            onEntitySelect={handleEntitySelect}
+                            collapsed={sidebarCollapsed}
+                            onToggle={() => setSidebarCollapsed((prev) => !prev)}
+                        />
+
+                        {/* Scene/Notes viewer (~40%) */}
+                        <Box
+                            sx={{
+                                flex: '0 0 40%',
+                                overflow: 'auto',
+                                borderRight: 1,
+                                borderColor: 'divider',
+                            }}
+                        >
+                            <SceneViewer
+                                scene={activeScene}
+                                prepNotes={formData.prepNotes}
+                                mode={playMode}
+                                campaignId={campaignId ?? 0}
+                                onEntityClick={handleEntitySelect}
+                                entities={entities ?? []}
+                            />
+                        </Box>
+
+                        {/* Entity drawer (~30%) */}
+                        <Box
+                            sx={{
+                                flex: '0 0 30%',
+                                overflow: 'auto',
+                                borderRight: 1,
+                                borderColor: 'divider',
+                            }}
+                        >
+                            <PlayEntityDrawer
+                                entity={selectedEntity}
+                                campaignId={campaignId ?? 0}
+                            />
+                        </Box>
+
+                        {/* Scratchpad (~30%) */}
+                        <Box
+                            sx={{
+                                flex: '0 0 30%',
+                                overflow: 'auto',
+                            }}
+                        >
+                            <PlayScratchpad
+                                value={formData.playNotes}
+                                onChange={(value) => updateField('playNotes', value)}
+                                lastSaved={lastSaved}
+                            />
+                        </Box>
+                    </Box>
+                </Box>
             ) : (
-                /* Non-prep stage placeholder */
+                /* Wrap-up / Completed stage placeholder */
                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 8 }}>
                     <Typography variant="h6" color="text.secondary" gutterBottom>
                         {stageTabs.find((t) => t.value === formData.stage)?.label} Stage
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                        Coming in Phase 2
+                        Coming in Phase 3
                     </Typography>
                 </Box>
             )}
+
+            {/* Import Notes dialog */}
+            <ImportNotesDialog
+                open={importDialogOpen}
+                onClose={() => setImportDialogOpen(false)}
+                onImport={handleImportNotes}
+            />
 
             {/* Analysis results snackbar */}
             <Snackbar
