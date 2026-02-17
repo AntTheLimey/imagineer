@@ -93,10 +93,10 @@ CREATE INDEX idx_session_chat_campaign ON session_chat_messages(campaign_id);
 -- Replaced by scenes table and other structures
 -- ============================================
 ALTER TABLE sessions
-    DROP COLUMN planned_scenes,
-    DROP COLUMN discoveries,
-    DROP COLUMN player_decisions,
-    DROP COLUMN consequences;
+    DROP COLUMN IF EXISTS planned_scenes,
+    DROP COLUMN IF EXISTS discoveries,
+    DROP COLUMN IF EXISTS player_decisions,
+    DROP COLUMN IF EXISTS consequences;
 
 -- ============================================
 -- Vectorization Setup (Conditional)

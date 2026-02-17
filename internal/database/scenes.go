@@ -13,6 +13,7 @@ package database
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/antonypegg/imagineer/internal/models"
@@ -103,6 +104,8 @@ func (db *DB) ListScenesBySession(ctx context.Context, sessionID int64) ([]model
 }
 
 // GetScene retrieves a scene by ID.
+// Returns pgx.ErrNoRows (unwrapped) when the scene does not exist so
+// callers can distinguish 404 from 500 with errors.Is().
 func (db *DB) GetScene(ctx context.Context, id int64) (*models.Scene, error) {
 	query := fmt.Sprintf(`
 		SELECT %s
@@ -111,6 +114,9 @@ func (db *DB) GetScene(ctx context.Context, id int64) (*models.Scene, error) {
 
 	s, err := scanScene(db.QueryRow(ctx, query, id))
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, pgx.ErrNoRows
+		}
 		return nil, fmt.Errorf("failed to get scene: %w", err)
 	}
 
@@ -217,11 +223,28 @@ func (db *DB) CreateScene(ctx context.Context, sessionID, campaignID int64, req 
 }
 
 // UpdateScene updates an existing scene.
+// The entire read-modify-write is wrapped in a transaction with
+// SELECT ... FOR UPDATE to prevent concurrent lost updates.
 func (db *DB) UpdateScene(ctx context.Context, id int64, req models.UpdateSceneRequest) (*models.Scene, error) {
-	// First get the existing scene
-	existing, err := db.GetScene(ctx, id)
+	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	// Fetch the existing scene inside the transaction with a row lock.
+	selectQuery := fmt.Sprintf(`
+		SELECT %s
+		FROM scenes
+		WHERE id = $1
+		FOR UPDATE`, sceneColumns)
+
+	existing, err := scanScene(tx.QueryRow(ctx, selectQuery, id))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, pgx.ErrNoRows
+		}
+		return nil, fmt.Errorf("failed to get scene for update: %w", err)
 	}
 
 	// Apply updates - for pointer fields, nil means "no change"
@@ -288,7 +311,7 @@ func (db *DB) UpdateScene(ctx context.Context, id int64, req models.UpdateSceneR
 		connections = req.Connections
 	}
 
-	query := fmt.Sprintf(`
+	updateQuery := fmt.Sprintf(`
 		UPDATE scenes
 		SET title = $2, description = $3, scene_type = $4, status = $5,
 			sort_order = $6, objective = $7, gm_notes = $8,
@@ -297,7 +320,7 @@ func (db *DB) UpdateScene(ctx context.Context, id int64, req models.UpdateSceneR
 		WHERE id = $1
 		RETURNING %s`, sceneColumns)
 
-	s, err := scanScene(db.QueryRow(ctx, query,
+	s, err := scanScene(tx.QueryRow(ctx, updateQuery,
 		id, title, description, sceneType, status,
 		sortOrder, objective, gmNotes,
 		pq.Array(entityIDs), systemData, source,
@@ -305,6 +328,10 @@ func (db *DB) UpdateScene(ctx context.Context, id int64, req models.UpdateSceneR
 	))
 	if err != nil {
 		return nil, fmt.Errorf("failed to update scene: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return s, nil
