@@ -153,7 +153,6 @@ export function SceneStrip({
                             p: 1,
                             border: isActive ? 2 : 1,
                             borderColor: isActive ? 'primary.main' : 'divider',
-                            elevation: isActive ? 2 : 0,
                             boxShadow: isActive ? 2 : 0,
                             transition: 'all 0.15s ease-in-out',
                             '&:hover': {

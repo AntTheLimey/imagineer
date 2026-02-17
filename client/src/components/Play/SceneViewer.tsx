@@ -41,8 +41,6 @@ export interface SceneViewerProps {
     prepNotes: string;
     /** Display mode controlling which content is shown. */
     mode: 'scene' | 'notes' | 'mixed';
-    /** The campaign ID (used for context). */
-    campaignId: number;
     /** Callback fired when an entity chip or wiki link is clicked. */
     onEntityClick: (entityId: number) => void;
     /** All entities available for wiki-link matching and chip display. */

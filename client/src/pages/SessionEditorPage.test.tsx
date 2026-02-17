@@ -210,10 +210,12 @@ import SessionEditorPage from './SessionEditorPage';
 import { useSession } from '../hooks/useSessions';
 import { useScenes } from '../hooks/useScenes';
 import { FullScreenLayout } from '../layouts';
+import { PlayScratchpad } from '../components/Play';
 
 const mockUseSession = vi.mocked(useSession);
 const mockUseScenes = vi.mocked(useScenes);
 const mockFullScreenLayout = vi.mocked(FullScreenLayout);
+const mockPlayScratchpad = vi.mocked(PlayScratchpad);
 
 // ---------------------------------------------------------------------------
 // Shared test fixtures
@@ -496,6 +498,8 @@ describe('SessionEditorPage', () => {
         expect(screen.queryByLabelText('Title')).not.toBeInTheDocument();
         // Play mode renders (mocked components render null, but placeholder is gone)
         expect(screen.queryByText('Coming in Phase 2')).not.toBeInTheDocument();
+        // Positive: verify Play components were rendered
+        expect(mockPlayScratchpad).toHaveBeenCalled();
     });
 
     it('shows placeholder for Wrap-up tab', async () => {

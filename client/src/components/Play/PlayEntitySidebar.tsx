@@ -76,8 +76,6 @@ const TYPE_ORDER: EntityType[] = [
  * Props for the PlayEntitySidebar component.
  */
 export interface PlayEntitySidebarProps {
-    /** The campaign these entities belong to. */
-    campaignId: number;
     /** Entity IDs associated with the active scene; empty means show all. */
     sceneEntityIds: number[];
     /** The full set of entities available in the campaign. */
@@ -101,7 +99,6 @@ export interface PlayEntitySidebarProps {
  * @example
  * ```tsx
  * <PlayEntitySidebar
- *     campaignId={1}
  *     sceneEntityIds={[10, 20, 30]}
  *     allEntities={entities}
  *     onEntitySelect={(e) => openEntityDetail(e)}
@@ -124,7 +121,8 @@ export function PlayEntitySidebar(props: PlayEntitySidebarProps) {
      */
     const filteredEntities = useMemo(() => {
         if (sceneEntityIds.length > 0) {
-            return allEntities.filter(e => sceneEntityIds.includes(e.id));
+            const idSet = new Set(sceneEntityIds);
+            return allEntities.filter(e => idSet.has(e.id));
         }
         return allEntities;
     }, [allEntities, sceneEntityIds]);

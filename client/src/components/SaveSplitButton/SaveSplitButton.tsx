@@ -7,7 +7,7 @@
 //
 // -------------------------------------------------------------------------
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
     Button,
     ButtonGroup,
@@ -99,6 +99,12 @@ export default function SaveSplitButton({
     const [selectedIndex, setSelectedIndex] = useState(
         initialIndex >= 0 ? initialIndex : DEFAULT_SELECTED_INDEX
     );
+    useEffect(() => {
+        const targetIndex = defaultMode
+            ? options.findIndex(o => o.mode === defaultMode)
+            : DEFAULT_SELECTED_INDEX;
+        setSelectedIndex(targetIndex >= 0 ? targetIndex : DEFAULT_SELECTED_INDEX);
+    }, [defaultMode]);
     const anchorRef = useRef<HTMLDivElement>(null);
 
     const selectedOption = options[selectedIndex];

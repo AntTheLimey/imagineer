@@ -308,7 +308,7 @@ export default function SessionEditorPage() {
         ? 'notes'
         : activeSceneId
             ? 'scene'
-            : 'mixed';
+            : 'notes';
 
     /** Auto-select the first active scene (or first scene) when entering Play. */
     useEffect(() => {
@@ -495,7 +495,11 @@ export default function SessionEditorPage() {
                 skipped: 'planned',
             };
             const next = cycle[status] ?? 'planned';
-            await updateScene.mutateAsync({ sceneId: id, input: { status: next } });
+            try {
+                await updateScene.mutateAsync({ sceneId: id, input: { status: next } });
+            } catch (error) {
+                console.error('Failed to update scene status:', error);
+            }
         },
         [updateScene]
     );
@@ -923,7 +927,7 @@ export default function SessionEditorPage() {
                             activeSceneId={activeSceneId}
                             onSceneSelect={setActiveSceneId}
                             onSceneStatusChange={handleSceneStatusChange}
-                            onAddScene={handleAddScene}
+                            onAddScene={() => {}}
                         />
                     )}
 
@@ -931,7 +935,6 @@ export default function SessionEditorPage() {
                     <Box sx={{ display: 'flex', flexGrow: 1, overflow: 'hidden' }}>
                         {/* Entity sidebar */}
                         <PlayEntitySidebar
-                            campaignId={campaignId ?? 0}
                             sceneEntityIds={activeScene?.entityIds ?? []}
                             allEntities={entities ?? []}
                             onEntitySelect={handleEntitySelect}
@@ -952,7 +955,6 @@ export default function SessionEditorPage() {
                                 scene={activeScene}
                                 prepNotes={formData.prepNotes}
                                 mode={playMode}
-                                campaignId={campaignId ?? 0}
                                 onEntityClick={handleEntitySelect}
                                 entities={entities ?? []}
                             />
@@ -1001,11 +1003,13 @@ export default function SessionEditorPage() {
             )}
 
             {/* Import Notes dialog */}
-            <ImportNotesDialog
-                open={importDialogOpen}
-                onClose={() => setImportDialogOpen(false)}
-                onImport={handleImportNotes}
-            />
+            {formData.stage === 'play' && (
+                <ImportNotesDialog
+                    open={importDialogOpen}
+                    onClose={() => setImportDialogOpen(false)}
+                    onImport={handleImportNotes}
+                />
+            )}
 
             {/* Analysis results snackbar */}
             <Snackbar
