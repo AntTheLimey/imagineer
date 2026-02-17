@@ -53,6 +53,11 @@ vi.mock('../hooks', () => ({
         isLoading: false,
         error: null,
     })),
+    useEntities: vi.fn(() => ({
+        data: [],
+        isLoading: false,
+        error: null,
+    })),
     useChapters: vi.fn(() => ({
         data: [
             {
@@ -183,6 +188,20 @@ vi.mock('../layouts', () => ({
     default: vi.fn(() => null),
 }));
 
+// Stub Play components: render nothing in tests.
+vi.mock('../components/Play', () => ({
+    SceneStrip: vi.fn(() => null),
+    SceneViewer: vi.fn(() => null),
+    PlayEntityDrawer: vi.fn(() => null),
+    PlayScratchpad: vi.fn(() => null),
+    PlayEntitySidebar: vi.fn(() => null),
+}));
+
+// Stub ImportNotesDialog: render nothing in tests.
+vi.mock('../components/Sessions', () => ({
+    ImportNotesDialog: vi.fn(() => null),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports after mocks
 // ---------------------------------------------------------------------------
@@ -191,10 +210,12 @@ import SessionEditorPage from './SessionEditorPage';
 import { useSession } from '../hooks/useSessions';
 import { useScenes } from '../hooks/useScenes';
 import { FullScreenLayout } from '../layouts';
+import { PlayScratchpad } from '../components/Play';
 
 const mockUseSession = vi.mocked(useSession);
 const mockUseScenes = vi.mocked(useScenes);
 const mockFullScreenLayout = vi.mocked(FullScreenLayout);
+const mockPlayScratchpad = vi.mocked(PlayScratchpad);
 
 // ---------------------------------------------------------------------------
 // Shared test fixtures
@@ -467,14 +488,18 @@ describe('SessionEditorPage', () => {
         expect(screen.getByText('Prep Notes')).toBeInTheDocument();
     });
 
-    it('shows placeholder when switching to Play tab', async () => {
+    it('shows Play mode layout when switching to Play tab', async () => {
         renderCreateMode();
 
         const user = userEvent.setup();
         await user.click(screen.getByRole('tab', { name: 'Play' }));
 
-        expect(screen.getByText('Play Stage')).toBeInTheDocument();
-        expect(screen.getByText('Coming in Phase 2')).toBeInTheDocument();
+        // Prep form should not be visible
+        expect(screen.queryByLabelText('Title')).not.toBeInTheDocument();
+        // Play mode renders (mocked components render null, but placeholder is gone)
+        expect(screen.queryByText('Coming in Phase 2')).not.toBeInTheDocument();
+        // Positive: verify Play components were rendered
+        expect(mockPlayScratchpad).toHaveBeenCalled();
     });
 
     it('shows placeholder for Wrap-up tab', async () => {
@@ -484,7 +509,7 @@ describe('SessionEditorPage', () => {
         await user.click(screen.getByRole('tab', { name: 'Wrap-up' }));
 
         expect(screen.getByText('Wrap-up Stage')).toBeInTheDocument();
-        expect(screen.getByText('Coming in Phase 2')).toBeInTheDocument();
+        expect(screen.getByText('Coming in Phase 3')).toBeInTheDocument();
     });
 
     it('shows placeholder for Completed tab', async () => {
@@ -498,7 +523,7 @@ describe('SessionEditorPage', () => {
         expect(
             screen.getByText('Completed Stage')
         ).toBeInTheDocument();
-        expect(screen.getByText('Coming in Phase 2')).toBeInTheDocument();
+        expect(screen.getByText('Coming in Phase 3')).toBeInTheDocument();
     });
 
     // -----------------------------------------------------------------

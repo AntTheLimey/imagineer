@@ -21,3 +21,6 @@ export type { SessionEditorProps } from './SessionEditor';
 
 export { default as SessionStageIndicator } from './SessionStageIndicator';
 export type { SessionStageIndicatorProps } from './SessionStageIndicator';
+
+export { default as ImportNotesDialog } from './ImportNotesDialog';
+export type { ImportNotesDialogProps } from './ImportNotesDialog';
