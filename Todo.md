@@ -49,10 +49,11 @@ beyond simple text editing.
 
 #### Session Play
 
-- [ ] `[MVP-1]` Session Play screen layout with prep note
-  traversal, AI chat assistant panel, and dynamic entity lists.
-- [ ] `[MVP-1]` Play mode navigation to traverse prep events
-  and encounters linearly.
+- [x] `[MVP-1]` Session Play screen layout with scene strip,
+  scene/notes viewer, entity drawer, scratchpad,
+  collapsible entity sidebar, and import notes dialog.
+- [x] `[MVP-1]` Play mode navigation via SceneStrip with
+  status cycling and scene selection.
 - [ ] `[MVP-1]` AI Play Assistant chat for on-the-fly help,
   reactions, side content, and rules questions.
 - [ ] `[MVP-1]` Real-time entity extraction from chat
@@ -323,6 +324,22 @@ Features planned for after the initial release.
 - [x] SessionsManagement navigation to full-screen editor.
 - [x] Chapter editor import button.
 - [x] 28 SessionEditorPage tests.
+
+### Session Workflows Phase 2 — Play Mode
+
+- [x] SceneStrip horizontal scene navigation with status
+  cycling and scene type icons.
+- [x] SceneViewer read-only panel with scene, notes, and
+  mixed display modes.
+- [x] PlayEntityDrawer for entity reference during play.
+- [x] PlayScratchpad auto-saving free-form textarea.
+- [x] PlayEntitySidebar collapsible entity browser with
+  type grouping.
+- [x] ImportNotesDialog for paste and file upload with
+  append/replace.
+- [x] SaveSplitButton defaultMode prop for Play mode.
+- [x] Full Play mode integration in SessionEditorPage.
+- [x] Updated tests for Play mode changes.
 
 ### Account Settings
 

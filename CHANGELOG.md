@@ -31,6 +31,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - 28 SessionEditorPage tests covering create and edit modes,
     stage tabs, scene sidebar, breadcrumbs, and user
     interaction.
+- Session Workflows Phase 2 — Play Mode
+  - Multi-panel Play mode layout replacing the Phase 2
+    placeholder: SceneStrip, SceneViewer,
+    PlayEntityDrawer, PlayScratchpad,
+    PlayEntitySidebar, and ImportNotesDialog.
+  - SceneStrip provides horizontal scene navigation with
+    status cycling (planned, active, completed, skipped)
+    and scene type icons.
+  - SceneViewer displays active scene content and prep
+    notes in three modes (scene, notes, mixed) with
+    wiki-link entity navigation.
+  - PlayEntityDrawer shows read-only entity details with
+    full description, GM notes, and relationships.
+  - PlayScratchpad provides a free-form auto-saving
+    textarea for in-game tracking (HP, initiative,
+    conditions, loot).
+  - PlayEntitySidebar collapses between a 40px icon
+    strip with badge counts and a 220px grouped entity
+    list.
+  - ImportNotesDialog supports importing notes via paste
+    or .txt/.md file upload with append/replace modes.
+  - SaveSplitButton gains a defaultMode prop so Play
+    mode defaults to plain Save (no analysis on
+    scratchpad saves).
+  - Wrap-up and Completed stage placeholders updated
+    from "Coming in Phase 2" to "Coming in Phase 3".
 - Save Options (SaveSplitButton)
   - SaveSplitButton component offering three save modes: Save,
     Save & Analyze, and Save, Analyze & Enrich.
