@@ -22,13 +22,20 @@ import {
     AlertTitle,
     Box,
     Button,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    FormControlLabel,
     Link as MuiLink,
     Paper,
     Skeleton,
     Snackbar,
+    Switch,
     TextField,
     Typography,
 } from '@mui/material';
+import { Upload as UploadIcon } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import { FullScreenLayout } from '../layouts';
 import { SaveSplitButton } from '../components/SaveSplitButton';
@@ -187,6 +194,11 @@ export default function ChapterEditorPage() {
         message?: string;
     }>({ open: false, jobId: 0, count: 0 });
 
+    // Import dialog state
+    const [importDialogOpen, setImportDialogOpen] = useState(false);
+    const [importContent, setImportContent] = useState('');
+    const [importMode, setImportMode] = useState<'append' | 'replace'>('append');
+
     // Calculate next sort order for new chapters
     const nextSortOrder = useMemo(() => {
         if (!chapters || chapters.length === 0) return 0;
@@ -261,6 +273,26 @@ export default function ChapterEditorPage() {
         },
         [setIsDirty]
     );
+
+    /**
+     * Handle importing content into the chapter overview.
+     */
+    const handleImport = useCallback(() => {
+        if (!importContent.trim()) return;
+
+        if (importMode === 'replace') {
+            updateField('overview', importContent);
+        } else {
+            const current = formData.overview;
+            const newContent = current
+                ? `${current}\n\n${importContent}`
+                : importContent;
+            updateField('overview', newContent);
+        }
+
+        setImportContent('');
+        setImportDialogOpen(false);
+    }, [importContent, importMode, formData.overview, updateField]);
 
     /**
      * Validate the form.
@@ -532,6 +564,16 @@ export default function ChapterEditorPage() {
             isSaving={isSaving}
             onBack={handleBack}
             subtitle={lastSaved ? `Auto-saved ${formatRelativeTime(lastSaved)}` : undefined}
+            actions={
+                <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<UploadIcon />}
+                    onClick={() => setImportDialogOpen(true)}
+                >
+                    Import
+                </Button>
+            }
             renderSaveButtons={() => (
                 <SaveSplitButton
                     onSave={handleSave}
@@ -731,6 +773,52 @@ export default function ChapterEditorPage() {
                     </Paper>
                 </Box>
             </Box>
+
+            {/* Import dialog */}
+            <Dialog
+                open={importDialogOpen}
+                onClose={() => setImportDialogOpen(false)}
+                maxWidth="md"
+                fullWidth
+            >
+                <DialogTitle>Import Content</DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        Paste content below to import it into the chapter overview.
+                    </Typography>
+                    <TextField
+                        fullWidth
+                        multiline
+                        minRows={10}
+                        maxRows={20}
+                        value={importContent}
+                        onChange={(e) => setImportContent(e.target.value)}
+                        placeholder="Paste your content here..."
+                        sx={{ mb: 2 }}
+                    />
+                    <FormControlLabel
+                        control={
+                            <Switch
+                                checked={importMode === 'replace'}
+                                onChange={(e) =>
+                                    setImportMode(e.target.checked ? 'replace' : 'append')
+                                }
+                            />
+                        }
+                        label="Replace existing content (default: append)"
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setImportDialogOpen(false)}>Cancel</Button>
+                    <Button
+                        variant="contained"
+                        onClick={handleImport}
+                        disabled={!importContent.trim()}
+                    >
+                        Import
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
             {/* Analysis results snackbar */}
             <Snackbar

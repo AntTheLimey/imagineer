@@ -12,7 +12,6 @@ package database
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/antonypegg/imagineer/internal/models"
@@ -22,8 +21,7 @@ import (
 func (db *DB) ListSessionsByCampaign(ctx context.Context, campaignID int64) ([]models.Session, error) {
 	query := `
         SELECT id, campaign_id, chapter_id, title, session_number, planned_date, actual_date,
-               status, stage, prep_notes, planned_scenes, actual_notes, discoveries,
-               player_decisions, consequences, created_at, updated_at
+               status, stage, prep_notes, actual_notes, play_notes, created_at, updated_at
         FROM sessions
         WHERE campaign_id = $1
         ORDER BY session_number ASC NULLS LAST, created_at ASC`
@@ -40,8 +38,7 @@ func (db *DB) ListSessionsByCampaign(ctx context.Context, campaignID int64) ([]m
 		var stage *string
 		err := rows.Scan(
 			&s.ID, &s.CampaignID, &s.ChapterID, &s.Title, &s.SessionNumber, &s.PlannedDate, &s.ActualDate,
-			&s.Status, &stage, &s.PrepNotes, &s.PlannedScenes, &s.ActualNotes, &s.Discoveries,
-			&s.PlayerDecisions, &s.Consequences, &s.CreatedAt, &s.UpdatedAt,
+			&s.Status, &stage, &s.PrepNotes, &s.ActualNotes, &s.PlayNotes, &s.CreatedAt, &s.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan session: %w", err)
@@ -63,8 +60,7 @@ func (db *DB) ListSessionsByCampaign(ctx context.Context, campaignID int64) ([]m
 func (db *DB) ListSessionsByChapter(ctx context.Context, chapterID int64) ([]models.Session, error) {
 	query := `
         SELECT id, campaign_id, chapter_id, title, session_number, planned_date, actual_date,
-               status, stage, prep_notes, planned_scenes, actual_notes, discoveries,
-               player_decisions, consequences, created_at, updated_at
+               status, stage, prep_notes, actual_notes, play_notes, created_at, updated_at
         FROM sessions
         WHERE chapter_id = $1
         ORDER BY session_number ASC NULLS LAST, created_at ASC`
@@ -81,8 +77,7 @@ func (db *DB) ListSessionsByChapter(ctx context.Context, chapterID int64) ([]mod
 		var stage *string
 		err := rows.Scan(
 			&s.ID, &s.CampaignID, &s.ChapterID, &s.Title, &s.SessionNumber, &s.PlannedDate, &s.ActualDate,
-			&s.Status, &stage, &s.PrepNotes, &s.PlannedScenes, &s.ActualNotes, &s.Discoveries,
-			&s.PlayerDecisions, &s.Consequences, &s.CreatedAt, &s.UpdatedAt,
+			&s.Status, &stage, &s.PrepNotes, &s.ActualNotes, &s.PlayNotes, &s.CreatedAt, &s.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan session: %w", err)
@@ -104,8 +99,7 @@ func (db *DB) ListSessionsByChapter(ctx context.Context, chapterID int64) ([]mod
 func (db *DB) GetSession(ctx context.Context, id int64) (*models.Session, error) {
 	query := `
         SELECT id, campaign_id, chapter_id, title, session_number, planned_date, actual_date,
-               status, stage, prep_notes, planned_scenes, actual_notes, discoveries,
-               player_decisions, consequences, created_at, updated_at
+               status, stage, prep_notes, actual_notes, play_notes, created_at, updated_at
         FROM sessions
         WHERE id = $1`
 
@@ -113,8 +107,7 @@ func (db *DB) GetSession(ctx context.Context, id int64) (*models.Session, error)
 	var stage *string
 	err := db.QueryRow(ctx, query, id).Scan(
 		&s.ID, &s.CampaignID, &s.ChapterID, &s.Title, &s.SessionNumber, &s.PlannedDate, &s.ActualDate,
-		&s.Status, &stage, &s.PrepNotes, &s.PlannedScenes, &s.ActualNotes, &s.Discoveries,
-		&s.PlayerDecisions, &s.Consequences, &s.CreatedAt, &s.UpdatedAt,
+		&s.Status, &stage, &s.PrepNotes, &s.ActualNotes, &s.PlayNotes, &s.CreatedAt, &s.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get session: %w", err)
@@ -137,27 +130,19 @@ func (db *DB) CreateSession(ctx context.Context, campaignID int64, req models.Cr
 		stage = *req.Stage
 	}
 
-	// Handle plannedScenes - default to empty array
-	plannedScenes := req.PlannedScenes
-	if plannedScenes == nil {
-		plannedScenes = json.RawMessage("[]")
-	}
-
 	query := `
         INSERT INTO sessions (campaign_id, chapter_id, title, session_number, planned_date,
-                              status, stage, prep_notes, planned_scenes)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                              status, stage, prep_notes)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING id, campaign_id, chapter_id, title, session_number, planned_date, actual_date,
-                  status, stage, prep_notes, planned_scenes, actual_notes, discoveries,
-                  player_decisions, consequences, created_at, updated_at`
+                  status, stage, prep_notes, actual_notes, play_notes, created_at, updated_at`
 
 	var s models.Session
 	var retStage *string
 	err := db.QueryRow(ctx, query, campaignID, req.ChapterID, req.Title, req.SessionNumber,
-		req.PlannedDate, status, stage, req.PrepNotes, plannedScenes).Scan(
+		req.PlannedDate, status, stage, req.PrepNotes).Scan(
 		&s.ID, &s.CampaignID, &s.ChapterID, &s.Title, &s.SessionNumber, &s.PlannedDate, &s.ActualDate,
-		&s.Status, &retStage, &s.PrepNotes, &s.PlannedScenes, &s.ActualNotes, &s.Discoveries,
-		&s.PlayerDecisions, &s.Consequences, &s.CreatedAt, &s.UpdatedAt,
+		&s.Status, &retStage, &s.PrepNotes, &s.ActualNotes, &s.PlayNotes, &s.CreatedAt, &s.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
@@ -218,50 +203,31 @@ func (db *DB) UpdateSession(ctx context.Context, id int64, req models.UpdateSess
 		prepNotes = req.PrepNotes
 	}
 
-	plannedScenes := existing.PlannedScenes
-	if req.PlannedScenes != nil {
-		plannedScenes = req.PlannedScenes
-	}
-
 	actualNotes := existing.ActualNotes
 	if req.ActualNotes != nil {
 		actualNotes = req.ActualNotes
 	}
 
-	discoveries := existing.Discoveries
-	if req.Discoveries != nil {
-		discoveries = req.Discoveries
-	}
-
-	playerDecisions := existing.PlayerDecisions
-	if req.PlayerDecisions != nil {
-		playerDecisions = req.PlayerDecisions
-	}
-
-	consequences := existing.Consequences
-	if req.Consequences != nil {
-		consequences = req.Consequences
+	playNotes := existing.PlayNotes
+	if req.PlayNotes != nil {
+		playNotes = req.PlayNotes
 	}
 
 	query := `
         UPDATE sessions
         SET chapter_id = $2, title = $3, session_number = $4, planned_date = $5,
             actual_date = $6, status = $7, stage = $8, prep_notes = $9,
-            planned_scenes = $10, actual_notes = $11, discoveries = $12,
-            player_decisions = $13, consequences = $14, updated_at = NOW()
+            actual_notes = $10, play_notes = $11, updated_at = NOW()
         WHERE id = $1
         RETURNING id, campaign_id, chapter_id, title, session_number, planned_date, actual_date,
-                  status, stage, prep_notes, planned_scenes, actual_notes, discoveries,
-                  player_decisions, consequences, created_at, updated_at`
+                  status, stage, prep_notes, actual_notes, play_notes, created_at, updated_at`
 
 	var s models.Session
 	var retStage *string
 	err = db.QueryRow(ctx, query, id, chapterID, title, sessionNumber, plannedDate,
-		actualDate, status, stage, prepNotes, plannedScenes, actualNotes, discoveries,
-		playerDecisions, consequences).Scan(
+		actualDate, status, stage, prepNotes, actualNotes, playNotes).Scan(
 		&s.ID, &s.CampaignID, &s.ChapterID, &s.Title, &s.SessionNumber, &s.PlannedDate, &s.ActualDate,
-		&s.Status, &retStage, &s.PrepNotes, &s.PlannedScenes, &s.ActualNotes, &s.Discoveries,
-		&s.PlayerDecisions, &s.Consequences, &s.CreatedAt, &s.UpdatedAt,
+		&s.Status, &retStage, &s.PrepNotes, &s.ActualNotes, &s.PlayNotes, &s.CreatedAt, &s.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update session: %w", err)

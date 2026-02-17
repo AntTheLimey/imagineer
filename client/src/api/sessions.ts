@@ -32,7 +32,6 @@ export interface CreateSessionInput {
     plannedDate?: string;
     stage?: SessionStage;
     prepNotes?: string;
-    plannedScenes?: unknown[];
 }
 
 /**
@@ -47,11 +46,8 @@ export interface UpdateSessionInput {
     status?: SessionStatus;
     stage?: SessionStage;
     prepNotes?: string;
-    plannedScenes?: unknown[];
     actualNotes?: string;
-    discoveries?: Array<{ entityId: number; howDiscovered: string }>;
-    playerDecisions?: unknown[];
-    consequences?: unknown[];
+    playNotes?: string;
 }
 
 /**

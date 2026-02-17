@@ -238,30 +238,28 @@ const (
 type SessionStage string
 
 const (
-	SessionStagePrep   SessionStage = "prep"
-	SessionStagePlay   SessionStage = "play"
-	SessionStageWrapUp SessionStage = "wrap_up"
+	SessionStagePrep      SessionStage = "prep"
+	SessionStagePlay      SessionStage = "play"
+	SessionStageWrapUp    SessionStage = "wrap_up"
+	SessionStageCompleted SessionStage = "completed"
 )
 
 // Session represents a game session within a campaign.
 type Session struct {
-	ID              int64           `json:"id"`
-	CampaignID      int64           `json:"campaignId"`
-	ChapterID       *int64          `json:"chapterId,omitempty"`
-	Title           *string         `json:"title,omitempty"`
-	SessionNumber   *int            `json:"sessionNumber,omitempty"`
-	PlannedDate     *time.Time      `json:"plannedDate,omitempty"`
-	ActualDate      *time.Time      `json:"actualDate,omitempty"`
-	Status          SessionStatus   `json:"status"`
-	Stage           SessionStage    `json:"stage"`
-	PrepNotes       *string         `json:"prepNotes,omitempty"`
-	PlannedScenes   json.RawMessage `json:"plannedScenes,omitempty"`
-	ActualNotes     *string         `json:"actualNotes,omitempty"`
-	Discoveries     json.RawMessage `json:"discoveries,omitempty"`
-	PlayerDecisions json.RawMessage `json:"playerDecisions,omitempty"`
-	Consequences    json.RawMessage `json:"consequences,omitempty"`
-	CreatedAt       time.Time       `json:"createdAt"`
-	UpdatedAt       time.Time       `json:"updatedAt"`
+	ID            int64         `json:"id"`
+	CampaignID    int64         `json:"campaignId"`
+	ChapterID     *int64        `json:"chapterId,omitempty"`
+	Title         *string       `json:"title,omitempty"`
+	SessionNumber *int          `json:"sessionNumber,omitempty"`
+	PlannedDate   *time.Time    `json:"plannedDate,omitempty"`
+	ActualDate    *time.Time    `json:"actualDate,omitempty"`
+	Status        SessionStatus `json:"status"`
+	Stage         SessionStage  `json:"stage"`
+	PrepNotes     *string       `json:"prepNotes,omitempty"`
+	ActualNotes   *string       `json:"actualNotes,omitempty"`
+	PlayNotes     *string       `json:"playNotes,omitempty"`
+	CreatedAt     time.Time     `json:"createdAt"`
+	UpdatedAt     time.Time     `json:"updatedAt"`
 }
 
 // Chapter represents a story arc or grouping of sessions within a campaign.
@@ -291,30 +289,89 @@ type UpdateChapterRequest struct {
 
 // CreateSessionRequest represents the request body for creating a session.
 type CreateSessionRequest struct {
-	ChapterID     *int64          `json:"chapterId,omitempty"`
-	Title         *string         `json:"title,omitempty"`
-	SessionNumber *int            `json:"sessionNumber,omitempty"`
-	PlannedDate   *time.Time      `json:"plannedDate,omitempty"`
-	Stage         *SessionStage   `json:"stage,omitempty"`
-	PrepNotes     *string         `json:"prepNotes,omitempty"`
-	PlannedScenes json.RawMessage `json:"plannedScenes,omitempty"`
+	ChapterID     *int64        `json:"chapterId,omitempty"`
+	Title         *string       `json:"title,omitempty"`
+	SessionNumber *int          `json:"sessionNumber,omitempty"`
+	PlannedDate   *time.Time    `json:"plannedDate,omitempty"`
+	Stage         *SessionStage `json:"stage,omitempty"`
+	PrepNotes     *string       `json:"prepNotes,omitempty"`
 }
 
 // UpdateSessionRequest represents the request body for updating a session.
 type UpdateSessionRequest struct {
-	ChapterID       *int64          `json:"chapterId,omitempty"`
-	Title           *string         `json:"title,omitempty"`
-	SessionNumber   *int            `json:"sessionNumber,omitempty"`
-	PlannedDate     *time.Time      `json:"plannedDate,omitempty"`
-	ActualDate      *time.Time      `json:"actualDate,omitempty"`
-	Status          *SessionStatus  `json:"status,omitempty"`
-	Stage           *SessionStage   `json:"stage,omitempty"`
-	PrepNotes       *string         `json:"prepNotes,omitempty"`
-	PlannedScenes   json.RawMessage `json:"plannedScenes,omitempty"`
-	ActualNotes     *string         `json:"actualNotes,omitempty"`
-	Discoveries     json.RawMessage `json:"discoveries,omitempty"`
-	PlayerDecisions json.RawMessage `json:"playerDecisions,omitempty"`
-	Consequences    json.RawMessage `json:"consequences,omitempty"`
+	ChapterID     *int64         `json:"chapterId,omitempty"`
+	Title         *string        `json:"title,omitempty"`
+	SessionNumber *int           `json:"sessionNumber,omitempty"`
+	PlannedDate   *time.Time     `json:"plannedDate,omitempty"`
+	ActualDate    *time.Time     `json:"actualDate,omitempty"`
+	Status        *SessionStatus `json:"status,omitempty"`
+	Stage         *SessionStage  `json:"stage,omitempty"`
+	PrepNotes     *string        `json:"prepNotes,omitempty"`
+	ActualNotes   *string        `json:"actualNotes,omitempty"`
+	PlayNotes     *string        `json:"playNotes,omitempty"`
+}
+
+// Scene represents a structured scene within a game session.
+type Scene struct {
+	ID               int64           `json:"id"`
+	SessionID        int64           `json:"sessionId"`
+	CampaignID       int64           `json:"campaignId"`
+	Title            string          `json:"title"`
+	Description      *string         `json:"description,omitempty"`
+	SceneType        string          `json:"sceneType"`
+	Status           string          `json:"status"`
+	SortOrder        int             `json:"sortOrder"`
+	Objective        *string         `json:"objective,omitempty"`
+	GMNotes          *string         `json:"gmNotes,omitempty"`
+	EntityIDs        []int64         `json:"entityIds"`
+	SystemData       json.RawMessage `json:"systemData,omitempty"`
+	Source           string          `json:"source"`
+	SourceConfidence string          `json:"sourceConfidence"`
+	Connections      json.RawMessage `json:"connections,omitempty"`
+	CreatedAt        time.Time       `json:"createdAt"`
+	UpdatedAt        time.Time       `json:"updatedAt"`
+}
+
+// CreateSceneRequest represents the request body for creating a scene.
+type CreateSceneRequest struct {
+	Title            string          `json:"title"`
+	Description      *string         `json:"description,omitempty"`
+	SceneType        *string         `json:"sceneType,omitempty"`
+	SortOrder        *int            `json:"sortOrder,omitempty"`
+	Objective        *string         `json:"objective,omitempty"`
+	GMNotes          *string         `json:"gmNotes,omitempty"`
+	EntityIDs        []int64         `json:"entityIds,omitempty"`
+	SystemData       json.RawMessage `json:"systemData,omitempty"`
+	Source           *string         `json:"source,omitempty"`
+	SourceConfidence *string         `json:"sourceConfidence,omitempty"`
+	Connections      json.RawMessage `json:"connections,omitempty"`
+}
+
+// UpdateSceneRequest represents the request body for updating a scene.
+type UpdateSceneRequest struct {
+	Title            *string         `json:"title,omitempty"`
+	Description      *string         `json:"description,omitempty"`
+	SceneType        *string         `json:"sceneType,omitempty"`
+	Status           *string         `json:"status,omitempty"`
+	SortOrder        *int            `json:"sortOrder,omitempty"`
+	Objective        *string         `json:"objective,omitempty"`
+	GMNotes          *string         `json:"gmNotes,omitempty"`
+	EntityIDs        []int64         `json:"entityIds,omitempty"`
+	SystemData       json.RawMessage `json:"systemData,omitempty"`
+	Source           *string         `json:"source,omitempty"`
+	SourceConfidence *string         `json:"sourceConfidence,omitempty"`
+	Connections      json.RawMessage `json:"connections,omitempty"`
+}
+
+// SessionChatMessage represents a chat message within a session workflow.
+type SessionChatMessage struct {
+	ID         int64     `json:"id"`
+	SessionID  int64     `json:"sessionId"`
+	CampaignID int64     `json:"campaignId"`
+	Role       string    `json:"role"`
+	Content    string    `json:"content"`
+	SortOrder  int       `json:"sortOrder"`
+	CreatedAt  time.Time `json:"createdAt"`
 }
 
 // DatePrecision represents the precision level of a date.
