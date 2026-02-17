@@ -68,6 +68,7 @@ func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string)
 	entityDetectionHandler := NewEntityDetectionHandler(db)
 	entityResolveHandler := NewEntityResolveHandler(db)
 	entityLogHandler := NewEntityLogHandler(db)
+	sceneHandler := NewSceneHandler(db)
 	enrichmentHandler := NewEnrichmentHandler(db)
 
 	// API routes
@@ -184,6 +185,15 @@ func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string)
 						r.Get("/", h.GetSession)
 						r.Put("/", h.UpdateSession)
 						r.Delete("/", h.DeleteSession)
+
+						// Scenes
+						r.Get("/scenes", sceneHandler.ListScenes)
+						r.Post("/scenes", sceneHandler.CreateScene)
+						r.Route("/scenes/{sceneId}", func(r chi.Router) {
+							r.Get("/", sceneHandler.GetScene)
+							r.Put("/", sceneHandler.UpdateScene)
+							r.Delete("/", sceneHandler.DeleteScene)
+						})
 					})
 
 					// Campaign timeline

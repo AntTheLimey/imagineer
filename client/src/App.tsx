@@ -34,6 +34,7 @@ import Login from './pages/Login';
 import AuthCallback from './pages/AuthCallback';
 import AccountSettings from './pages/AccountSettings';
 import AnalysisTriagePage from './pages/AnalysisTriagePage';
+import SessionEditorPage from './pages/SessionEditorPage';
 
 /**
  * Guards access to child routes based on authentication state.
@@ -207,6 +208,16 @@ function AppRoutes() {
                     <Route
                         path="/campaigns/:campaignId/chapters/:chapterId/edit"
                         element={<ChapterEditorPage />}
+                    />
+                    {/* New session editor */}
+                    <Route
+                        path="/campaigns/:campaignId/sessions/new"
+                        element={<SessionEditorPage />}
+                    />
+                    {/* Edit existing session */}
+                    <Route
+                        path="/campaigns/:campaignId/sessions/:sessionId/edit"
+                        element={<SessionEditorPage />}
                     />
                     {/* Analysis triage */}
                     <Route

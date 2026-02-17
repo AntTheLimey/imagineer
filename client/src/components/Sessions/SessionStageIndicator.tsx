@@ -10,8 +10,8 @@
 /**
  * SessionStageIndicator - Shows session stage as a colored chip.
  *
- * Displays the current session stage (prep, play, wrap_up) with an
- * appropriate icon and color to provide visual context.
+ * Displays the current session stage (prep, play, wrap_up, completed) with
+ * an appropriate icon and color to provide visual context.
  */
 
 import { Chip, type ChipProps } from '@mui/material';
@@ -19,6 +19,7 @@ import {
     EditNote as EditNoteIcon,
     PlayArrow as PlayArrowIcon,
     CheckCircle as CheckCircleIcon,
+    DoneAll as DoneAllIcon,
 } from '@mui/icons-material';
 import type { SessionStage } from '../../types';
 
@@ -58,6 +59,11 @@ const stageConfig: Record<
         color: 'warning',
         icon: <CheckCircleIcon fontSize="small" />,
     },
+    completed: {
+        label: 'Completed',
+        color: 'default',
+        icon: <DoneAllIcon fontSize="small" />,
+    },
 };
 
 /**
@@ -67,6 +73,7 @@ const stageConfig: Record<
  * - Prep: Blue/info with EditNote icon
  * - Play: Green/success with PlayArrow icon
  * - Wrap-up: Orange/warning with CheckCircle icon
+ * - Completed: Default/grey with DoneAll icon
  *
  * @param props - The component props.
  * @returns A React element containing the stage chip.

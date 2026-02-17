@@ -8,6 +8,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Session Workflows Phase 1
+  - Full-screen session editor page with two-column prep
+    layout (form and scene sidebar), stage tabs (Prep active,
+    Play/Wrap-up/Completed as Phase 2 placeholders), autosave,
+    draft recovery, and unsaved changes protection.
+  - Scene CRUD with full-stack implementation: database table,
+    Go model, handlers, routes, React API client, hooks, and
+    inline add/edit/delete in the session editor sidebar.
+  - Database migration 011 adds the scenes table,
+    session_chat_messages table, and play_notes column on
+    sessions. The migration also adds vectorization for the
+    new tables, updates the `search_campaign_content()`
+    function, and drops legacy JSONB columns (planned_scenes,
+    discoveries, player_decisions, consequences).
+  - Session types updated with a completed stage, removed
+    legacy fields, and added playNotes.
+  - SessionsManagement page now navigates to the full-screen
+    session editor instead of opening a dialog.
+  - Chapter editor import button for pasting content into the
+    overview field.
+  - 28 SessionEditorPage tests covering create and edit modes,
+    stage tabs, scene sidebar, breadcrumbs, and user
+    interaction.
 - Save Options (SaveSplitButton)
   - SaveSplitButton component offering three save modes: Save,
     Save & Analyze, and Save, Analyze & Enrich.

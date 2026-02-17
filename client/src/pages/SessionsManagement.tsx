@@ -18,7 +18,7 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Alert, Box, Typography } from '@mui/material';
 import { ChapterList } from '../components/Chapters';
-import { SessionList, SessionEditor } from '../components/Sessions';
+import { SessionList } from '../components/Sessions';
 import type { Chapter, Session } from '../types';
 
 /**
@@ -34,10 +34,6 @@ export default function SessionsManagement() {
     // Selection state
     const [selectedChapterId, setSelectedChapterId] = useState<number | undefined>();
     const [selectedSessionId, setSelectedSessionId] = useState<number | undefined>();
-
-    // Session editor state (chapters now use full-screen editor)
-    const [sessionEditorOpen, setSessionEditorOpen] = useState(false);
-    const [editingSessionId, setEditingSessionId] = useState<number | undefined>();
 
     if (!campaignId) {
         return (
@@ -56,13 +52,11 @@ export default function SessionsManagement() {
     };
 
     const handleCreateSession = () => {
-        setEditingSessionId(undefined);
-        setSessionEditorOpen(true);
+        navigate(`/campaigns/${campaignId}/sessions/new`);
     };
 
     const handleEditSession = (session: Session) => {
-        setEditingSessionId(session.id);
-        setSessionEditorOpen(true);
+        navigate(`/campaigns/${campaignId}/sessions/${session.id}/edit`);
     };
 
     return (
@@ -144,18 +138,6 @@ export default function SessionsManagement() {
                 </Box>
             </Box>
 
-            {/* Session Editor Dialog */}
-            <SessionEditor
-                campaignId={campaignId}
-                chapterId={selectedChapterId}
-                sessionId={editingSessionId}
-                open={sessionEditorOpen}
-                onClose={() => setSessionEditorOpen(false)}
-                onSave={(session) => {
-                    setSelectedSessionId(session.id);
-                    setSessionEditorOpen(false);
-                }}
-            />
         </Box>
     );
 }

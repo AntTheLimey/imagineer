@@ -133,10 +133,10 @@ relationship type governance.
 
 ### Scenes / Vignettes / Encounters
 
-- [ ] `[MVP-2]` Scene data model (title, summary, involved
+- [x] `[MVP-2]` Scene data model (title, summary, involved
   entities, GM notes).
-- [ ] `[MVP-2]` Scene editor UI with entity sidebar.
-- [ ] `[MVP-2]` Scenes reorderable within session.
+- [x] `[MVP-2]` Scene editor UI with entity sidebar.
+- [x] `[MVP-2]` Scenes reorderable within session.
 - [ ] `[MVP-3]` Memorable moments per scene (Funny, Dramatic,
   Epic, Intriguing).
 - [ ] Scene outline with collapsible beats.
@@ -310,6 +310,19 @@ Features planned for after the initial release.
 ---
 
 ## Completed
+
+### Session Workflows Phase 1
+
+- [x] Full-screen session editor page with stage tabs and
+  two-column prep layout.
+- [x] Scene CRUD (full stack: migration, Go model, database,
+  handlers, routes, React API, hooks, and UI).
+- [x] Database migration 011 with scenes,
+  session_chat_messages, play_notes, vectorization, and
+  search function update.
+- [x] SessionsManagement navigation to full-screen editor.
+- [x] Chapter editor import button.
+- [x] 28 SessionEditorPage tests.
 
 ### Account Settings
 

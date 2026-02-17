@@ -1,3 +1,12 @@
+// -------------------------------------------------------------------------
+//
+// Imagineer - TTRPG Campaign Intelligence Platform
+//
+// Copyright (c) 2025 - 2026
+// This software is released under The MIT License
+//
+// -------------------------------------------------------------------------
+
 // Game System types
 export interface GameSystem {
     id: number;
@@ -108,7 +117,7 @@ export interface ChapterEntity {
 }
 
 // Session types
-export type SessionStage = 'prep' | 'play' | 'wrap_up';
+export type SessionStage = 'prep' | 'play' | 'wrap_up' | 'completed';
 
 export type SessionStatus = 'PLANNED' | 'COMPLETED' | 'SKIPPED';
 
@@ -123,11 +132,8 @@ export interface Session {
     status: SessionStatus;
     stage: SessionStage;
     prepNotes?: string;
-    plannedScenes?: unknown[];
     actualNotes?: string;
-    discoveries?: Array<{ entityId: number; howDiscovered: string }>;
-    playerDecisions?: unknown[];
-    consequences?: unknown[];
+    playNotes?: string;
     createdAt: string;
     updatedAt: string;
 }

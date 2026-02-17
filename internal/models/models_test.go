@@ -526,3 +526,181 @@ func TestFrontendDashboardStats_JSONMarshalUnmarshal(t *testing.T) {
 	// Verify
 	assert.Equal(t, stats, result)
 }
+
+func TestSessionStage_Values(t *testing.T) {
+	tests := []struct {
+		stage    SessionStage
+		expected string
+	}{
+		{SessionStagePrep, "prep"},
+		{SessionStagePlay, "play"},
+		{SessionStageWrapUp, "wrap_up"},
+		{SessionStageCompleted, "completed"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.expected, func(t *testing.T) {
+			assert.Equal(t, tt.expected, string(tt.stage))
+		})
+	}
+}
+
+func TestSession_JSONMarshalUnmarshal(t *testing.T) {
+	playNotes := "The players chose to investigate the warehouse"
+	prepNotes := "Set up the docks encounter"
+	title := "Session 5: The Docks"
+	chapterID := int64(2)
+
+	session := Session{
+		ID:         10,
+		CampaignID: 3,
+		ChapterID:  &chapterID,
+		Title:      &title,
+		Status:     SessionStatusPlanned,
+		Stage:      SessionStagePrep,
+		PrepNotes:  &prepNotes,
+		PlayNotes:  &playNotes,
+		CreatedAt:  time.Date(2025, 7, 1, 10, 0, 0, 0, time.UTC),
+		UpdatedAt:  time.Date(2025, 7, 1, 10, 0, 0, 0, time.UTC),
+	}
+
+	data, err := json.Marshal(session)
+	require.NoError(t, err)
+
+	var result map[string]interface{}
+	err = json.Unmarshal(data, &result)
+	require.NoError(t, err)
+
+	// Verify new field is present
+	assert.Equal(t, playNotes, result["playNotes"])
+
+	// Verify removed fields are NOT present
+	assert.NotContains(t, result, "plannedScenes")
+	assert.NotContains(t, result, "discoveries")
+	assert.NotContains(t, result, "playerDecisions")
+	assert.NotContains(t, result, "consequences")
+
+	// Round-trip test
+	var roundTrip Session
+	err = json.Unmarshal(data, &roundTrip)
+	require.NoError(t, err)
+	assert.Equal(t, session.ID, roundTrip.ID)
+	assert.Equal(t, session.Stage, roundTrip.Stage)
+	assert.NotNil(t, roundTrip.PlayNotes)
+	assert.Equal(t, playNotes, *roundTrip.PlayNotes)
+}
+
+func TestScene_JSONMarshalUnmarshal(t *testing.T) {
+	description := "The investigators arrive at the docks"
+	objective := "Find the hidden cargo"
+
+	scene := Scene{
+		ID:               1,
+		SessionID:        10,
+		CampaignID:       3,
+		Title:            "Arrival at the Docks",
+		Description:      &description,
+		SceneType:        "exploration",
+		Status:           "planned",
+		SortOrder:        0,
+		Objective:        &objective,
+		EntityIDs:        []int64{5, 6, 7},
+		SystemData:       json.RawMessage(`{"encounter_type": "investigation"}`),
+		Source:           "manual",
+		SourceConfidence: SourceConfidenceDraft,
+		Connections:      json.RawMessage(`[]`),
+		CreatedAt:        time.Date(2025, 7, 1, 10, 0, 0, 0, time.UTC),
+		UpdatedAt:        time.Date(2025, 7, 1, 10, 0, 0, 0, time.UTC),
+	}
+
+	data, err := json.Marshal(scene)
+	require.NoError(t, err)
+
+	var result Scene
+	err = json.Unmarshal(data, &result)
+	require.NoError(t, err)
+
+	assert.Equal(t, scene.ID, result.ID)
+	assert.Equal(t, scene.SessionID, result.SessionID)
+	assert.Equal(t, scene.CampaignID, result.CampaignID)
+	assert.Equal(t, scene.Title, result.Title)
+	require.NotNil(t, result.Description)
+	assert.Equal(t, *scene.Description, *result.Description)
+	assert.Equal(t, scene.SceneType, result.SceneType)
+	assert.Equal(t, scene.Status, result.Status)
+	assert.Equal(t, scene.SortOrder, result.SortOrder)
+	assert.Equal(t, scene.EntityIDs, result.EntityIDs)
+	assert.Equal(t, scene.Source, result.Source)
+	assert.Equal(t, scene.SourceConfidence, result.SourceConfidence)
+}
+
+func TestCreateSceneRequest_JSONUnmarshal(t *testing.T) {
+	tests := []struct {
+		name     string
+		jsonData string
+		expected CreateSceneRequest
+		wantErr  bool
+	}{
+		{
+			name:     "minimal scene",
+			jsonData: `{"title": "Test Scene"}`,
+			expected: CreateSceneRequest{Title: "Test Scene"},
+		},
+		{
+			name:     "full scene",
+			jsonData: `{"title": "Full Scene", "sceneType": "combat", "description": "A fight!", "entityIds": [1, 2]}`,
+			expected: CreateSceneRequest{
+				Title:     "Full Scene",
+				EntityIDs: []int64{1, 2},
+			},
+		},
+		{
+			name:     "invalid JSON",
+			jsonData: `{"title": }`,
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var result CreateSceneRequest
+			err := json.Unmarshal([]byte(tt.jsonData), &result)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected.Title, result.Title)
+			if tt.expected.EntityIDs != nil {
+				assert.Equal(t, tt.expected.EntityIDs, result.EntityIDs)
+			}
+		})
+	}
+}
+
+func TestSessionChatMessage_JSONMarshalUnmarshal(t *testing.T) {
+	msg := SessionChatMessage{
+		ID:         1,
+		SessionID:  10,
+		CampaignID: 3,
+		Role:       "user",
+		Content:    "What NPCs are at the docks?",
+		SortOrder:  0,
+		CreatedAt:  time.Date(2025, 7, 1, 10, 0, 0, 0, time.UTC),
+	}
+
+	data, err := json.Marshal(msg)
+	require.NoError(t, err)
+
+	var result SessionChatMessage
+	err = json.Unmarshal(data, &result)
+	require.NoError(t, err)
+
+	assert.Equal(t, msg.ID, result.ID)
+	assert.Equal(t, msg.SessionID, result.SessionID)
+	assert.Equal(t, msg.Role, result.Role)
+	assert.Equal(t, msg.Content, result.Content)
+	assert.Equal(t, msg.SortOrder, result.SortOrder)
+}
