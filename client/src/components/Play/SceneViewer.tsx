@@ -86,6 +86,7 @@ function SceneContent({
     onEntityClick: (entityId: number) => void;
     entities: Entity[];
 }) {
+    /** Entities whose IDs appear in the active scene's entityIds list. */
     const linkedEntities = useMemo(
         () => entities.filter((e) => scene.entityIds.includes(e.id)),
         [entities, scene.entityIds]
@@ -171,8 +172,10 @@ export function SceneViewer({
     onEntityClick,
     entities,
 }: SceneViewerProps) {
+    /** Index of the active tab in mixed mode (0 = Scene, 1 = Notes). */
     const [tabIndex, setTabIndex] = useState(0);
 
+    /** Maps campaign entities to the WikiLinkEntity shape for MarkdownRenderer. */
     const wikiLinkEntities: WikiLinkEntity[] = useMemo(
         () =>
             entities.map((e) => ({

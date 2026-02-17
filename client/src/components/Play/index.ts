@@ -8,6 +8,11 @@
  * -------------------------------------------------------------------------
  */
 
+/**
+ * Barrel exports for Play mode components used in the session
+ * editor's Play stage.
+ */
+
 export { default as PlayScratchpad } from './PlayScratchpad';
 export type { PlayScratchpadProps } from './PlayScratchpad';
 

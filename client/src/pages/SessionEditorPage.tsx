@@ -254,7 +254,7 @@ export default function SessionEditorPage() {
     const updateScene = useUpdateScene(campaignId ?? 0, sessionId ?? 0);
     const deleteScene = useDeleteScene(campaignId ?? 0, sessionId ?? 0);
 
-    // Fetch entities for Play mode
+    /** All campaign entities for Play mode entity sidebar and drawer. */
     const { data: entities } = useEntities({ campaignId: campaignId ?? 0 });
 
     // Form state
@@ -268,10 +268,13 @@ export default function SessionEditorPage() {
     const [editingSceneId, setEditingSceneId] = useState<number | null>(null);
     const [sceneForm, setSceneForm] = useState({ title: '', sceneType: 'other', description: '' });
 
-    // Play mode state
+    /** ID of the currently active scene in Play mode, or null if none. */
     const [activeSceneId, setActiveSceneId] = useState<number | null>(null);
+    /** The entity currently displayed in the PlayEntityDrawer. */
     const [selectedEntity, setSelectedEntity] = useState<Entity | null>(null);
+    /** Whether the PlayEntitySidebar is in its narrow collapsed state. */
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+    /** Whether the ImportNotesDialog is open. */
     const [importDialogOpen, setImportDialogOpen] = useState(false);
 
     // Draft management
@@ -295,18 +298,19 @@ export default function SessionEditorPage() {
         enabled: isDirty,
     });
 
-    // Play mode derived values
+    /** The Scene object for the currently active scene, or null. */
     const activeScene = useMemo(
         () => scenes?.find((s) => s.id === activeSceneId) ?? null,
         [scenes, activeSceneId]
     );
+    /** Display mode for SceneViewer: 'notes' when no scenes, 'scene' when a scene is active, 'mixed' otherwise. */
     const playMode: 'scene' | 'notes' | 'mixed' = !scenes?.length
         ? 'notes'
         : activeSceneId
             ? 'scene'
             : 'mixed';
 
-    // Auto-select first active scene when entering Play
+    /** Auto-select the first active scene (or first scene) when entering Play. */
     useEffect(() => {
         if (formData.stage === 'play' && scenes?.length && !activeSceneId) {
             const first = scenes.find((s) => s.status === 'active');

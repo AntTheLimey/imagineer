@@ -110,12 +110,12 @@ export function PlayEntityDrawer({
         navigate(`/campaigns/${campaignId}/entities/${entityId}`);
     };
 
-    // Fetch all campaign entities for wiki link resolution
+    /** All campaign entities for wiki link resolution in description/GM notes. */
     const { data: allEntities } = useEntities({
         campaignId,
     });
 
-    // Map entities to WikiLinkEntity shape for MarkdownRenderer
+    /** Campaign entities mapped to WikiLinkEntity shape for MarkdownRenderer. */
     const wikiLinkEntities: WikiLinkEntity[] | undefined = allEntities?.map(
         (e) => ({
             id: e.id,
@@ -125,14 +125,14 @@ export function PlayEntityDrawer({
         })
     );
 
-    // Fetch relationships for the selected entity
+    /** Relationships for the currently displayed entity. */
     const { data: relationships } = useEntityRelationships(
         campaignId,
         entity?.id ?? 0,
         { enabled: !!entity }
     );
 
-    // Empty state when no entity is selected
+    /** When no entity is selected, render the empty-state prompt. */
     if (!entity) {
         return (
             <Box
@@ -152,6 +152,7 @@ export function PlayEntityDrawer({
         );
     }
 
+    /** Number of relationships to display in the header. */
     const relationshipCount = relationships?.length ?? 0;
 
     return (
