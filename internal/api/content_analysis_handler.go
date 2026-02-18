@@ -1372,12 +1372,10 @@ func (h *ContentAnalysisHandler) CancelEnrichment(w http.ResponseWriter, r *http
 }
 
 // RunContentEnrichment runs LLM enrichment directly on content without
-// depending on Phase 1 analysis results. It scans the content for entity
-// name mentions (case-insensitive substring matching), enriches each
-// mentioned entity with the LLM, and runs DetectNewEntities to find new
-// entity suggestions. Results are saved as enrichment-phase analysis
-// items on the given job. The method runs enrichment in a background
-// goroutine and returns immediately.
+// depending on Phase 1 analysis results. It delegates entity discovery
+// and enrichment to the Pipeline and EnrichmentAgent. Results are saved
+// as enrichment-phase analysis items on the given job. The method runs
+// enrichment in a background goroutine and returns immediately.
 func (h *ContentAnalysisHandler) RunContentEnrichment(
 	ctx context.Context,
 	jobID int64,
@@ -1408,40 +1406,14 @@ func (h *ContentAnalysisHandler) RunContentEnrichment(
 		return
 	}
 
-	// 3. Get all campaign entities.
-	allEntities, err := h.db.ListEntitiesByCampaign(ctx, campaignID)
-	if err != nil {
-		log.Printf("Content-enrich: failed to list entities for campaign %d: %v",
-			campaignID, err)
-		return
-	}
-
-	// 4. Find entities mentioned in content via case-insensitive name match.
-	lowerContent := strings.ToLower(content)
-	var mentionedEntityIDs []int64
-	for _, entity := range allEntities {
-		if entity.Name == "" {
-			continue
-		}
-		if strings.Contains(lowerContent, strings.ToLower(entity.Name)) {
-			mentionedEntityIDs = append(mentionedEntityIDs, entity.ID)
-		}
-	}
-
-	if len(mentionedEntityIDs) == 0 && len(allEntities) == 0 {
-		log.Printf("Content-enrich: skipping job %d — no entities found in campaign %d",
-			jobID, campaignID)
-		return
-	}
-
-	// 5. Get the job for source info.
+	// 3. Get the job for source info.
 	job, err := h.db.GetAnalysisJob(ctx, jobID)
 	if err != nil {
 		log.Printf("Content-enrich: failed to get job %d: %v", jobID, err)
 		return
 	}
 
-	// 6. Set job status to "enriching".
+	// 4. Set job status to "enriching".
 	if err := h.db.Exec(ctx,
 		"UPDATE content_analysis_jobs SET status = 'enriching' WHERE id = $1",
 		jobID,
@@ -1451,70 +1423,39 @@ func (h *ContentAnalysisHandler) RunContentEnrichment(
 		return
 	}
 
-	// 7. Spawn background goroutine for enrichment.
-	engine := enrichment.NewEngine(h.db)
+	// 5. Build pipeline and spawn background goroutine for enrichment.
+	agent := enrichment.NewEnrichmentAgent(h.db)
+	pipeline := enrichment.NewPipeline(h.db, []enrichment.Stage{{
+		Name:   "enrichment",
+		Phase:  "enrichment",
+		Agents: []enrichment.PipelineAgent{agent},
+	}})
+
 	bgCtx, cancel := context.WithCancel(context.Background())
 	h.enrichCancels.Store(jobID, cancel)
 	go func() {
 		defer h.enrichCancels.Delete(jobID)
 		defer cancel()
-		log.Printf("Content-enrich: starting enrichment for job %d with %d mentioned entities",
-			jobID, len(mentionedEntityIDs))
+		log.Printf("Content-enrich: starting enrichment for job %d", jobID)
 
-		for _, entityID := range mentionedEntityIDs {
-			if bgCtx.Err() != nil {
-				log.Printf("Content-enrich: cancelled for job %d", jobID)
-				break
-			}
-			entity, err := h.db.GetEntity(bgCtx, entityID)
-			if err != nil {
-				log.Printf("Content-enrich: failed to get entity %d: %v",
-					entityID, err)
-				continue
-			}
+		input := enrichment.PipelineInput{
+			CampaignID:  campaignID,
+			JobID:       jobID,
+			SourceTable: job.SourceTable,
+			SourceID:    job.SourceID,
+			Content:     content,
+		}
 
-			relationships, err := h.db.GetEntityRelationships(bgCtx, entityID)
-			if err != nil {
+		enrichItems, err := pipeline.Run(bgCtx, provider, input)
+		if err != nil {
+			log.Printf("Content-enrich: pipeline run failed for job %d: %v",
+				jobID, err)
+		} else if len(enrichItems) > 0 {
+			if err := h.db.CreateAnalysisItems(bgCtx, enrichItems); err != nil {
 				log.Printf(
-					"Content-enrich: failed to get relationships for entity %d: %v",
-					entityID, err)
-				relationships = nil
-			}
-
-			// Build list of other entities (exclude the current one).
-			otherEntities := make([]models.Entity, 0, len(allEntities)-1)
-			for _, e := range allEntities {
-				if e.ID != entityID {
-					otherEntities = append(otherEntities, e)
-				}
-			}
-
-			input := enrichment.EnrichmentInput{
-				CampaignID:    campaignID,
-				JobID:         jobID,
-				SourceTable:   job.SourceTable,
-				SourceID:      job.SourceID,
-				Content:       content,
-				Entity:        *entity,
-				OtherEntities: otherEntities,
-				Relationships: relationships,
-			}
-
-			enrichItems, err := engine.EnrichEntity(bgCtx, provider, input)
-			if err != nil {
-				log.Printf("Content-enrich: failed to enrich entity %d: %v",
-					entityID, err)
-				continue
-			}
-
-			if len(enrichItems) > 0 {
-				if err := h.db.CreateAnalysisItems(bgCtx, enrichItems); err != nil {
-					log.Printf(
-						"Content-enrich: failed to save items for entity %d: %v",
-						entityID, err)
-					continue
-				}
-
+					"Content-enrich: failed to save items for job %d: %v",
+					jobID, err)
+			} else {
 				if err := h.db.Exec(bgCtx,
 					"UPDATE content_analysis_jobs SET enrichment_total = enrichment_total + $1 WHERE id = $2",
 					len(enrichItems), jobID,
@@ -1522,34 +1463,6 @@ func (h *ContentAnalysisHandler) RunContentEnrichment(
 					log.Printf(
 						"Content-enrich: failed to update enrichment count for job %d: %v",
 						jobID, err)
-				}
-			}
-		}
-
-		// Detect new entities not yet in the campaign database.
-		if bgCtx.Err() == nil {
-			newEntityItems, detectErr := engine.DetectNewEntities(
-				bgCtx, provider, campaignID, jobID,
-				content, allEntities,
-			)
-			if detectErr != nil {
-				log.Printf(
-					"Content-enrich: new-entity detection failed for job %d: %v",
-					jobID, detectErr)
-			} else if len(newEntityItems) > 0 {
-				if err := h.db.CreateAnalysisItems(bgCtx, newEntityItems); err != nil {
-					log.Printf(
-						"Content-enrich: failed to save new-entity items for job %d: %v",
-						jobID, err)
-				} else {
-					if err := h.db.Exec(bgCtx,
-						"UPDATE content_analysis_jobs SET enrichment_total = enrichment_total + $1 WHERE id = $2",
-						len(newEntityItems), jobID,
-					); err != nil {
-						log.Printf(
-							"Content-enrich: failed to update enrichment count for job %d: %v",
-							jobID, err)
-					}
 				}
 			}
 		}
@@ -1653,81 +1566,52 @@ func (h *ContentAnalysisHandler) TryAutoEnrich(
 		return
 	}
 
-	// 7. Get all campaign entities for context.
-	allEntities, err := h.db.ListEntitiesByCampaign(ctx, job.CampaignID)
-	if err != nil {
-		log.Printf("Auto-enrich: failed to list entities for campaign %d: %v",
-			job.CampaignID, err)
-		_ = h.db.Exec(ctx,
-			"UPDATE content_analysis_jobs SET status = 'completed' WHERE id = $1",
-			jobID,
-		)
-		return
+	// 7. Pre-load entity objects from accepted entity IDs.
+	entities := make([]models.Entity, 0, len(entityIDs))
+	for _, eid := range entityIDs {
+		entity, err := h.db.GetEntity(ctx, eid)
+		if err != nil {
+			log.Printf("Auto-enrich: failed to get entity %d: %v", eid, err)
+			continue
+		}
+		entities = append(entities, *entity)
 	}
 
-	// 8. Spawn background goroutine for enrichment.
-	engine := enrichment.NewEngine(h.db)
+	// 8. Build pipeline and spawn background goroutine for enrichment.
+	agent := enrichment.NewEnrichmentAgent(h.db)
+	pipeline := enrichment.NewPipeline(h.db, []enrichment.Stage{{
+		Name:   "enrichment",
+		Phase:  "enrichment",
+		Agents: []enrichment.PipelineAgent{agent},
+	}})
+
 	bgCtx, cancel := context.WithCancel(context.Background())
 	h.enrichCancels.Store(jobID, cancel)
 	go func() {
 		defer h.enrichCancels.Delete(jobID)
 		defer cancel()
-		log.Printf("Auto-enrich: starting enrichment for job %d with %d entities", jobID, len(entityIDs))
+		log.Printf("Auto-enrich: starting enrichment for job %d with %d entities",
+			jobID, len(entities))
 
-		for _, entityID := range entityIDs {
-			if bgCtx.Err() != nil {
-				log.Printf("Auto-enrich: cancelled for job %d", jobID)
-				break
-			}
-			entity, err := h.db.GetEntity(bgCtx, entityID)
-			if err != nil {
-				log.Printf("Auto-enrich: failed to get entity %d: %v",
-					entityID, err)
-				continue
-			}
+		input := enrichment.PipelineInput{
+			CampaignID:  job.CampaignID,
+			JobID:       jobID,
+			SourceTable: job.SourceTable,
+			SourceID:    job.SourceID,
+			Content:     content,
+			Entities:    entities,
+		}
 
-			relationships, err := h.db.GetEntityRelationships(bgCtx, entityID)
-			if err != nil {
+		enrichItems, err := pipeline.Run(bgCtx, provider, input)
+		if err != nil {
+			log.Printf("Auto-enrich: pipeline run failed for job %d: %v",
+				jobID, err)
+		} else if len(enrichItems) > 0 {
+			if err := h.db.CreateAnalysisItems(bgCtx, enrichItems); err != nil {
 				log.Printf(
-					"Auto-enrich: failed to get relationships for entity %d: %v",
-					entityID, err)
-				relationships = nil
-			}
-
-			// Build list of other entities (exclude the current one).
-			otherEntities := make([]models.Entity, 0, len(allEntities)-1)
-			for _, e := range allEntities {
-				if e.ID != entityID {
-					otherEntities = append(otherEntities, e)
-				}
-			}
-
-			input := enrichment.EnrichmentInput{
-				CampaignID:    job.CampaignID,
-				JobID:         jobID,
-				SourceTable:   job.SourceTable,
-				SourceID:      job.SourceID,
-				Content:       content,
-				Entity:        *entity,
-				OtherEntities: otherEntities,
-				Relationships: relationships,
-			}
-
-			enrichItems, err := engine.EnrichEntity(bgCtx, provider, input)
-			if err != nil {
-				log.Printf("Auto-enrich: failed to enrich entity %d: %v",
-					entityID, err)
-				continue
-			}
-
-			if len(enrichItems) > 0 {
-				if err := h.db.CreateAnalysisItems(bgCtx, enrichItems); err != nil {
-					log.Printf(
-						"Auto-enrich: failed to save items for entity %d: %v",
-						entityID, err)
-					continue
-				}
-
+					"Auto-enrich: failed to save items for job %d: %v",
+					jobID, err)
+			} else {
 				if err := h.db.Exec(bgCtx,
 					"UPDATE content_analysis_jobs SET enrichment_total = enrichment_total + $1 WHERE id = $2",
 					len(enrichItems), jobID,
@@ -1735,34 +1619,6 @@ func (h *ContentAnalysisHandler) TryAutoEnrich(
 					log.Printf(
 						"Auto-enrich: failed to update enrichment count for job %d: %v",
 						jobID, err)
-				}
-			}
-		}
-
-		// Detect new entities not yet in the campaign database.
-		if bgCtx.Err() == nil {
-			newEntityItems, detectErr := engine.DetectNewEntities(
-				bgCtx, provider, job.CampaignID, jobID,
-				content, allEntities,
-			)
-			if detectErr != nil {
-				log.Printf(
-					"Auto-enrich: new-entity detection failed for job %d: %v",
-					jobID, detectErr)
-			} else if len(newEntityItems) > 0 {
-				if err := h.db.CreateAnalysisItems(bgCtx, newEntityItems); err != nil {
-					log.Printf(
-						"Auto-enrich: failed to save new-entity items for job %d: %v",
-						jobID, err)
-				} else {
-					if err := h.db.Exec(bgCtx,
-						"UPDATE content_analysis_jobs SET enrichment_total = enrichment_total + $1 WHERE id = $2",
-						len(newEntityItems), jobID,
-					); err != nil {
-						log.Printf(
-							"Auto-enrich: failed to update enrichment count for job %d: %v",
-							jobID, err)
-					}
 				}
 			}
 		}

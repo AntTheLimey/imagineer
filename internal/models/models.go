@@ -685,6 +685,8 @@ type ContentAnalysisItem struct {
 	CreatedAt        time.Time       `json:"createdAt"`
 	SuggestedContent json.RawMessage `json:"suggestedContent,omitempty"`
 	Phase            string          `json:"phase"`
+	AgentName        string          `json:"agentName,omitempty"`
+	PipelineRunID    *int64          `json:"pipelineRunId,omitempty"`
 
 	// Joined fields (not in database)
 	EntityName *string     `json:"entityName,omitempty"`

@@ -86,11 +86,11 @@ test-all: lint coverage
 
 lint:
 	@echo "=== Running linters ==="
-	@if ! command -v golangci-lint &> /dev/null; then \
+	@GOBIN_PATH=$$(go env GOPATH)/bin; \
+	if ! command -v golangci-lint &> /dev/null && [ ! -x "$$GOBIN_PATH/golangci-lint" ]; then \
 		echo "Installing golangci-lint..."; \
 		go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest; \
-	fi
-	@GOBIN_PATH=$$(go env GOPATH)/bin; \
+	fi; \
 	if command -v golangci-lint &> /dev/null; then \
 		golangci-lint run ./...; \
 	elif [ -x "$$GOBIN_PATH/golangci-lint" ]; then \

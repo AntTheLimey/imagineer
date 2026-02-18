@@ -133,23 +133,24 @@ func (db *DB) CreateAnalysisItems(ctx context.Context, items []models.ContentAna
 		return nil
 	}
 
-	const cols = 12 // number of columns per row
+	const cols = 14 // number of columns per row
 	valueStrings := make([]string, 0, len(items))
 	args := make([]interface{}, 0, len(items)*cols)
 
 	for i, item := range items {
 		base := i * cols
 		valueStrings = append(valueStrings, fmt.Sprintf(
-			"($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)",
+			"($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)",
 			base+1, base+2, base+3, base+4, base+5,
 			base+6, base+7, base+8, base+9, base+10,
-			base+11, base+12,
+			base+11, base+12, base+13, base+14,
 		))
 		args = append(args,
 			item.JobID, item.DetectionType, item.MatchedText,
 			item.EntityID, item.Similarity, item.ContextSnippet,
 			item.PositionStart, item.PositionEnd, item.Resolution,
 			item.ResolvedEntityID, item.SuggestedContent, item.Phase,
+			item.AgentName, item.PipelineRunID,
 		)
 	}
 
@@ -157,7 +158,8 @@ func (db *DB) CreateAnalysisItems(ctx context.Context, items []models.ContentAna
 		INSERT INTO content_analysis_items
 			(job_id, detection_type, matched_text, entity_id, similarity,
 			 context_snippet, position_start, position_end, resolution,
-			 resolved_entity_id, suggested_content, phase)
+			 resolved_entity_id, suggested_content, phase,
+			 agent_name, pipeline_run_id)
 		VALUES %s`, strings.Join(valueStrings, ", "))
 
 	return db.Exec(ctx, query, args...)
@@ -174,6 +176,7 @@ func (db *DB) ListAnalysisItemsByJob(ctx context.Context, jobID int64, resolutio
 		       i.position_start, i.position_end, i.resolution,
 		       i.resolved_entity_id, i.resolved_at, i.created_at,
 		       i.suggested_content, i.phase,
+		       i.agent_name, i.pipeline_run_id,
 		       e.name AS entity_name, e.entity_type
 		FROM content_analysis_items i
 		LEFT JOIN entities e ON i.entity_id = e.id
@@ -371,6 +374,7 @@ func scanAnalysisItems(rows pgx.Rows) ([]models.ContentAnalysisItem, error) {
 			&item.PositionStart, &item.PositionEnd, &item.Resolution,
 			&item.ResolvedEntityID, &item.ResolvedAt, &item.CreatedAt,
 			&item.SuggestedContent, &item.Phase,
+			&item.AgentName, &item.PipelineRunID,
 			&item.EntityName, &item.EntityType,
 		)
 		if err != nil {

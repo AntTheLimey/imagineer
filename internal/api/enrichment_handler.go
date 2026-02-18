@@ -157,15 +157,24 @@ func (h *EnrichmentHandler) TriggerEnrichment(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Fetch all campaign entities for context
-	allEntities, err := h.db.ListEntitiesByCampaign(r.Context(), campaignID)
-	if err != nil {
-		log.Printf("Error listing campaign entities: %v", err)
-		allEntities = []models.Entity{}
-	}
+	// Build the pipeline with a single enrichment stage.
+	agent := enrichment.NewEnrichmentAgent(h.db)
+	pipeline := enrichment.NewPipeline(h.db, []enrichment.Stage{{
+		Name:   "enrichment",
+		Phase:  "enrichment",
+		Agents: []enrichment.PipelineAgent{agent},
+	}})
 
-	// Create enrichment engine
-	engine := enrichment.NewEngine(h.db)
+	// Pre-load entity objects from the accepted entity IDs.
+	entities := make([]models.Entity, 0, len(entityIDs))
+	for _, eid := range entityIDs {
+		entity, err := h.db.GetEntity(r.Context(), eid)
+		if err != nil {
+			log.Printf("Enrichment: error fetching entity %d: %v", eid, err)
+			continue
+		}
+		entities = append(entities, *entity)
+	}
 
 	// Spawn background goroutine for enrichment processing
 	go func() {
@@ -185,59 +194,26 @@ func (h *EnrichmentHandler) TriggerEnrichment(w http.ResponseWriter, r *http.Req
 			}
 		}()
 
-		for _, entityID := range entityIDs {
-			entity, err := h.db.GetEntity(bgCtx, entityID)
-			if err != nil {
-				log.Printf("Enrichment: error fetching entity %d: %v", entityID, err)
-				continue
-			}
+		input := enrichment.PipelineInput{
+			CampaignID:  campaignID,
+			JobID:       jobID,
+			SourceTable: job.SourceTable,
+			SourceID:    job.SourceID,
+			Content:     content,
+			Entities:    entities,
+		}
 
-			relationships, err := h.db.GetEntityRelationships(bgCtx, entityID)
-			if err != nil {
-				log.Printf("Enrichment: error fetching relationships for entity %d: %v",
-					entityID, err)
-				relationships = []models.Relationship{}
-			}
-
-			// Build list of other entities (exclude the current entity)
-			otherEntities := make([]models.Entity, 0, len(allEntities)-1)
-			for _, e := range allEntities {
-				if e.ID != entityID {
-					otherEntities = append(otherEntities, e)
-				}
-			}
-
-			input := enrichment.EnrichmentInput{
-				CampaignID:    campaignID,
-				JobID:         jobID,
-				SourceTable:   job.SourceTable,
-				SourceID:      job.SourceID,
-				Content:       content,
-				Entity:        *entity,
-				OtherEntities: otherEntities,
-				Relationships: relationships,
-			}
-
-			enrichItems, err := engine.EnrichEntity(bgCtx, provider, input)
-			if err != nil {
-				log.Printf("Enrichment: error enriching entity %d: %v", entityID, err)
-				continue
-			}
-
-			if len(enrichItems) > 0 {
-				if err := h.db.CreateAnalysisItems(bgCtx, enrichItems); err != nil {
-					log.Printf("Enrichment: error inserting items for entity %d: %v",
-						entityID, err)
-					continue
-				}
-
-				if err := h.db.Exec(bgCtx,
+		enrichItems, err := pipeline.Run(bgCtx, provider, input)
+		if err != nil {
+			log.Printf("Enrichment: pipeline run failed for job %d: %v", jobID, err)
+		} else if len(enrichItems) > 0 {
+			if err := h.db.CreateAnalysisItems(bgCtx, enrichItems); err != nil {
+				log.Printf("Enrichment: error inserting items for job %d: %v",
+					jobID, err)
+			} else {
+				_ = h.db.Exec(bgCtx,
 					"UPDATE content_analysis_jobs SET enrichment_total = enrichment_total + $1 WHERE id = $2",
-					len(enrichItems), jobID,
-				); err != nil {
-					log.Printf("Enrichment: error updating job counts for entity %d: %v",
-						entityID, err)
-				}
+					len(enrichItems), jobID)
 			}
 		}
 
