@@ -45,9 +45,7 @@ import {
     useUpdateEntity,
     useSimilarEntities,
     useCampaign,
-    useDraft,
-    useAutosave,
-    useUnsavedChanges,
+    useServerDraft,
     useCampaignOwnership,
 } from '../hooks';
 import { useCreateRelationship } from '../hooks/useRelationships';
@@ -177,9 +175,6 @@ export default function EntityEditor() {
     const navigate = useNavigate();
 
     const isNewEntity = !entityId;
-    const draftKey = isNewEntity
-        ? `entity-new-${campaignId}`
-        : `entity-${entityId}`;
 
     // Fetch campaign for breadcrumbs
     const { data: campaign } = useCampaign(campaignId ?? 0, {
@@ -204,27 +199,39 @@ export default function EntityEditor() {
         Partial<Record<keyof EntityFormData, string>>
     >({});
 
-    // Draft management
-    const { getDraft, deleteDraft } = useDraft();
-    const [showDraftRecovery, setShowDraftRecovery] = useState(false);
+    // Server-side draft management (replaces useDraft + useAutosave + useUnsavedChanges)
+    const {
+        serverDraft,
+        hasDraft: hasServerDraft,
+        saveDraftToServer,
+        deleteDraftFromServer,
+        isDirty,
+        lastSaved,
+        isLoading: draftLoading,
+        draftUpdatedAt,
+    } = useServerDraft<EntityFormData>({
+        campaignId: campaignId ?? 0,
+        sourceTable: 'entities',
+        sourceId: entityId ?? 0,
+        isNew: isNewEntity,
+        committedData: existingEntity ? {
+            name: existingEntity.name,
+            entityType: existingEntity.entityType,
+            description: existingEntity.description ?? '',
+            tags: existingEntity.tags ?? [],
+            attributes: JSON.stringify(existingEntity.attributes ?? {}, null, 2),
+            gmNotes: existingEntity.gmNotes ?? '',
+            sourceConfidence: existingEntity.sourceConfidence,
+        } : undefined,
+        currentData: formData,
+        serverVersion: existingEntity?.version,
+        enabled: !!campaignId,
+    });
 
-    // Unsaved changes protection
-    const { isDirty, setIsDirty, clearDirty, checkUnsavedChanges, ConfirmDialog } =
-        useUnsavedChanges({
-            message:
-                'You have unsaved changes to this entity. Are you sure you want to leave?',
-        });
+    const [showDraftRecovery, setShowDraftRecovery] = useState(false);
 
     // Track the last hydrated entity ID to detect route changes
     const lastHydratedEntityIdRef = useRef<number | undefined>(undefined);
-
-    // Autosave
-    const { lastSaved } = useAutosave({
-        data: formData,
-        key: draftKey,
-        enabled: isDirty,
-        serverVersion: existingEntity?.version,
-    });
 
     // Similar entities for duplicate detection (new entities only)
     const { data: similarEntities } = useSimilarEntities(
@@ -251,21 +258,11 @@ export default function EntityEditor() {
         message?: string;
     }>({ open: false, jobId: 0, count: 0 });
 
-    // Initialize form data from existing entity or check for draft
+    // Initialize form data from existing entity
     useEffect(() => {
         if (!isNewEntity && existingEntity) {
-            // Check if this is a different entity than what we last hydrated
             const isNewEntityRoute = existingEntity.id !== lastHydratedEntityIdRef.current;
-
-            // Skip hydration only if same entity AND user has in-progress edits
-            if (!isNewEntityRoute && isDirty) {
-                return;
-            }
-
-            // If navigating to a different entity, clear dirty state
-            if (isNewEntityRoute && isDirty) {
-                clearDirty();
-            }
+            if (!isNewEntityRoute) return;
 
             setFormData({
                 name: existingEntity.name,
@@ -277,50 +274,68 @@ export default function EntityEditor() {
                 sourceConfidence: existingEntity.sourceConfidence,
             });
 
-            // Update the ref to track this entity
             lastHydratedEntityIdRef.current = existingEntity.id;
         } else if (isNewEntity) {
-            // Reset the ref for new entity routes
             lastHydratedEntityIdRef.current = undefined;
-            // Check for existing draft
-            const draft = getDraft<EntityFormData>(draftKey);
-            if (draft) {
+        }
+    }, [existingEntity, isNewEntity]);
+
+    // Auto-apply server draft on load: show draft data with a dismissable
+    // banner. Uses a ref to ensure the draft is only applied once on
+    // initial load; after the user ditches the draft, a brief stale
+    // reference to serverDraft will not re-apply it.
+    const draftAppliedRef = useRef(false);
+    useEffect(() => {
+        if (!draftLoading && !draftAppliedRef.current) {
+            draftAppliedRef.current = true;
+            if (hasServerDraft && serverDraft !== null) {
+                setFormData(serverDraft);
                 setShowDraftRecovery(true);
             }
         }
-    }, [existingEntity, isNewEntity, getDraft, draftKey, isDirty, clearDirty]);
+    }, [draftLoading, hasServerDraft, serverDraft]);
 
     /**
-     * Recover draft data.
+     * Dismiss the draft banner without discarding the draft.
      */
-    const handleRecoverDraft = useCallback(() => {
-        const draft = getDraft<EntityFormData>(draftKey);
-        if (draft) {
-            setFormData(draft.data);
-            setIsDirty(true);
+    const handleDismissDraftBanner = useCallback(() => {
+        setShowDraftRecovery(false);
+    }, []);
+
+    /**
+     * Ditch the draft: delete from the server and restore committed data.
+     */
+    const handleDitchDraft = useCallback(() => {
+        // Delete draft from server
+        deleteDraftFromServer();
+        // Restore committed data
+        if (existingEntity) {
+            setFormData({
+                name: existingEntity.name,
+                entityType: existingEntity.entityType,
+                description: existingEntity.description ?? '',
+                tags: existingEntity.tags ?? [],
+                attributes: JSON.stringify(existingEntity.attributes ?? {}, null, 2),
+                gmNotes: existingEntity.gmNotes ?? '',
+                sourceConfidence: existingEntity.sourceConfidence,
+            });
+        } else {
+            setFormData(DEFAULT_FORM_DATA);
         }
         setShowDraftRecovery(false);
-    }, [getDraft, draftKey, setIsDirty]);
+    }, [deleteDraftFromServer, existingEntity]);
 
     /**
-     * Discard draft data.
-     */
-    const handleDiscardDraft = useCallback(() => {
-        deleteDraft(draftKey);
-        setShowDraftRecovery(false);
-    }, [deleteDraft, draftKey]);
-
-    /**
-     * Update a form field and mark as dirty.
+     * Update a form field. Dirty state is computed automatically by
+     * useServerDraft from currentData vs committedData.
      */
     const updateField = useCallback(
         <K extends keyof EntityFormData>(field: K, value: EntityFormData[K]) => {
             setFormData((prev) => ({ ...prev, [field]: value }));
-            setIsDirty(true);
             // Clear error for this field
             setFormErrors((prev) => ({ ...prev, [field]: undefined }));
         },
-        [setIsDirty]
+        []
     );
 
     /**
@@ -408,8 +423,7 @@ export default function EntityEditor() {
                 setPendingRelationships([]);
 
                 // Clean up draft
-                deleteDraft(draftKey);
-                clearDirty();
+                await deleteDraftFromServer();
 
                 // Navigate to edit the newly created entity
                 navigate(`/campaigns/${campaignId}/entities/${newEntity.id}/edit`, {
@@ -457,8 +471,7 @@ export default function EntityEditor() {
                 }
 
                 // Clean up draft
-                deleteDraft(draftKey);
-                clearDirty();
+                await deleteDraftFromServer();
             }
 
             return true;
@@ -476,27 +489,20 @@ export default function EntityEditor() {
         createEntity,
         createRelationship,
         updateEntity,
-        deleteDraft,
-        draftKey,
-        clearDirty,
+        deleteDraftFromServer,
         navigate,
     ]);
 
     /**
-     * Handle back navigation with unsaved changes check.
-     *
-     * Uses browser history so the user returns to whatever page they
-     * came from (e.g. Campaign Overview, Entities list, etc.).
+     * Handle back navigation. Auto-saves the draft if there are unsaved
+     * changes, then navigates back in browser history.
      */
-    const handleBack = useCallback(() => {
-        const goBack = () => navigate(-1);
-        // If there are unsaved changes, checkUnsavedChanges will show the dialog
-        // and return true. If the user confirms, it will call goBack.
-        // If there are no unsaved changes, it returns false and we navigate directly.
-        if (!checkUnsavedChanges(goBack)) {
-            goBack();
+    const handleBack = useCallback(async () => {
+        if (isDirty) {
+            await saveDraftToServer();
         }
-    }, [navigate, checkUnsavedChanges]);
+        navigate(-1);
+    }, [isDirty, saveDraftToServer, navigate]);
 
     // Build breadcrumbs
     const breadcrumbs = useMemo(
@@ -563,30 +569,29 @@ export default function EntityEditor() {
             )}
         >
             <Box sx={{ maxWidth: 800, mx: 'auto' }}>
-                {/* Draft recovery alert */}
+                {/* Draft banner -- auto-applied, dismissable */}
                 {showDraftRecovery && (
                     <Alert
-                        severity="info"
+                        severity="warning"
+                        variant="filled"
                         sx={{ mb: 3 }}
+                        onClose={handleDismissDraftBanner}
                         action={
-                            <Box sx={{ display: 'flex', gap: 1 }}>
-                                <Chip
-                                    label="Recover"
-                                    color="primary"
-                                    onClick={handleRecoverDraft}
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Button
                                     size="small"
-                                />
-                                <Chip
-                                    label="Discard"
+                                    color="inherit"
                                     variant="outlined"
-                                    onClick={handleDiscardDraft}
-                                    size="small"
-                                />
+                                    onClick={handleDitchDraft}
+                                    sx={{ whiteSpace: 'nowrap' }}
+                                >
+                                    Ditch Draft
+                                </Button>
                             </Box>
                         }
                     >
-                        You have an unsaved draft from a previous session. Would you like
-                        to recover it?
+                        Showing draft
+                        {draftUpdatedAt ? ` \u2014 last saved ${formatRelativeTime(draftUpdatedAt)}` : ''}
                     </Alert>
                 )}
 
@@ -809,8 +814,6 @@ export default function EntityEditor() {
                 )}
             </Snackbar>
 
-            {/* Navigation confirmation dialog */}
-            {ConfirmDialog}
         </FullScreenLayout>
     );
 }

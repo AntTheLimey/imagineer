@@ -69,11 +69,14 @@ import {
     useTriggerEnrichment,
     useCancelEnrichment,
 } from '../hooks/useContentAnalysis';
+import { useQuery } from '@tanstack/react-query';
 import { useUserSettings } from '../hooks/useUserSettings';
 import {
     useRelationshipTypes,
     useCreateRelationshipType,
 } from '../hooks/useRelationshipTypes';
+import { useDraftIndicators } from '../hooks/useDraftIndicators';
+import { draftsApi } from '../api/drafts';
 import {
     entityTypeColors,
     formatEntityType,
@@ -617,6 +620,9 @@ export default function AnalysisTriagePage() {
         numericCampaignId,
     );
 
+    // Draft indicators for three-way triage
+    const { hasDraft: entityHasDraft } = useDraftIndicators(numericCampaignId, 'entities');
+
     const isLoading = jobLoading || itemsLoading;
 
     /**
@@ -778,6 +784,27 @@ export default function AnalysisTriagePage() {
         }
         return '';
     }, [selectedItem]);
+
+    // Fetch draft for the selected entity when it's a description_update
+    // with a pending draft, enabling three-way triage.
+    const selectedEntityId = selectedItem?.phase === 'enrichment'
+        && selectedItem?.detectionType === 'description_update'
+        && selectedItem?.entityId
+        ? selectedItem.entityId
+        : null;
+
+    const { data: entityDraft } = useQuery({
+        queryKey: ['drafts', numericCampaignId, 'entities', selectedEntityId],
+        queryFn: () => draftsApi.getDraft(numericCampaignId, 'entities', selectedEntityId!),
+        enabled: !!selectedEntityId && entityHasDraft(selectedEntityId),
+        retry: false,
+        refetchOnWindowFocus: false,
+    });
+
+    const hasDraftForSelected = !!selectedEntityId && entityHasDraft(selectedEntityId) && !!entityDraft?.draftData;
+    const draftDescription = hasDraftForSelected
+        ? String((entityDraft?.draftData as Record<string, unknown>)?.description ?? '')
+        : '';
 
     const resolvedCount = resolvedItems.length;
     const totalCount = items ? items.length : 0;
@@ -987,16 +1014,25 @@ export default function AnalysisTriagePage() {
                 if (nextEntry.kind === 'item') {
                     setSelectedItemId(nextEntry.item.id);
                     setSelectedEntityGroup(null);
+                    setNewEntityName(nextEntry.item.matchedText);
+                    setNewEntityType('npc');
+                    setShowNewEntityForm(false);
                 } else {
                     setSelectedItemId(null);
                     setSelectedEntityGroup({
                         entityId: nextEntry.entityId,
                         detectionType: nextEntry.detectionType,
                     });
+                    setNewEntityName('');
+                    setNewEntityType('npc');
+                    setShowNewEntityForm(false);
                 }
             } else {
                 setSelectedItemId(null);
                 setSelectedEntityGroup(null);
+                setNewEntityName('');
+                setNewEntityType('npc');
+                setShowNewEntityForm(false);
             }
         },
         [leftPanelOrder, selectedEntityGroup],
@@ -1071,6 +1107,31 @@ export default function AnalysisTriagePage() {
         },
         [resolveItem, editedRelTypes, advanceToNextPending],
     );
+
+    // Three-way triage handlers
+    const handleUseEnrichment = useCallback(async (item: ContentAnalysisItem) => {
+        // Delete the draft first, then accept the enrichment
+        if (selectedEntityId) {
+            try {
+                await draftsApi.deleteDraft(numericCampaignId, 'entities', selectedEntityId);
+            } catch {
+                // Draft may already be gone — proceed anyway
+            }
+        }
+        handleEnrichmentResolve(item.id, 'accepted', item);
+    }, [numericCampaignId, selectedEntityId, handleEnrichmentResolve]);
+
+    const handleCommitDraft = useCallback(async (item: ContentAnalysisItem) => {
+        // Dismiss the enrichment (user wants their draft instead)
+        handleEnrichmentResolve(item.id, 'dismissed', item);
+        // Note: draft remains — user navigates to editor to save it
+    }, [handleEnrichmentResolve]);
+
+    const handleCommitDraftAndReEnrich = useCallback(async (item: ContentAnalysisItem) => {
+        // Dismiss the enrichment (user wants their draft, but also wants fresh AI analysis)
+        handleEnrichmentResolve(item.id, 'dismissed', item);
+        // Note: re-enrichment would be triggered when the user saves from the editor
+    }, [handleEnrichmentResolve]);
 
     if (Number.isNaN(numericCampaignId) || Number.isNaN(numericJobId)) {
         return (
@@ -2370,6 +2431,77 @@ export default function AnalysisTriagePage() {
                                                 </Typography>
                                             );
                                         }
+
+                                        if (hasDraftForSelected) {
+                                            // Three-way triage view
+                                            return (
+                                                <Stack spacing={2}>
+                                                    <Alert severity="info" variant="outlined">
+                                                        This entity has an unsaved draft. Choose how to proceed:
+                                                    </Alert>
+                                                    <Box sx={{ display: 'flex', gap: 2 }}>
+                                                        {/* Column 1: Committed Version */}
+                                                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                                                            <Typography variant="subtitle2" gutterBottom>
+                                                                Committed Version
+                                                            </Typography>
+                                                            <Paper
+                                                                variant="outlined"
+                                                                sx={{ p: 2, bgcolor: 'action.hover', height: 200, overflow: 'auto' }}
+                                                            >
+                                                                <Typography variant="body2">
+                                                                    {suggestion.currentDescription !== undefined &&
+                                                                     suggestion.currentDescription !== null &&
+                                                                     String(suggestion.currentDescription) !== ''
+                                                                        ? String(suggestion.currentDescription)
+                                                                        : '(No current description)'}
+                                                                </Typography>
+                                                            </Paper>
+                                                        </Box>
+                                                        {/* Column 2: Your Draft */}
+                                                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                                                            <Typography variant="subtitle2" gutterBottom>
+                                                                Your Draft
+                                                            </Typography>
+                                                            <Paper
+                                                                variant="outlined"
+                                                                sx={{ p: 2, bgcolor: 'warning.50', borderColor: 'warning.main', height: 200, overflow: 'auto' }}
+                                                            >
+                                                                <Typography variant="body2">
+                                                                    {draftDescription || '(Empty draft)'}
+                                                                </Typography>
+                                                            </Paper>
+                                                        </Box>
+                                                        {/* Column 3: AI Suggestion */}
+                                                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                                                            <Typography variant="subtitle2" gutterBottom>
+                                                                AI Suggestion
+                                                            </Typography>
+                                                            <Paper
+                                                                variant="outlined"
+                                                                sx={{ p: 2, bgcolor: 'success.50', borderColor: 'success.main', height: 200, overflow: 'auto' }}
+                                                            >
+                                                                <Typography variant="body2">
+                                                                    {String(suggestion.suggestedDescription ?? '')}
+                                                                </Typography>
+                                                            </Paper>
+                                                        </Box>
+                                                    </Box>
+                                                    {!!suggestion.rationale && (
+                                                        <Box>
+                                                            <Typography variant="subtitle2" gutterBottom>
+                                                                AI Rationale
+                                                            </Typography>
+                                                            <Typography variant="body2" color="text.secondary">
+                                                                {String(suggestion.rationale)}
+                                                            </Typography>
+                                                        </Box>
+                                                    )}
+                                                </Stack>
+                                            );
+                                        }
+
+                                        // Standard two-way view
                                         return (
                                             <Stack spacing={2}>
                                                 <Box>
@@ -2726,45 +2858,75 @@ export default function AnalysisTriagePage() {
                                 {/* Enrichment action buttons */}
                                 {selectedItem.resolution === 'pending' &&
                                  selectedItem.detectionType !== 'new_entity_suggestion' && (
-                                    <Stack
-                                        direction="row"
-                                        spacing={1}
-                                    >
-                                        <Button
-                                            variant="contained"
-                                            color="success"
-                                            startIcon={<Check />}
-                                            onClick={() =>
-                                                handleEnrichmentResolve(
-                                                    selectedItem.id,
-                                                    'accepted',
-                                                    selectedItem,
-                                                )
-                                            }
-                                            disabled={
-                                                resolveItem.isPending
-                                            }
+                                    hasDraftForSelected && selectedItem.detectionType === 'description_update' ? (
+                                        <Stack direction="row" spacing={1} flexWrap="wrap">
+                                            <Button
+                                                variant="contained"
+                                                color="success"
+                                                startIcon={<Check />}
+                                                onClick={() => handleUseEnrichment(selectedItem)}
+                                                disabled={resolveItem.isPending}
+                                            >
+                                                Use Enrichment
+                                            </Button>
+                                            <Button
+                                                variant="contained"
+                                                color="warning"
+                                                onClick={() => handleCommitDraft(selectedItem)}
+                                                disabled={resolveItem.isPending}
+                                            >
+                                                Keep Draft
+                                            </Button>
+                                            <Button
+                                                variant="outlined"
+                                                color="info"
+                                                onClick={() => handleCommitDraftAndReEnrich(selectedItem)}
+                                                disabled={resolveItem.isPending}
+                                            >
+                                                Keep Draft &amp; Re-Enrich
+                                            </Button>
+                                        </Stack>
+                                    ) : (
+                                        <Stack
+                                            direction="row"
+                                            spacing={1}
                                         >
-                                            Accept
-                                        </Button>
-                                        <Button
-                                            variant="outlined"
-                                            color="error"
-                                            startIcon={<Close />}
-                                            onClick={() =>
-                                                handleEnrichmentResolve(
-                                                    selectedItem.id,
-                                                    'dismissed',
-                                                    selectedItem,
-                                                )
-                                            }
-                                            disabled={
-                                                resolveItem.isPending
-                                            }
-                                        >
-                                            Dismiss
-                                        </Button>
-                                    </Stack>
+                                            <Button
+                                                variant="contained"
+                                                color="success"
+                                                startIcon={<Check />}
+                                                onClick={() =>
+                                                    handleEnrichmentResolve(
+                                                        selectedItem.id,
+                                                        'accepted',
+                                                        selectedItem,
+                                                    )
+                                                }
+                                                disabled={
+                                                    resolveItem.isPending
+                                                }
+                                            >
+                                                Accept
+                                            </Button>
+                                            <Button
+                                                variant="outlined"
+                                                color="error"
+                                                startIcon={<Close />}
+                                                onClick={() =>
+                                                    handleEnrichmentResolve(
+                                                        selectedItem.id,
+                                                        'dismissed',
+                                                        selectedItem,
+                                                    )
+                                                }
+                                                disabled={
+                                                    resolveItem.isPending
+                                                }
+                                            >
+                                                Dismiss
+                                            </Button>
+                                        </Stack>
+                                    )
                                 )}
 
                                 {/* New entity suggestion action buttons */}

@@ -43,6 +43,8 @@ import {
 } from '@mui/icons-material';
 import { useChapters, useDeleteChapter } from '../../hooks/useChapters';
 import { useSessionsByChapter } from '../../hooks/useSessions';
+import { useDraftIndicators } from '../../hooks/useDraftIndicators';
+import { DraftIndicator } from '../DraftIndicator';
 import type { Chapter } from '../../types';
 
 /**
@@ -83,6 +85,8 @@ interface ChapterListItemProps {
     onDelete: () => void;
     /** Whether a delete operation is in progress. */
     isDeleting: boolean;
+    /** Whether a draft exists for this chapter. */
+    hasDraft: boolean;
 }
 
 /**
@@ -108,6 +112,7 @@ function ChapterListItem({
     onEdit,
     onDelete,
     isDeleting,
+    hasDraft,
 }: ChapterListItemProps) {
     const { data: sessions } = useSessionsByChapter(campaignId, chapter.id);
     const sessionCount = sessions?.length ?? 0;
@@ -175,11 +180,22 @@ function ChapterListItem({
                         {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                     </IconButton>
                     <ListItemText
-                        primary={chapter.title}
+                        primary={
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <Typography
+                                    component="span"
+                                    noWrap
+                                    fontWeight={isSelected ? 600 : 400}
+                                    sx={{ flexGrow: 1, minWidth: 0 }}
+                                >
+                                    {chapter.title}
+                                </Typography>
+                                <DraftIndicator hasDraft={hasDraft} />
+                            </Box>
+                        }
                         secondary={`${sessionCount} session${sessionCount !== 1 ? 's' : ''}`}
                         primaryTypographyProps={{
-                            noWrap: true,
-                            fontWeight: isSelected ? 600 : 400,
+                            component: 'div',
                         }}
                     />
                 </ListItemButton>
@@ -244,6 +260,7 @@ export default function ChapterList({
         null
     );
     const [deleteError, setDeleteError] = useState<string | null>(null);
+    const { hasDraft } = useDraftIndicators(campaignId, 'chapters');
 
     const {
         data: chapters,
@@ -371,6 +388,7 @@ export default function ChapterList({
                             campaignId={campaignId}
                             isSelected={selectedChapterId === chapter.id}
                             isExpanded={expandedChapterId === chapter.id}
+                            hasDraft={hasDraft(chapter.id)}
                             onSelect={() => onSelectChapter(chapter.id)}
                             onToggleExpand={() =>
                                 handleToggleExpand(chapter.id)

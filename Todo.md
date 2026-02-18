@@ -74,6 +74,51 @@ beyond simple text editing.
   session entities with GM approval workflow.
 - [ ] `[MVP-2]` Campaign story integration that adds session
   summaries to the campaign timeline.
+- [ ] `[MVP-2]` Chapter auto-summary from sessions: aggregate
+  session wrap-up summaries to build and update the parent
+  chapter overview automatically.
+
+### Analysis Triage Fixes
+
+These items address issues discovered during manual testing of the
+analysis and triage workflow.
+
+- [ ] `[MVP-2]` Fix analysis deduplication: when text exactly
+  matches an entity name (e.g. "Dr Algernon Hume"), the
+  pipeline should produce only an entity link suggestion,
+  not also an alias suggestion for a substring of the same
+  text fragment.
+- [ ] `[MVP-2]` Add the ability to reassign an alias target
+  entity on the triage screen. When a suggested alias belongs
+  to a different entity than the one proposed (e.g. "The
+  Orphean Society building" suggested as an alias for "The
+  Orphean Society" but actually an alias for "18 Grosvenor
+  Square"), the user needs an autocomplete entity picker to
+  redirect the alias to the correct entity.
+- [ ] `[MVP-2]` Enrichment pipeline should check existing
+  relationships (including inverses) before suggesting new
+  ones. Currently the pipeline can suggest "A leads B" when
+  "A leads B" or "B is_led_by A" already exists in the
+  graph.
+- [ ] `[MVP-2]` Lightweight ontology for relationship types
+  — define which relationship types are valid between which
+  entity type pairs (e.g., "leads/is_led_by" valid for
+  Person to Organization, not Location to Item). Enforce
+  during analysis to prevent nonsensical suggestions.
+
+### Graph Maintenance
+
+These items cover tools for reviewing and pruning the
+campaign relationship graph over time.
+
+- [ ] `[MVP-3]` Graph maintenance UI — dashboard to review
+  relationship density, spot redundant edges (relationships
+  that could be traversals instead of direct links), and
+  prune the graph.
+- [ ] `[MVP-3]` Traversal analysis — detect relationships
+  that are implied by existing paths (e.g., if A is in
+  London and B is in London, a direct "A is associated
+  with B" edge may be redundant).
 
 ### AI Features
 
@@ -100,6 +145,8 @@ infrastructure.
 - [ ] `[MVP-1]` Three-panel layout for session views (basic
   campaign nav exists, but the full three-panel layout with AI
   panel does not).
+- [ ] `[MVP-2]` Read-only chapter view page (view mode from
+  chapter list without entering editor).
 
 ### Evernote Import
 
@@ -340,6 +387,21 @@ Features planned for after the initial release.
 - [x] SaveSplitButton defaultMode prop for Play mode.
 - [x] Full Play mode integration in SessionEditorPage.
 - [x] Updated tests for Play mode changes.
+
+### Session Workflows Phase 3 — Wrap-up & Completed
+
+- [x] Wrap-up stage with actual date field, actual notes
+  MarkdownEditor, and collapsible reference panel (prep
+  notes, play notes, scene summary).
+- [x] Completed stage read-only view with session metadata,
+  notes, scenes, and Reopen Session button.
+- [x] AnalysisBadge integration for wrap-up stage.
+- [x] Auto-populate actual date on wrap-up entry.
+- [x] SaveSplitButton defaults to "Save & Analyze" in
+  wrap-up, hidden in completed stage.
+- [x] Import Notes available in wrap-up stage.
+- [x] Wrap-up and Completed tabs disabled for new sessions.
+- [x] Updated tests for Phase 3 components.
 
 ### Account Settings
 

@@ -6,8 +6,8 @@
 ## Project Context
 
 Imagineer is a TTRPG campaign management platform supporting multiple game
-systems. Currently focused on: Call of Cthulhu 7e, GURPS 4e, and Blades in
-the Dark/FitD.
+systems. Currently focused on: Call of Cthulhu 7e, GURPS 4e, Blades in the
+Dark/FitD, and D&D 5th Edition (2024 Revision).
 
 ## Primary Agent Role
 
@@ -96,6 +96,7 @@ but never implements. Use this mapping to select the correct sub-agent:
 | Documentation changes            | **documentation-writer**        |
 | PostgreSQL questions             | **postgres-expert**             |
 | Game system mechanics            | **ttrpg-expert**                |
+| Graph/ontology questions         | **graph-expert**                |
 | MCP protocol questions           | **mcp-server-expert**           |
 | Security review                  | **security-auditor**            |
 | Code quality review              | **code-reviewer**               |
@@ -122,9 +123,13 @@ present results to the user.
 
 - **postgres-expert** - PostgreSQL administration, tuning, troubleshooting.
 
-- **ttrpg-expert** - Game system mechanics, schema validation, canon rules.
-  This agent understands Call of Cthulhu 7e, GURPS 4e, and Forged in the
-  Dark systems.
+- **ttrpg-expert** - Game system mechanics, schema validation, canon
+  rules, session planning, scene design, and GM assistance. This
+  agent understands Call of Cthulhu 7e, GURPS 4e, Forged in the
+  Dark, and D&D 5e (2024 Revision).
+
+- **graph-expert** - Knowledge graph design, relationship modeling,
+  ontology, graph hygiene, and deduplication detection.
 
 - **mcp-server-expert** - MCP protocol, tool implementation, debugging.
 

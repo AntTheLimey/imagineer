@@ -69,6 +69,7 @@ func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string)
 	entityResolveHandler := NewEntityResolveHandler(db)
 	entityLogHandler := NewEntityLogHandler(db)
 	sceneHandler := NewSceneHandler(db)
+	draftHandler := NewDraftHandler(db)
 	enrichmentHandler := NewEnrichmentHandler(db)
 
 	// API routes
@@ -215,6 +216,15 @@ func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string)
 					// Campaign agent endpoints
 					r.Route("/agents", func(r chi.Router) {
 						r.Post("/consistency-check", agentHandler.RunConsistencyCheck)
+					})
+
+					// Drafts (auto-save)
+					r.Route("/drafts", func(r chi.Router) {
+						r.Put("/", draftHandler.SaveDraft)
+						r.Get("/", draftHandler.ListDraftIndicators)
+						r.Post("/beacon", draftHandler.BeaconSave)
+						r.Get("/{st}/{sid}", draftHandler.GetDraft)
+						r.Delete("/{st}/{sid}", draftHandler.DeleteDraft)
 					})
 
 					// Content analysis

@@ -47,6 +47,8 @@ import {
     ChevronLeft as CollapseIcon,
 } from '@mui/icons-material';
 import type { Entity, EntityType } from '../../types';
+import { useDraftIndicators } from '../../hooks/useDraftIndicators';
+import { DraftIndicator } from '../DraftIndicator';
 
 /**
  * Maps each entity type to its display icon and human-readable label.
@@ -76,6 +78,8 @@ const TYPE_ORDER: EntityType[] = [
  * Props for the PlayEntitySidebar component.
  */
 export interface PlayEntitySidebarProps {
+    /** The campaign ID for fetching draft indicators. */
+    campaignId: number;
     /** Entity IDs associated with the active scene; empty means show all. */
     sceneEntityIds: number[];
     /** The full set of entities available in the campaign. */
@@ -99,6 +103,7 @@ export interface PlayEntitySidebarProps {
  * @example
  * ```tsx
  * <PlayEntitySidebar
+ *     campaignId={42}
  *     sceneEntityIds={[10, 20, 30]}
  *     allEntities={entities}
  *     onEntitySelect={(e) => openEntityDetail(e)}
@@ -109,12 +114,15 @@ export interface PlayEntitySidebarProps {
  */
 export function PlayEntitySidebar(props: PlayEntitySidebarProps) {
     const {
+        campaignId,
         sceneEntityIds,
         allEntities,
         onEntitySelect,
         collapsed,
         onToggle,
     } = props;
+
+    const { hasDraft } = useDraftIndicators(campaignId, 'entities');
     /**
      * Filter entities to the active scene when scene entity IDs are
      * provided; otherwise show the full campaign entity set.
@@ -263,6 +271,7 @@ export function PlayEntitySidebar(props: PlayEntitySidebarProps) {
                                                     noWrap: true,
                                                 }}
                                             />
+                                            <DraftIndicator hasDraft={hasDraft(entity.id)} />
                                         </ListItemButton>
                                     ))}
                                 </List>

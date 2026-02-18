@@ -39,7 +39,9 @@ import {
     Edit as EditIcon,
 } from '@mui/icons-material';
 import { useSessionsByChapter, useDeleteSession } from '../../hooks/useSessions';
+import { useDraftIndicators } from '../../hooks/useDraftIndicators';
 import type { Session } from '../../types';
+import { DraftIndicator } from '../DraftIndicator';
 import SessionStageIndicator from './SessionStageIndicator';
 
 /**
@@ -76,6 +78,8 @@ interface SessionListItemProps {
     onDelete: () => void;
     /** Whether a delete operation is in progress. */
     isDeleting: boolean;
+    /** Whether a draft exists for this session. */
+    hasDraft: boolean;
 }
 
 /**
@@ -131,6 +135,7 @@ function SessionListItem({
     onEdit,
     onDelete,
     isDeleting,
+    hasDraft,
 }: SessionListItemProps) {
     const handleEditClick = (event: MouseEvent) => {
         event.stopPropagation();
@@ -201,6 +206,7 @@ function SessionListItem({
                             >
                                 {title}
                             </Typography>
+                            <DraftIndicator hasDraft={hasDraft} />
                             <SessionStageIndicator
                                 stage={session.stage}
                                 size="small"
@@ -247,6 +253,7 @@ export default function SessionList({
     onEditSession,
 }: SessionListProps) {
     const [deleteError, setDeleteError] = useState<string | null>(null);
+    const { hasDraft } = useDraftIndicators(campaignId, 'sessions');
 
     const {
         data: sessions,
@@ -371,6 +378,7 @@ export default function SessionList({
                             key={session.id}
                             session={session}
                             isSelected={selectedSessionId === session.id}
+                            hasDraft={hasDraft(session.id)}
                             onSelect={() => onSelectSession(session.id)}
                             onEdit={() => onEditSession?.(session)}
                             onDelete={() => handleDeleteSession(session)}

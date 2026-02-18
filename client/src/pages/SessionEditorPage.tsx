@@ -12,8 +12,8 @@
  *
  * Provides a focused editing experience for creating and editing sessions
  * with a two-column layout: form on the left, scene panel on the right.
- * Includes stage tabs, autosave, draft recovery, and unsaved changes
- * protection.
+ * Includes stage tabs, server-backed draft persistence, and draft
+ * recovery.
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -26,7 +26,6 @@ import {
     FormControl,
     IconButton,
     InputLabel,
-    Link as MuiLink,
     MenuItem,
     Paper,
     Select,
@@ -58,9 +57,7 @@ import {
     useCampaign,
     useChapters,
     useEntities,
-    useDraft,
-    useAutosave,
-    useUnsavedChanges,
+    useServerDraft,
 } from '../hooks';
 import { useSession, useCreateSession, useUpdateSession } from '../hooks/useSessions';
 import { useScenes, useCreateScene, useUpdateScene, useDeleteScene } from '../hooks/useScenes';
@@ -225,9 +222,6 @@ export default function SessionEditorPage() {
     const navigate = useNavigate();
 
     const isNewSession = !sessionId;
-    const draftKey = isNewSession
-        ? `session-new-${campaignId}`
-        : `session-${sessionId}`;
 
     // Fetch campaign for breadcrumbs
     const { data: campaign } = useCampaign(campaignId ?? 0, {
@@ -277,26 +271,39 @@ export default function SessionEditorPage() {
     /** Whether the ImportNotesDialog is open. */
     const [importDialogOpen, setImportDialogOpen] = useState(false);
 
-    // Draft management
-    const { getDraft, deleteDraft } = useDraft();
-    const [showDraftRecovery, setShowDraftRecovery] = useState(false);
+    // Server-backed draft persistence
+    const {
+        serverDraft,
+        hasDraft: hasServerDraft,
+        saveDraftToServer,
+        deleteDraftFromServer,
+        isDirty,
+        lastSaved,
+        isLoading: draftLoading,
+        draftUpdatedAt,
+    } = useServerDraft<SessionFormData>({
+        campaignId: campaignId ?? 0,
+        sourceTable: 'sessions',
+        sourceId: sessionId ?? 0,
+        isNew: isNewSession,
+        committedData: session ? {
+            title: session.title ?? '',
+            chapterId: session.chapterId ?? null,
+            sessionNumber: session.sessionNumber ?? null,
+            plannedDate: session.plannedDate ?? '',
+            stage: session.stage,
+            prepNotes: session.prepNotes ?? '',
+            actualNotes: session.actualNotes ?? '',
+            playNotes: session.playNotes ?? '',
+        } : undefined,
+        currentData: formData,
+        enabled: !!campaignId,
+    });
 
-    // Unsaved changes protection
-    const { isDirty, setIsDirty, clearDirty, checkUnsavedChanges, ConfirmDialog } =
-        useUnsavedChanges({
-            message:
-                'You have unsaved changes to this session. Are you sure you want to leave?',
-        });
+    const [showDraftRecovery, setShowDraftRecovery] = useState(false);
 
     // Track the last hydrated session ID to detect route changes
     const lastHydratedSessionIdRef = useRef<number | undefined>(undefined);
-
-    // Autosave
-    const { lastSaved } = useAutosave({
-        data: formData,
-        key: draftKey,
-        enabled: isDirty,
-    });
 
     /** The Scene object for the currently active scene, or null. */
     const activeScene = useMemo(
@@ -332,18 +339,11 @@ export default function SessionEditorPage() {
         message?: string;
     }>({ open: false, jobId: 0, count: 0 });
 
-    // Initialize form data from existing session or check for draft
+    // Initialize form data from existing session
     useEffect(() => {
         if (!isNewSession && session) {
             const isNewRoute = session.id !== lastHydratedSessionIdRef.current;
-
-            if (!isNewRoute && isDirty) {
-                return;
-            }
-
-            if (isNewRoute && isDirty) {
-                clearDirty();
-            }
+            if (!isNewRoute) return;
 
             setFormData({
                 title: session.title ?? '',
@@ -359,45 +359,63 @@ export default function SessionEditorPage() {
             lastHydratedSessionIdRef.current = session.id;
         } else if (isNewSession) {
             lastHydratedSessionIdRef.current = undefined;
+        }
+    }, [session, isNewSession]);
 
-            // Check for existing draft
-            const draft = getDraft<SessionFormData>(draftKey);
-            if (draft) {
+    // Auto-apply server draft on load: show draft data with a dismissable banner
+    const draftCheckedRef = useRef(false);
+    useEffect(() => {
+        if (!draftLoading && !draftCheckedRef.current) {
+            draftCheckedRef.current = true;
+            if (hasServerDraft && serverDraft) {
+                setFormData(serverDraft);
                 setShowDraftRecovery(true);
             }
         }
-    }, [session, isNewSession, getDraft, draftKey, isDirty, clearDirty]);
+    }, [draftLoading, hasServerDraft, serverDraft]);
 
     /**
-     * Recover draft data.
+     * Dismiss the draft banner without discarding. The user keeps editing
+     * the already-applied draft data.
      */
-    const handleRecoverDraft = useCallback(() => {
-        const draft = getDraft<SessionFormData>(draftKey);
-        if (draft) {
-            setFormData(draft.data);
-            setIsDirty(true);
+    const handleDismissDraftBanner = useCallback(() => {
+        setShowDraftRecovery(false);
+    }, []);
+
+    /**
+     * Ditch the draft: delete it from the server and restore the committed
+     * (saved) session data so the form reverts to the last-saved state.
+     */
+    const handleDitchDraft = useCallback(() => {
+        deleteDraftFromServer();
+        // Restore committed data
+        if (session) {
+            setFormData({
+                title: session.title ?? '',
+                chapterId: session.chapterId ?? null,
+                sessionNumber: session.sessionNumber ?? null,
+                plannedDate: session.plannedDate ?? '',
+                stage: session.stage,
+                prepNotes: session.prepNotes ?? '',
+                actualNotes: session.actualNotes ?? '',
+                playNotes: session.playNotes ?? '',
+            });
+        } else {
+            setFormData(DEFAULT_FORM_DATA);
         }
         setShowDraftRecovery(false);
-    }, [getDraft, draftKey, setIsDirty]);
+    }, [deleteDraftFromServer, session]);
 
     /**
-     * Discard draft data.
-     */
-    const handleDiscardDraft = useCallback(() => {
-        deleteDraft(draftKey);
-        setShowDraftRecovery(false);
-    }, [deleteDraft, draftKey]);
-
-    /**
-     * Update a form field and mark as dirty.
+     * Update a form field. Dirty state is tracked automatically by
+     * useServerDraft via deep comparison.
      */
     const updateField = useCallback(
         <K extends keyof SessionFormData>(field: K, value: SessionFormData[K]) => {
             setFormData((prev) => ({ ...prev, [field]: value }));
-            setIsDirty(true);
             setFormErrors((prev) => ({ ...prev, [field]: undefined }));
         },
-        [setIsDirty]
+        []
     );
 
     /**
@@ -438,8 +456,7 @@ export default function SessionEditorPage() {
                     },
                 });
 
-                deleteDraft(draftKey);
-                clearDirty();
+                await deleteDraftFromServer();
 
                 navigate(`/campaigns/${campaignId}/sessions/${newSession.id}/edit`, {
                     replace: true,
@@ -460,8 +477,7 @@ export default function SessionEditorPage() {
                     },
                 });
 
-                deleteDraft(draftKey);
-                clearDirty();
+                await deleteDraftFromServer();
             }
 
             return true;
@@ -477,9 +493,7 @@ export default function SessionEditorPage() {
         createSession,
         updateSession,
         sessionId,
-        deleteDraft,
-        draftKey,
-        clearDirty,
+        deleteDraftFromServer,
         navigate,
     ]);
 
@@ -536,14 +550,14 @@ export default function SessionEditorPage() {
     );
 
     /**
-     * Handle back navigation with unsaved changes check.
+     * Handle back navigation, auto-saving any dirty draft before leaving.
      */
-    const handleBack = useCallback(() => {
-        const goBack = () => navigate(`/campaigns/${campaignId}/sessions`);
-        if (!checkUnsavedChanges(goBack)) {
-            goBack();
+    const handleBack = useCallback(async () => {
+        if (isDirty) {
+            await saveDraftToServer();
         }
-    }, [navigate, campaignId, checkUnsavedChanges]);
+        navigate(`/campaigns/${campaignId}/sessions`);
+    }, [isDirty, saveDraftToServer, navigate, campaignId]);
 
     /**
      * Handle adding a new scene.
@@ -707,32 +721,29 @@ export default function SessionEditorPage() {
                 />
             )}
         >
-            {/* Draft recovery alert */}
+            {/* Draft banner -- auto-applied, dismissable */}
             {showDraftRecovery && (
                 <Alert
-                    severity="info"
+                    severity="warning"
+                    variant="filled"
                     sx={{ mb: 3 }}
+                    onClose={handleDismissDraftBanner}
                     action={
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                            <MuiLink
-                                component="button"
-                                variant="body2"
-                                onClick={handleRecoverDraft}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Button
+                                size="small"
+                                color="inherit"
+                                variant="outlined"
+                                onClick={handleDitchDraft}
+                                sx={{ whiteSpace: 'nowrap' }}
                             >
-                                Recover
-                            </MuiLink>
-                            <MuiLink
-                                component="button"
-                                variant="body2"
-                                onClick={handleDiscardDraft}
-                            >
-                                Discard
-                            </MuiLink>
+                                Ditch Draft
+                            </Button>
                         </Box>
                     }
                 >
-                    You have an unsaved draft from a previous session. Would you like
-                    to recover it?
+                    Showing draft
+                    {draftUpdatedAt ? ` \u2014 last saved ${formatRelativeTime(draftUpdatedAt)}` : ''}
                 </Alert>
             )}
 
@@ -935,6 +946,7 @@ export default function SessionEditorPage() {
                     <Box sx={{ display: 'flex', flexGrow: 1, overflow: 'hidden' }}>
                         {/* Entity sidebar */}
                         <PlayEntitySidebar
+                            campaignId={campaignId ?? 0}
                             sceneEntityIds={activeScene?.entityIds ?? []}
                             allEntities={entities ?? []}
                             onEntitySelect={handleEntitySelect}
@@ -1046,8 +1058,6 @@ export default function SessionEditorPage() {
                 )}
             </Snackbar>
 
-            {/* Navigation confirmation dialog */}
-            {ConfirmDialog}
         </FullScreenLayout>
     );
 }

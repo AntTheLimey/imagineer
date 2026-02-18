@@ -204,8 +204,38 @@ func convertToItems(input EnrichmentInput, resp *enrichmentResponse) []models.Co
 		})
 	}
 
+	// Build a set of existing entity pairs (both directions) for
+	// deduplication. Any existing relationship between two entities
+	// means we skip new suggestions for that pair.
+	type entityPair struct {
+		a, b int64
+	}
+	existingPairs := make(map[entityPair]bool)
+	for _, rel := range input.Relationships {
+		// Normalise the pair so (a,b) and (b,a) match.
+		a, b := rel.SourceEntityID, rel.TargetEntityID
+		if a > b {
+			a, b = b, a
+		}
+		existingPairs[entityPair{a, b}] = true
+	}
+
 	// Relationship suggestions.
 	for _, rs := range resp.Relationships {
+		// Skip if a relationship already exists between these entities.
+		a, b := rs.SourceEntityID, rs.TargetEntityID
+		if a > b {
+			a, b = b, a
+		}
+		if existingPairs[entityPair{a, b}] {
+			log.Printf(
+				"enrichment: skipping duplicate relationship suggestion "+
+					"between entities %d and %d for entity %d",
+				rs.SourceEntityID, rs.TargetEntityID, entityID,
+			)
+			continue
+		}
+
 		content, err := json.Marshal(rs)
 		if err != nil {
 			log.Printf(

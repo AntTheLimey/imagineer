@@ -28,6 +28,7 @@ import {
     Delete as DeleteIcon,
     Edit as EditIcon,
 } from '@mui/icons-material';
+import { DraftIndicator } from '../DraftIndicator';
 import type { Chapter } from '../../types';
 
 /**
@@ -46,6 +47,8 @@ export interface ChapterCardProps {
     onEdit: () => void;
     /** Callback fired when the delete button is clicked. */
     onDelete: () => void;
+    /** Whether a draft exists for this chapter. */
+    hasDraft: boolean;
 }
 
 /**
@@ -76,6 +79,7 @@ export default function ChapterCard({
     onClick,
     onEdit,
     onDelete,
+    hasDraft,
 }: ChapterCardProps) {
     /**
      * Handles edit button click without triggering card click.
@@ -150,15 +154,18 @@ export default function ChapterCard({
             <CardActionArea onClick={onClick}>
                 <CardContent>
                     {/* Chapter title */}
-                    <Typography
-                        variant="subtitle1"
-                        component="h3"
-                        fontWeight={isSelected ? 600 : 500}
-                        noWrap
-                        sx={{ pr: 8 }}
-                    >
-                        {chapter.title}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Typography
+                            variant="subtitle1"
+                            component="h3"
+                            fontWeight={isSelected ? 600 : 500}
+                            noWrap
+                            sx={{ pr: 8, flexGrow: 1, minWidth: 0 }}
+                        >
+                            {chapter.title}
+                        </Typography>
+                        <DraftIndicator hasDraft={hasDraft} />
+                    </Box>
 
                     {/* Session count */}
                     <Typography
