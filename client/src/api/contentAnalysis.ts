@@ -57,7 +57,11 @@ export interface ContentAnalysisItem {
         | 'pacing_note'
         | 'canon_contradiction'
         | 'temporal_inconsistency'
-        | 'character_inconsistency';
+        | 'character_inconsistency'
+        | 'graph_warning'
+        | 'redundant_edge'
+        | 'invalid_type_pair'
+        | 'orphan_warning';
     matchedText: string;
     entityId?: number;
     similarity?: number;

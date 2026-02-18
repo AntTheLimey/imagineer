@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/antonypegg/imagineer/internal/agents/canon"
+	"github.com/antonypegg/imagineer/internal/agents/graph"
 	"github.com/antonypegg/imagineer/internal/agents/ttrpg"
 	"github.com/antonypegg/imagineer/internal/auth"
 	"github.com/antonypegg/imagineer/internal/database"
@@ -163,6 +164,7 @@ func (h *EnrichmentHandler) TriggerEnrichment(w http.ResponseWriter, r *http.Req
 	ttrpgAgent := ttrpg.NewExpert()
 	canonAgent := canon.NewExpert()
 	enrichAgent := enrichment.NewEnrichmentAgent(h.db)
+	graphAgent := graph.NewExpert(h.db)
 	pipeline := enrichment.NewPipeline(h.db, []enrichment.Stage{
 		{
 			Name:   "analysis",
@@ -172,7 +174,7 @@ func (h *EnrichmentHandler) TriggerEnrichment(w http.ResponseWriter, r *http.Req
 		{
 			Name:   "enrichment",
 			Phase:  "enrichment",
-			Agents: []enrichment.PipelineAgent{enrichAgent},
+			Agents: []enrichment.PipelineAgent{enrichAgent, graphAgent},
 		},
 	})
 

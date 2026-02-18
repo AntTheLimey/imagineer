@@ -38,6 +38,12 @@ type PipelineInput struct {
 	Relationships []models.Relationship
 	GameSystemID  *int64
 	Context       *RAGContext
+
+	// PriorResults holds items produced by agents that ran in
+	// earlier pipeline stages. The pipeline populates this field
+	// before each stage so that downstream agents can inspect
+	// upstream output without a database round-trip.
+	PriorResults []models.ContentAnalysisItem
 }
 
 // PipelineAgent extends the base agents.Agent interface with pipeline-
@@ -86,6 +92,10 @@ func (p *Pipeline) Run(
 	var allItems []models.ContentAnalysisItem
 
 	for _, stage := range p.stages {
+		// Make items from prior stages available to agents in
+		// this stage via the PriorResults field.
+		input.PriorResults = allItems
+
 		sorted, skipped := topologicalSort(stage.Agents)
 
 		for _, name := range skipped {

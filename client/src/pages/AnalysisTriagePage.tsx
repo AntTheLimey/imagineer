@@ -145,6 +145,30 @@ const ENRICHMENT_GROUPS = [
         label: 'New Entity Suggestions',
         color: '#7b1fa2',
     },
+    {
+        key: 'graph_warning' as const,
+        label: 'Graph Warning',
+        color: '#795548',
+        description: 'Knowledge graph hygiene issue',
+    },
+    {
+        key: 'redundant_edge' as const,
+        label: 'Redundant Edge',
+        color: '#607d8b',
+        description: 'Duplicate or implied relationship',
+    },
+    {
+        key: 'invalid_type_pair' as const,
+        label: 'Invalid Type Pair',
+        color: '#d84315',
+        description: 'Entity types not valid for this relationship',
+    },
+    {
+        key: 'orphan_warning' as const,
+        label: 'Orphaned Entity',
+        color: '#8d6e63',
+        description: 'Entity has no relationships',
+    },
 ];
 
 /**
@@ -3626,6 +3650,82 @@ export default function AnalysisTriagePage() {
                                         )}
                                     </Box>
                                 )}
+
+                                {/* Graph advisory item detail */}
+                                {(selectedItem.detectionType === 'graph_warning' ||
+                                    selectedItem.detectionType === 'redundant_edge' ||
+                                    selectedItem.detectionType === 'invalid_type_pair' ||
+                                    selectedItem.detectionType === 'orphan_warning') &&
+                                    ((): React.ReactNode => {
+                                        const suggestion = selectedItem.suggestedContent ?? null;
+                                        if (!suggestion) {
+                                            return (
+                                                <Typography
+                                                    variant="body2"
+                                                    color="text.secondary"
+                                                >
+                                                    No suggestion data available.
+                                                </Typography>
+                                            );
+                                        }
+                                        return (
+                                            <Stack spacing={2}>
+                                                {!!suggestion.description && (
+                                                    <Box>
+                                                        <Typography
+                                                            variant="subtitle2"
+                                                            gutterBottom
+                                                        >
+                                                            Issue
+                                                        </Typography>
+                                                        <Typography variant="body2">
+                                                            {String(suggestion.description)}
+                                                        </Typography>
+                                                    </Box>
+                                                )}
+                                                {!!suggestion.suggestion && (
+                                                    <Box>
+                                                        <Typography
+                                                            variant="subtitle2"
+                                                            gutterBottom
+                                                        >
+                                                            Suggestion
+                                                        </Typography>
+                                                        <Typography
+                                                            variant="body2"
+                                                            color="text.secondary"
+                                                        >
+                                                            {String(suggestion.suggestion)}
+                                                        </Typography>
+                                                    </Box>
+                                                )}
+                                                {!!suggestion.involvedEntities &&
+                                                    Array.isArray(suggestion.involvedEntities) &&
+                                                    (suggestion.involvedEntities as string[]).length > 0 && (
+                                                    <Box>
+                                                        <Typography
+                                                            variant="subtitle2"
+                                                            gutterBottom
+                                                        >
+                                                            Involved Entities
+                                                        </Typography>
+                                                        <Stack direction="row" spacing={1} flexWrap="wrap">
+                                                            {(suggestion.involvedEntities as string[]).map(
+                                                                (name: string) => (
+                                                                    <Chip
+                                                                        key={name}
+                                                                        label={name}
+                                                                        size="small"
+                                                                        variant="outlined"
+                                                                    />
+                                                                ),
+                                                            )}
+                                                        </Stack>
+                                                    </Box>
+                                                )}
+                                            </Stack>
+                                        );
+                                    })()}
 
                                 {/* Resolution status */}
                                 {selectedItem.resolution !== 'pending' && (

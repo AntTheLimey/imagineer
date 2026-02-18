@@ -27,6 +27,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/antonypegg/imagineer/internal/agents/canon"
+	"github.com/antonypegg/imagineer/internal/agents/graph"
 	"github.com/antonypegg/imagineer/internal/agents/ttrpg"
 	"github.com/antonypegg/imagineer/internal/analysis"
 	"github.com/antonypegg/imagineer/internal/auth"
@@ -1429,6 +1430,7 @@ func (h *ContentAnalysisHandler) RunContentEnrichment(
 	ttrpgAgent := ttrpg.NewExpert()
 	canonAgent := canon.NewExpert()
 	enrichAgent := enrichment.NewEnrichmentAgent(h.db)
+	graphAgent := graph.NewExpert(h.db)
 	pipeline := enrichment.NewPipeline(h.db, []enrichment.Stage{
 		{
 			Name:   "analysis",
@@ -1438,7 +1440,7 @@ func (h *ContentAnalysisHandler) RunContentEnrichment(
 		{
 			Name:   "enrichment",
 			Phase:  "enrichment",
-			Agents: []enrichment.PipelineAgent{enrichAgent},
+			Agents: []enrichment.PipelineAgent{enrichAgent, graphAgent},
 		},
 	})
 
@@ -1592,6 +1594,7 @@ func (h *ContentAnalysisHandler) TryAutoEnrich(
 	ttrpgAgent := ttrpg.NewExpert()
 	canonAgent := canon.NewExpert()
 	enrichAgent := enrichment.NewEnrichmentAgent(h.db)
+	graphAgent := graph.NewExpert(h.db)
 	pipeline := enrichment.NewPipeline(h.db, []enrichment.Stage{
 		{
 			Name:   "analysis",
@@ -1601,7 +1604,7 @@ func (h *ContentAnalysisHandler) TryAutoEnrich(
 		{
 			Name:   "enrichment",
 			Phase:  "enrichment",
-			Agents: []enrichment.PipelineAgent{enrichAgent},
+			Agents: []enrichment.PipelineAgent{enrichAgent, graphAgent},
 		},
 	})
 
