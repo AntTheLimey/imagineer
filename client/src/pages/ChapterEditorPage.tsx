@@ -18,10 +18,14 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
+    Accordion,
+    AccordionDetails,
+    AccordionSummary,
     Alert,
     AlertTitle,
     Box,
     Button,
+    Divider,
     Link as MuiLink,
     Paper,
     Skeleton,
@@ -29,6 +33,7 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { Link } from 'react-router-dom';
 import { FullScreenLayout } from '../layouts';
 import { SaveSplitButton } from '../components/SaveSplitButton';
@@ -54,6 +59,7 @@ interface ChapterFormData {
     title: string;
     overview: string;
     sortOrder: number;
+    linkedEntityIds: number[];
 }
 
 /**
@@ -63,6 +69,7 @@ const DEFAULT_FORM_DATA: ChapterFormData = {
     title: '',
     overview: '',
     sortOrder: 0,
+    linkedEntityIds: [],
 };
 
 /**
@@ -143,9 +150,6 @@ export default function ChapterEditorPage() {
         Partial<Record<keyof ChapterFormData, string>>
     >({});
 
-    // Pending entity links for new chapters
-    const [pendingEntityLinks, setPendingEntityLinks] = useState<number[]>([]);
-
     // Server-side draft management (replaces useDraft + useAutosave + useUnsavedChanges)
     const {
         serverDraft,
@@ -165,6 +169,7 @@ export default function ChapterEditorPage() {
             title: existingChapter.title,
             overview: existingChapter.overview ?? '',
             sortOrder: existingChapter.sortOrder,
+            linkedEntityIds: chapterEntities?.map(ce => ce.entityId) ?? [],
         } : undefined,
         currentData: formData,
         enabled: !!campaignId,
@@ -207,6 +212,7 @@ export default function ChapterEditorPage() {
                 title: existingChapter.title,
                 overview: existingChapter.overview ?? '',
                 sortOrder: existingChapter.sortOrder,
+                linkedEntityIds: chapterEntities?.map(ce => ce.entityId) ?? [],
             });
 
             lastHydratedChapterIdRef.current = existingChapter.id;
@@ -219,13 +225,20 @@ export default function ChapterEditorPage() {
                 sortOrder: nextSortOrder,
             }));
         }
-    }, [existingChapter, isNewChapter, nextSortOrder]);
+    }, [existingChapter, isNewChapter, nextSortOrder, chapterEntities]);
 
-    // Auto-apply server draft on load: show draft data with a dismissable banner
+    // Auto-apply server draft on load: show draft data with a dismissable
+    // banner. Uses a ref to ensure the draft is only applied once on
+    // initial load; after the user ditches the draft, a brief stale
+    // reference to serverDraft will not re-apply it.
+    const draftAppliedRef = useRef(false);
     useEffect(() => {
-        if (!draftLoading && hasServerDraft && serverDraft !== null) {
-            setFormData(serverDraft);
-            setShowDraftRecovery(true);
+        if (!draftLoading && !draftAppliedRef.current) {
+            draftAppliedRef.current = true;
+            if (hasServerDraft && serverDraft !== null) {
+                setFormData(serverDraft);
+                setShowDraftRecovery(true);
+            }
         }
     }, [draftLoading, hasServerDraft, serverDraft]);
 
@@ -249,12 +262,13 @@ export default function ChapterEditorPage() {
                 title: existingChapter.title,
                 overview: existingChapter.overview ?? '',
                 sortOrder: existingChapter.sortOrder,
+                linkedEntityIds: chapterEntities?.map(ce => ce.entityId) ?? [],
             });
         } else {
             setFormData(DEFAULT_FORM_DATA);
         }
         setShowDraftRecovery(false);
-    }, [deleteDraftFromServer, existingChapter]);
+    }, [deleteDraftFromServer, existingChapter, chapterEntities]);
 
     /**
      * Update a form field. Dirty state is tracked automatically by
@@ -306,10 +320,10 @@ export default function ChapterEditorPage() {
                     },
                 });
 
-                // Create pending entity links using Promise.allSettled
-                if (pendingEntityLinks.length > 0) {
+                // Create entity links using Promise.allSettled
+                if (formData.linkedEntityIds.length > 0) {
                     const linkResults = await Promise.allSettled(
-                        pendingEntityLinks.map((entityId) =>
+                        formData.linkedEntityIds.map((entityId) =>
                             createChapterEntity.mutateAsync({
                                 campaignId,
                                 chapterId: newChapter.id,
@@ -367,6 +381,33 @@ export default function ChapterEditorPage() {
                     }
                 }
 
+                // Diff entity links against committed state
+                const committedIds = new Set(
+                    chapterEntities?.map(ce => ce.entityId) ?? []
+                );
+                const currentIds = new Set(formData.linkedEntityIds);
+
+                // Add new links
+                const toAdd = formData.linkedEntityIds.filter(id => !committedIds.has(id));
+                await Promise.allSettled(
+                    toAdd.map(entityId =>
+                        createChapterEntity.mutateAsync({
+                            campaignId, chapterId, input: { entityId },
+                        })
+                    )
+                );
+
+                // Remove deleted links
+                const toRemove = chapterEntities
+                    ?.filter(ce => !currentIds.has(ce.entityId)) ?? [];
+                await Promise.allSettled(
+                    toRemove.map(ce =>
+                        deleteChapterEntity.mutateAsync({
+                            campaignId, chapterId, linkId: ce.id,
+                        })
+                    )
+                );
+
                 await deleteDraftFromServer();
             }
 
@@ -383,8 +424,9 @@ export default function ChapterEditorPage() {
         createChapter,
         updateChapter,
         chapterId,
-        pendingEntityLinks,
+        chapterEntities,
         createChapterEntity,
+        deleteChapterEntity,
         deleteDraftFromServer,
         navigate,
     ]);
@@ -404,48 +446,26 @@ export default function ChapterEditorPage() {
      * Link an entity to this chapter.
      */
     const handleLinkEntity = useCallback(
-        async (entityId: number) => {
-            try {
-                if (isNewChapter) {
-                    // Add to pending links for new chapters
-                    setPendingEntityLinks((prev) => [...prev, entityId]);
-                } else if (campaignId && chapterId) {
-                    // Create the link immediately for existing chapters
-                    await createChapterEntity.mutateAsync({
-                        campaignId,
-                        chapterId,
-                        input: { entityId },
-                    });
-                }
-            } catch (error) {
-                console.error('Failed to link entity:', error);
-            }
+        (entityId: number) => {
+            setFormData(prev => ({
+                ...prev,
+                linkedEntityIds: [...prev.linkedEntityIds, entityId],
+            }));
         },
-        [isNewChapter, campaignId, chapterId, createChapterEntity]
+        []
     );
 
     /**
      * Unlink an entity from this chapter.
      */
     const handleUnlinkEntity = useCallback(
-        async (linkId: number, entityId: number) => {
-            try {
-                if (isNewChapter) {
-                    // Remove from pending links for new chapters
-                    setPendingEntityLinks((prev) => prev.filter((id) => id !== entityId));
-                } else if (campaignId && chapterId) {
-                    // Delete the link immediately for existing chapters
-                    await deleteChapterEntity.mutateAsync({
-                        campaignId,
-                        chapterId,
-                        linkId,
-                    });
-                }
-            } catch (error) {
-                console.error('Failed to unlink entity:', error);
-            }
+        (_linkId: number, entityId: number) => {
+            setFormData(prev => ({
+                ...prev,
+                linkedEntityIds: prev.linkedEntityIds.filter(id => id !== entityId),
+            }));
         },
-        [isNewChapter, campaignId, chapterId, deleteChapterEntity]
+        []
     );
 
     // Build breadcrumbs
@@ -466,26 +486,34 @@ export default function ChapterEditorPage() {
     );
 
     // Get linked entities for display
-    const linkedEntities = useMemo(() => {
-        if (isNewChapter) {
-            // For new chapters, show entities from pending links
-            return pendingEntityLinks
-                .map((id) => allEntities?.find((e) => e.id === id))
-                .filter((e): e is Entity => !!e);
-        }
-        // For existing chapters, show entities from chapter_entities
-        return chapterEntities?.map((ce) => ce.entity).filter((e): e is Entity => !!e) ?? [];
-    }, [isNewChapter, pendingEntityLinks, allEntities, chapterEntities]);
+    const linkedEntities = useMemo(() =>
+        formData.linkedEntityIds
+            .map(id => allEntities?.find(e => e.id === id))
+            .filter((e): e is Entity => !!e),
+        [formData.linkedEntityIds, allEntities]
+    );
 
     // Get available entities (not yet linked)
     const availableEntities = useMemo(() => {
-        const linkedIds = new Set(
-            isNewChapter
-                ? pendingEntityLinks
-                : chapterEntities?.map((ce) => ce.entityId) ?? []
-        );
-        return allEntities?.filter((e) => !linkedIds.has(e.id)) ?? [];
-    }, [isNewChapter, pendingEntityLinks, chapterEntities, allEntities]);
+        const linked = new Set(formData.linkedEntityIds);
+        return allEntities?.filter(e => !linked.has(e.id)) ?? [];
+    }, [formData.linkedEntityIds, allEntities]);
+
+    /**
+     * Link all available entities to this chapter at once.
+     */
+    const handleLinkAllEntities = useCallback(() => {
+        setFormData(prev => ({
+            ...prev,
+            linkedEntityIds: [
+                ...prev.linkedEntityIds,
+                ...availableEntities.map(e => e.id),
+            ],
+        }));
+    }, [availableEntities]);
+
+    // Accordion expanded state for linked entities section
+    const [linkedAccordionExpanded, setLinkedAccordionExpanded] = useState(true);
 
     // Loading state
     if (!isNewChapter && chapterLoading) {
@@ -632,102 +660,135 @@ export default function ChapterEditorPage() {
                             </Alert>
                         )}
 
-                        {/* Linked entities list */}
-                        {linkedEntities.length > 0 ? (
+                        {/* Available entities to link */}
+                        {availableEntities.length > 0 && (
                             <Box sx={{ mb: 2 }}>
-                                {linkedEntities.map((entity) => {
-                                    const link = chapterEntities?.find(
-                                        (ce) => ce.entityId === entity.id
-                                    );
-                                    return (
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        mb: 1,
+                                    }}
+                                >
+                                    <Typography variant="subtitle2">
+                                        Link an Entity
+                                    </Typography>
+                                    <Button
+                                        size="small"
+                                        variant="outlined"
+                                        onClick={handleLinkAllEntities}
+                                    >
+                                        Accept All
+                                    </Button>
+                                </Box>
+                                <Box sx={{ maxHeight: 300, overflow: 'auto' }}>
+                                    {availableEntities.map((entity) => (
                                         <Box
                                             key={entity.id}
                                             sx={{
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'space-between',
-                                                py: 1,
-                                                borderBottom: 1,
-                                                borderColor: 'divider',
+                                                py: 0.5,
                                             }}
                                         >
-                                            <Box>
-                                                <Typography variant="body2">
-                                                    {entity.name}
-                                                </Typography>
-                                                <Typography
-                                                    variant="caption"
-                                                    color="text.secondary"
-                                                >
-                                                    {entity.entityType}
-                                                </Typography>
-                                            </Box>
+                                            <Typography variant="body2" noWrap sx={{ flex: 1 }}>
+                                                {entity.name}
+                                            </Typography>
                                             <MuiLink
                                                 component="button"
                                                 variant="caption"
-                                                onClick={() =>
-                                                    handleUnlinkEntity(
-                                                        link?.id ?? 0,
-                                                        entity.id
-                                                    )
-                                                }
-                                                sx={{ color: 'error.main' }}
+                                                onClick={() => handleLinkEntity(entity.id)}
                                             >
-                                                Remove
+                                                Link
                                             </MuiLink>
                                         </Box>
-                                    );
-                                })}
+                                    ))}
+                                </Box>
                             </Box>
-                        ) : (
-                            <Typography
-                                variant="body2"
-                                color="text.secondary"
-                                sx={{ mb: 2 }}
-                            >
-                                No entities linked yet.
-                            </Typography>
                         )}
 
-                        {/* Quick entity selector */}
-                        {availableEntities.length > 0 && (
-                            <Box>
-                                <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                                    Link an Entity
+                        <Divider sx={{ my: 1 }} />
+
+                        {/* Linked entities - collapsible accordion */}
+                        <Accordion
+                            expanded={linkedAccordionExpanded}
+                            onChange={(_event, isExpanded) =>
+                                setLinkedAccordionExpanded(isExpanded)
+                            }
+                            disableGutters
+                            elevation={0}
+                            sx={{
+                                '&::before': { display: 'none' },
+                                backgroundColor: 'transparent',
+                            }}
+                        >
+                            <AccordionSummary
+                                expandIcon={<ExpandMoreIcon />}
+                                sx={{ px: 0, minHeight: 'unset' }}
+                            >
+                                <Typography variant="subtitle2">
+                                    Linked ({linkedEntities.length})
                                 </Typography>
-                                {availableEntities.slice(0, 5).map((entity) => (
-                                    <Box
-                                        key={entity.id}
-                                        sx={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'space-between',
-                                            py: 0.5,
-                                        }}
-                                    >
-                                        <Typography variant="body2" noWrap sx={{ flex: 1 }}>
-                                            {entity.name}
-                                        </Typography>
-                                        <MuiLink
-                                            component="button"
-                                            variant="caption"
-                                            onClick={() => handleLinkEntity(entity.id)}
-                                        >
-                                            Link
-                                        </MuiLink>
+                            </AccordionSummary>
+                            <AccordionDetails sx={{ px: 0, pt: 0 }}>
+                                {linkedEntities.length > 0 ? (
+                                    <Box sx={{ maxHeight: 300, overflow: 'auto' }}>
+                                        {linkedEntities.map((entity) => {
+                                            const link = chapterEntities?.find(
+                                                (ce) => ce.entityId === entity.id
+                                            );
+                                            return (
+                                                <Box
+                                                    key={entity.id}
+                                                    sx={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'space-between',
+                                                        py: 1,
+                                                        borderBottom: 1,
+                                                        borderColor: 'divider',
+                                                    }}
+                                                >
+                                                    <Box>
+                                                        <Typography variant="body2">
+                                                            {entity.name}
+                                                        </Typography>
+                                                        <Typography
+                                                            variant="caption"
+                                                            color="text.secondary"
+                                                        >
+                                                            {entity.entityType}
+                                                        </Typography>
+                                                    </Box>
+                                                    <MuiLink
+                                                        component="button"
+                                                        variant="caption"
+                                                        onClick={() =>
+                                                            handleUnlinkEntity(
+                                                                link?.id ?? 0,
+                                                                entity.id
+                                                            )
+                                                        }
+                                                        sx={{ color: 'error.main' }}
+                                                    >
+                                                        Remove
+                                                    </MuiLink>
+                                                </Box>
+                                            );
+                                        })}
                                     </Box>
-                                ))}
-                                {availableEntities.length > 5 && (
+                                ) : (
                                     <Typography
-                                        variant="caption"
+                                        variant="body2"
                                         color="text.secondary"
                                     >
-                                        +{availableEntities.length - 5} more entities
-                                        available
+                                        No entities linked yet.
                                     </Typography>
                                 )}
-                            </Box>
-                        )}
+                            </AccordionDetails>
+                        </Accordion>
                     </Paper>
                 </Box>
             </Box>

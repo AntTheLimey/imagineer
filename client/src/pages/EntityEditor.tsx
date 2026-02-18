@@ -280,11 +280,18 @@ export default function EntityEditor() {
         }
     }, [existingEntity, isNewEntity]);
 
-    // Auto-apply server draft on load: show draft data with a dismissable banner
+    // Auto-apply server draft on load: show draft data with a dismissable
+    // banner. Uses a ref to ensure the draft is only applied once on
+    // initial load; after the user ditches the draft, a brief stale
+    // reference to serverDraft will not re-apply it.
+    const draftAppliedRef = useRef(false);
     useEffect(() => {
-        if (!draftLoading && hasServerDraft && serverDraft !== null) {
-            setFormData(serverDraft);
-            setShowDraftRecovery(true);
+        if (!draftLoading && !draftAppliedRef.current) {
+            draftAppliedRef.current = true;
+            if (hasServerDraft && serverDraft !== null) {
+                setFormData(serverDraft);
+                setShowDraftRecovery(true);
+            }
         }
     }, [draftLoading, hasServerDraft, serverDraft]);
 

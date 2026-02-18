@@ -159,6 +159,7 @@ export function useServerDraft<T>({
     const serverVersionRef = useRef(serverVersion);
     const enabledRef = useRef(enabled);
     const isDirtyRef = useRef(false);
+    const suppressAutosaveRef = useRef(false);
 
     // Keep refs current
     useEffect(() => { currentDataRef.current = currentData; }, [currentData]);
@@ -277,14 +278,24 @@ export function useServerDraft<T>({
 
     /**
      * Delete the draft from the server.
+     *
+     * Suppresses autosave temporarily so the debounced timer that may
+     * still be pending from the previous dirty state does not
+     * immediately re-create the draft after deletion.
      */
     const deleteDraftFromServer = useCallback(async () => {
+        suppressAutosaveRef.current = true;
         await deleteMutation.mutateAsync();
-    }, [deleteMutation]);
+        // Also set query data to null so serverDraft is immediately
+        // null rather than waiting for removeQueries to propagate.
+        queryClient.setQueryData(draftQueryKey, null);
+        // Re-enable autosave after a tick so the next real edit can save
+        setTimeout(() => { suppressAutosaveRef.current = false; }, 100);
+    }, [deleteMutation, queryClient, draftQueryKey]);
 
     // Debounced autosave: schedule a server save when dirty
     useEffect(() => {
-        if (!enabled || !isDirty) {
+        if (!enabled || !isDirty || suppressAutosaveRef.current) {
             return;
         }
 
@@ -312,7 +323,7 @@ export function useServerDraft<T>({
     // Save on unmount using fetch with keepalive
     useEffect(() => {
         return () => {
-            if (!enabledRef.current || !isDirtyRef.current) {
+            if (!enabledRef.current || !isDirtyRef.current || suppressAutosaveRef.current) {
                 return;
             }
 
