@@ -26,6 +26,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/antonypegg/imagineer/internal/agents/ttrpg"
 	"github.com/antonypegg/imagineer/internal/analysis"
 	"github.com/antonypegg/imagineer/internal/auth"
 	"github.com/antonypegg/imagineer/internal/database"
@@ -1424,12 +1425,20 @@ func (h *ContentAnalysisHandler) RunContentEnrichment(
 	}
 
 	// 5. Build pipeline and spawn background goroutine for enrichment.
-	agent := enrichment.NewEnrichmentAgent(h.db)
-	pipeline := enrichment.NewPipeline(h.db, []enrichment.Stage{{
-		Name:   "enrichment",
-		Phase:  "enrichment",
-		Agents: []enrichment.PipelineAgent{agent},
-	}})
+	ttrpgAgent := ttrpg.NewExpert()
+	enrichAgent := enrichment.NewEnrichmentAgent(h.db)
+	pipeline := enrichment.NewPipeline(h.db, []enrichment.Stage{
+		{
+			Name:   "analysis",
+			Phase:  "analysis",
+			Agents: []enrichment.PipelineAgent{ttrpgAgent},
+		},
+		{
+			Name:   "enrichment",
+			Phase:  "enrichment",
+			Agents: []enrichment.PipelineAgent{enrichAgent},
+		},
+	})
 
 	bgCtx, cancel := context.WithCancel(context.Background())
 	h.enrichCancels.Store(jobID, cancel)
@@ -1578,12 +1587,20 @@ func (h *ContentAnalysisHandler) TryAutoEnrich(
 	}
 
 	// 8. Build pipeline and spawn background goroutine for enrichment.
-	agent := enrichment.NewEnrichmentAgent(h.db)
-	pipeline := enrichment.NewPipeline(h.db, []enrichment.Stage{{
-		Name:   "enrichment",
-		Phase:  "enrichment",
-		Agents: []enrichment.PipelineAgent{agent},
-	}})
+	ttrpgAgent := ttrpg.NewExpert()
+	enrichAgent := enrichment.NewEnrichmentAgent(h.db)
+	pipeline := enrichment.NewPipeline(h.db, []enrichment.Stage{
+		{
+			Name:   "analysis",
+			Phase:  "analysis",
+			Agents: []enrichment.PipelineAgent{ttrpgAgent},
+		},
+		{
+			Name:   "enrichment",
+			Phase:  "enrichment",
+			Agents: []enrichment.PipelineAgent{enrichAgent},
+		},
+	})
 
 	bgCtx, cancel := context.WithCancel(context.Background())
 	h.enrichCancels.Store(jobID, cancel)

@@ -57,6 +57,7 @@ import {
     PersonAdd,
     Undo,
     ExpandMore,
+    Assessment,
 } from '@mui/icons-material';
 import FullScreenLayout from '../layouts/FullScreenLayout';
 import {
@@ -140,6 +141,51 @@ const ENRICHMENT_GROUPS = [
         color: '#7b1fa2',
     },
 ];
+
+/**
+ * Analysis detection type grouping configuration (Phase: analysis).
+ * These are advisory items from the TTRPG Expert agent's holistic
+ * content review, appearing before identification items.
+ */
+const ANALYSIS_GROUPS: Record<
+    string,
+    { label: string; color: string; description: string }
+> = {
+    analysis_report: {
+        label: 'Analysis Report',
+        color: '#1565c0',
+        description: 'Holistic content quality analysis',
+    },
+    content_suggestion: {
+        label: 'Content Suggestion',
+        color: '#2e7d32',
+        description: 'Quality improvement suggestion',
+    },
+    mechanics_warning: {
+        label: 'Mechanics Warning',
+        color: '#e65100',
+        description: 'Game system rules or stats issue',
+    },
+    investigation_gap: {
+        label: 'Investigation Gap',
+        color: '#6a1b9a',
+        description: 'Three Clue Rule or investigation design gap',
+    },
+    pacing_note: {
+        label: 'Pacing Note',
+        color: '#00838f',
+        description: 'Scene pacing or tension concern',
+    },
+};
+
+/**
+ * Severity chip color mapping for analysis items.
+ */
+const SEVERITY_COLORS: Record<string, 'info' | 'warning' | 'error'> = {
+    info: 'info',
+    warning: 'warning',
+    error: 'error',
+};
 
 /**
  * All available entity types for the new entity creation form.
@@ -638,6 +684,11 @@ export default function AnalysisTriagePage() {
         return items.filter((i) => i.phase === 'enrichment');
     }, [items]);
 
+    const analysisItems = useMemo(() => {
+        if (!items) return [];
+        return items.filter((i) => i.phase === 'analysis');
+    }, [items]);
+
     // Enrichment status
     const enrichmentStatus = useMemo(() => {
         if (!job || job.totalItems === 0) return null;
@@ -712,14 +763,22 @@ export default function AnalysisTriagePage() {
         return enrichmentItems.filter((i) => i.resolution === 'pending');
     }, [enrichmentItems]);
 
+    const pendingAnalysisItems = useMemo(() => {
+        return analysisItems.filter((i) => i.resolution === 'pending');
+    }, [analysisItems]);
+
     const resolvedItems = useMemo(() => {
         if (!items) return [];
         return items.filter((i) => i.resolution !== 'pending');
     }, [items]);
 
     const pendingItems = useMemo(() => {
-        return [...pendingIdentificationItems, ...pendingEnrichmentItems];
-    }, [pendingIdentificationItems, pendingEnrichmentItems]);
+        return [
+            ...pendingAnalysisItems,
+            ...pendingIdentificationItems,
+            ...pendingEnrichmentItems,
+        ];
+    }, [pendingAnalysisItems, pendingIdentificationItems, pendingEnrichmentItems]);
 
     /**
      * Group only pending identification items by detection type for the
@@ -897,15 +956,26 @@ export default function AnalysisTriagePage() {
      *
      * Each entry is either:
      * - An individual item (Phase 1 items, description_update,
-     *   new_entity_suggestion), or
+     *   new_entity_suggestion, or analysis items), or
      * - An entity group (log_entry, relationship_suggestion grouped by
      *   entityId).
      *
-     * This mirrors the rendering order: DETECTION_GROUPS first, then
-     * ENRICHMENT_GROUPS, each containing their items/groups in order.
+     * This mirrors the rendering order: ANALYSIS items first, then
+     * DETECTION_GROUPS, then ENRICHMENT_GROUPS, each containing their
+     * items/groups in order.
      */
     const leftPanelOrder = useMemo((): LeftPanelEntry[] => {
         const entries: LeftPanelEntry[] = [];
+
+        // Analysis phase items listed individually per detection group.
+        for (const key of Object.keys(ANALYSIS_GROUPS)) {
+            const groupItems = pendingAnalysisItems.filter(
+                (item) => item.detectionType === key,
+            );
+            for (const item of groupItems) {
+                entries.push({ kind: 'item', item });
+            }
+        }
 
         // Phase 1: identification items listed individually per
         // detection group.
@@ -956,7 +1026,7 @@ export default function AnalysisTriagePage() {
         }
 
         return entries;
-    }, [groupedPendingItems, pendingEnrichmentItems]);
+    }, [pendingAnalysisItems, groupedPendingItems, pendingEnrichmentItems]);
 
     /**
      * Advance the selection to the next pending item after a resolution,
@@ -1132,6 +1202,25 @@ export default function AnalysisTriagePage() {
         handleEnrichmentResolve(item.id, 'dismissed', item);
         // Note: re-enrichment would be triggered when the user saves from the editor
     }, [handleEnrichmentResolve]);
+
+    /**
+     * Handle resolving an analysis-phase item. These are advisory, so
+     * "Accept" maps to "acknowledged" and "Dismiss" maps to "dismissed".
+     */
+    const handleAnalysisResolve = useCallback(
+        (itemId: number, resolution: 'acknowledged' | 'dismissed') => {
+            resolveItem.mutate(
+                {
+                    itemId,
+                    req: { resolution },
+                },
+                {
+                    onSuccess: () => advanceToNextPending(itemId),
+                },
+            );
+        },
+        [resolveItem, advanceToNextPending],
+    );
 
     if (Number.isNaN(numericCampaignId) || Number.isNaN(numericJobId)) {
         return (
@@ -1420,6 +1509,206 @@ export default function AnalysisTriagePage() {
                                 </Alert>
                             </Box>
                         )}
+                        {/* Analysis phase items (advisory) */}
+                        {pendingAnalysisItems.length > 0 && (
+                            <Box>
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 1,
+                                        px: 2,
+                                        py: 1.5,
+                                        bgcolor: 'background.default',
+                                    }}
+                                >
+                                    <Assessment
+                                        fontSize="small"
+                                        sx={{ color: '#1565c0' }}
+                                    />
+                                    <Typography
+                                        variant="subtitle2"
+                                        sx={{
+                                            fontWeight: 600,
+                                            flexGrow: 1,
+                                        }}
+                                    >
+                                        Content Analysis (
+                                        {pendingAnalysisItems.length})
+                                    </Typography>
+                                    <Tooltip title="Acknowledge all analysis items">
+                                        <span>
+                                            <Button
+                                                size="small"
+                                                variant="outlined"
+                                                startIcon={
+                                                    <DoneAll
+                                                        fontSize="small"
+                                                    />
+                                                }
+                                                onClick={() => {
+                                                    for (const item of pendingAnalysisItems) {
+                                                        handleAnalysisResolve(
+                                                            item.id,
+                                                            'acknowledged',
+                                                        );
+                                                    }
+                                                }}
+                                                disabled={
+                                                    resolveItem.isPending
+                                                }
+                                                sx={{
+                                                    textTransform: 'none',
+                                                    py: 0,
+                                                    minHeight: 28,
+                                                }}
+                                            >
+                                                Acknowledge All
+                                            </Button>
+                                        </span>
+                                    </Tooltip>
+                                </Box>
+                                <Divider />
+                                {pendingAnalysisItems.map((item) => {
+                                    const groupConfig =
+                                        ANALYSIS_GROUPS[
+                                            item.detectionType
+                                        ];
+                                    const suggestion =
+                                        item.suggestedContent as Record<
+                                            string,
+                                            unknown
+                                        > | null;
+                                    const severity =
+                                        suggestion?.severity as
+                                            | string
+                                            | undefined;
+                                    return (
+                                        <ListItemButton
+                                            key={item.id}
+                                            selected={
+                                                selectedItemId === item.id
+                                            }
+                                            onClick={() =>
+                                                handleSelectItem(item)
+                                            }
+                                            sx={{
+                                                bgcolor:
+                                                    selectedItemId ===
+                                                    item.id
+                                                        ? 'action.selected'
+                                                        : undefined,
+                                            }}
+                                        >
+                                            <ListItemText
+                                                primary={
+                                                    <Box
+                                                        sx={{
+                                                            display: 'flex',
+                                                            alignItems:
+                                                                'center',
+                                                            gap: 0.75,
+                                                            flexWrap:
+                                                                'wrap',
+                                                        }}
+                                                    >
+                                                        <Chip
+                                                            label={
+                                                                groupConfig
+                                                                    ?.label ??
+                                                                item.detectionType
+                                                            }
+                                                            size="small"
+                                                            sx={{
+                                                                height: 22,
+                                                                bgcolor:
+                                                                    groupConfig?.color ??
+                                                                    '#757575',
+                                                                color: 'white',
+                                                                fontWeight: 600,
+                                                                fontSize:
+                                                                    '0.7rem',
+                                                            }}
+                                                        />
+                                                        {severity && (
+                                                            <Chip
+                                                                label={severity}
+                                                                size="small"
+                                                                color={
+                                                                    SEVERITY_COLORS[
+                                                                        severity
+                                                                    ] ??
+                                                                    'default'
+                                                                }
+                                                                variant="outlined"
+                                                                sx={{
+                                                                    height: 20,
+                                                                    fontSize:
+                                                                        '0.65rem',
+                                                                }}
+                                                            />
+                                                        )}
+                                                    </Box>
+                                                }
+                                                secondary={
+                                                    item.detectionType ===
+                                                    'analysis_report'
+                                                        ? 'Holistic content analysis'
+                                                        : String(
+                                                              suggestion?.description ??
+                                                                  item.matchedText,
+                                                          ).length > 80
+                                                          ? `${String(suggestion?.description ?? item.matchedText).slice(0, 80)}...`
+                                                          : String(
+                                                                suggestion?.description ??
+                                                                    item.matchedText,
+                                                            )
+                                                }
+                                            />
+                                            <Box
+                                                sx={{
+                                                    display: 'flex',
+                                                    gap: 0.5,
+                                                    ml: 1,
+                                                }}
+                                            >
+                                                <Tooltip title="Acknowledge">
+                                                    <IconButton
+                                                        size="small"
+                                                        color="success"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleAnalysisResolve(
+                                                                item.id,
+                                                                'acknowledged',
+                                                            );
+                                                        }}
+                                                    >
+                                                        <Check fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                                <Tooltip title="Dismiss">
+                                                    <IconButton
+                                                        size="small"
+                                                        color="error"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleAnalysisResolve(
+                                                                item.id,
+                                                                'dismissed',
+                                                            );
+                                                        }}
+                                                    >
+                                                        <Close fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                            </Box>
+                                        </ListItemButton>
+                                    );
+                                })}
+                            </Box>
+                        )}
+
                         {DETECTION_GROUPS.map((group) => {
                             const groupItems =
                                 groupedPendingItems[group.key];
@@ -2350,7 +2639,274 @@ export default function AnalysisTriagePage() {
                             })}
                         </Stack>
                     ) : selectedItem ? (
-                        selectedItem.phase === 'enrichment' ? (
+                        selectedItem.phase === 'analysis' ? (
+                            /* Analysis detail view (advisory) */
+                            <Stack spacing={3}>
+                                {/* Analysis header */}
+                                <Box>
+                                    <Box
+                                        sx={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 1,
+                                            mb: 1,
+                                        }}
+                                    >
+                                        <Assessment
+                                            sx={{
+                                                color:
+                                                    ANALYSIS_GROUPS[
+                                                        selectedItem
+                                                            .detectionType
+                                                    ]?.color ?? '#757575',
+                                            }}
+                                        />
+                                        <Typography
+                                            variant="h6"
+                                            sx={{ fontWeight: 600 }}
+                                        >
+                                            {ANALYSIS_GROUPS[
+                                                selectedItem.detectionType
+                                            ]?.label ??
+                                                selectedItem.detectionType}
+                                        </Typography>
+                                    </Box>
+                                    <Typography
+                                        variant="body2"
+                                        color="text.secondary"
+                                    >
+                                        {ANALYSIS_GROUPS[
+                                            selectedItem.detectionType
+                                        ]?.description ??
+                                            'Advisory analysis item'}
+                                    </Typography>
+                                </Box>
+
+                                <Divider />
+
+                                {/* Analysis report: display formatted report text */}
+                                {selectedItem.detectionType ===
+                                    'analysis_report' &&
+                                    ((): React.ReactNode => {
+                                        const suggestion =
+                                            selectedItem.suggestedContent as Record<
+                                                string,
+                                                unknown
+                                            > | null;
+                                        const report = String(
+                                            suggestion?.report ?? '',
+                                        );
+                                        if (!report) {
+                                            return (
+                                                <Typography
+                                                    variant="body2"
+                                                    color="text.secondary"
+                                                >
+                                                    No report data
+                                                    available.
+                                                </Typography>
+                                            );
+                                        }
+                                        return (
+                                            <Box
+                                                sx={{
+                                                    whiteSpace:
+                                                        'pre-wrap',
+                                                    fontFamily:
+                                                        'inherit',
+                                                    fontSize:
+                                                        '0.875rem',
+                                                    lineHeight: 1.7,
+                                                    p: 2,
+                                                    bgcolor:
+                                                        'action.hover',
+                                                    borderRadius: 1,
+                                                }}
+                                            >
+                                                {report}
+                                            </Box>
+                                        );
+                                    })()}
+
+                                {/* Other analysis items: structured detail */}
+                                {selectedItem.detectionType !==
+                                    'analysis_report' &&
+                                    ((): React.ReactNode => {
+                                        const suggestion =
+                                            selectedItem.suggestedContent as Record<
+                                                string,
+                                                unknown
+                                            > | null;
+                                        if (!suggestion) {
+                                            return (
+                                                <Typography
+                                                    variant="body2"
+                                                    color="text.secondary"
+                                                >
+                                                    No suggestion data
+                                                    available.
+                                                </Typography>
+                                            );
+                                        }
+                                        const category = String(
+                                            suggestion.category ?? '',
+                                        );
+                                        const severity = String(
+                                            suggestion.severity ?? '',
+                                        );
+                                        const description = String(
+                                            suggestion.description ?? '',
+                                        );
+                                        const suggestionText = String(
+                                            suggestion.suggestion ?? '',
+                                        );
+                                        const lineReference = String(
+                                            suggestion.lineReference ?? '',
+                                        );
+                                        return (
+                                            <Stack spacing={2}>
+                                                <Box
+                                                    sx={{
+                                                        display: 'flex',
+                                                        alignItems:
+                                                            'center',
+                                                        gap: 1,
+                                                        flexWrap: 'wrap',
+                                                    }}
+                                                >
+                                                    {category && (
+                                                        <Chip
+                                                            label={category}
+                                                            size="small"
+                                                            sx={{
+                                                                bgcolor:
+                                                                    ANALYSIS_GROUPS[
+                                                                        selectedItem
+                                                                            .detectionType
+                                                                    ]?.color ??
+                                                                    '#757575',
+                                                                color: 'white',
+                                                                fontWeight: 600,
+                                                            }}
+                                                        />
+                                                    )}
+                                                    {severity && (
+                                                        <Chip
+                                                            label={severity}
+                                                            size="small"
+                                                            color={
+                                                                SEVERITY_COLORS[
+                                                                    severity
+                                                                ] ??
+                                                                'default'
+                                                            }
+                                                            variant="outlined"
+                                                        />
+                                                    )}
+                                                    {lineReference && (
+                                                        <Typography
+                                                            variant="caption"
+                                                            color="text.secondary"
+                                                        >
+                                                            Ref:{' '}
+                                                            {lineReference}
+                                                        </Typography>
+                                                    )}
+                                                </Box>
+                                                {description && (
+                                                    <Box>
+                                                        <Typography
+                                                            variant="subtitle2"
+                                                            gutterBottom
+                                                        >
+                                                            Description
+                                                        </Typography>
+                                                        <Typography variant="body2">
+                                                            {description}
+                                                        </Typography>
+                                                    </Box>
+                                                )}
+                                                {suggestionText && (
+                                                    <Box>
+                                                        <Typography
+                                                            variant="subtitle2"
+                                                            gutterBottom
+                                                        >
+                                                            Suggestion
+                                                        </Typography>
+                                                        <Typography
+                                                            variant="body2"
+                                                            sx={{
+                                                                fontStyle:
+                                                                    'italic',
+                                                                pl: 2,
+                                                                borderLeft:
+                                                                    '3px solid',
+                                                                borderColor:
+                                                                    'divider',
+                                                            }}
+                                                        >
+                                                            {suggestionText}
+                                                        </Typography>
+                                                    </Box>
+                                                )}
+                                            </Stack>
+                                        );
+                                    })()}
+
+                                {/* Resolution status */}
+                                {selectedItem.resolution !== 'pending' && (
+                                    <Alert severity="info">
+                                        This item has been resolved as{' '}
+                                        <strong>
+                                            {selectedItem.resolution}
+                                        </strong>
+                                        .
+                                    </Alert>
+                                )}
+
+                                {/* Analysis action buttons */}
+                                {selectedItem.resolution === 'pending' && (
+                                    <Stack
+                                        direction="row"
+                                        spacing={1}
+                                    >
+                                        <Button
+                                            variant="contained"
+                                            color="success"
+                                            startIcon={<Check />}
+                                            onClick={() =>
+                                                handleAnalysisResolve(
+                                                    selectedItem.id,
+                                                    'acknowledged',
+                                                )
+                                            }
+                                            disabled={
+                                                resolveItem.isPending
+                                            }
+                                        >
+                                            Acknowledge
+                                        </Button>
+                                        <Button
+                                            variant="outlined"
+                                            color="error"
+                                            startIcon={<Close />}
+                                            onClick={() =>
+                                                handleAnalysisResolve(
+                                                    selectedItem.id,
+                                                    'dismissed',
+                                                )
+                                            }
+                                            disabled={
+                                                resolveItem.isPending
+                                            }
+                                        >
+                                            Dismiss
+                                        </Button>
+                                    </Stack>
+                                )}
+                            </Stack>
+                        ) : selectedItem.phase === 'enrichment' ? (
                             /* Enrichment detail view (Phase 2) */
                             <Stack spacing={3}>
                                 {/* Entity header */}

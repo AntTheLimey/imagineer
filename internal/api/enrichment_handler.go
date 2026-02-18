@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/antonypegg/imagineer/internal/agents/ttrpg"
 	"github.com/antonypegg/imagineer/internal/auth"
 	"github.com/antonypegg/imagineer/internal/database"
 	"github.com/antonypegg/imagineer/internal/enrichment"
@@ -157,13 +158,21 @@ func (h *EnrichmentHandler) TriggerEnrichment(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Build the pipeline with a single enrichment stage.
-	agent := enrichment.NewEnrichmentAgent(h.db)
-	pipeline := enrichment.NewPipeline(h.db, []enrichment.Stage{{
-		Name:   "enrichment",
-		Phase:  "enrichment",
-		Agents: []enrichment.PipelineAgent{agent},
-	}})
+	// Build the pipeline with analysis and enrichment stages.
+	ttrpgAgent := ttrpg.NewExpert()
+	enrichAgent := enrichment.NewEnrichmentAgent(h.db)
+	pipeline := enrichment.NewPipeline(h.db, []enrichment.Stage{
+		{
+			Name:   "analysis",
+			Phase:  "analysis",
+			Agents: []enrichment.PipelineAgent{ttrpgAgent},
+		},
+		{
+			Name:   "enrichment",
+			Phase:  "enrichment",
+			Agents: []enrichment.PipelineAgent{enrichAgent},
+		},
+	})
 
 	// Pre-load entity objects from the accepted entity IDs.
 	entities := make([]models.Entity, 0, len(entityIDs))

@@ -49,18 +49,23 @@ export interface ContentAnalysisItem {
         | 'description_update'
         | 'log_entry'
         | 'relationship_suggestion'
-        | 'new_entity_suggestion';
+        | 'new_entity_suggestion'
+        | 'analysis_report'
+        | 'content_suggestion'
+        | 'mechanics_warning'
+        | 'investigation_gap'
+        | 'pacing_note';
     matchedText: string;
     entityId?: number;
     similarity?: number;
     contextSnippet?: string;
     positionStart?: number;
     positionEnd?: number;
-    resolution: 'pending' | 'accepted' | 'new_entity' | 'dismissed';
+    resolution: 'pending' | 'accepted' | 'acknowledged' | 'new_entity' | 'dismissed';
     resolvedEntityId?: number;
     resolvedAt?: string;
     suggestedContent?: Record<string, unknown>;
-    phase: 'identification' | 'enrichment';
+    phase: 'identification' | 'enrichment' | 'analysis';
     createdAt: string;
     entityName?: string;
     entityType?: EntityType;
@@ -78,7 +83,7 @@ export interface AnalysisSummary {
  * Request payload for resolving a single analysis item.
  */
 export interface ResolveAnalysisItemRequest {
-    resolution: 'accepted' | 'new_entity' | 'dismissed';
+    resolution: 'accepted' | 'acknowledged' | 'new_entity' | 'dismissed';
     entityType?: EntityType;
     entityName?: string;
     /** Override for the relationship type in a relationship_suggestion. */
