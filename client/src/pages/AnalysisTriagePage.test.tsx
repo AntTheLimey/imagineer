@@ -22,6 +22,8 @@ vi.mock('../hooks/useContentAnalysis', () => ({
     useTriggerEnrichment: vi.fn(),
     useCancelEnrichment: vi.fn(),
     useEnrichmentStream: vi.fn(),
+    useGenerateRevision: vi.fn(),
+    useApplyRevision: vi.fn(),
 }));
 
 vi.mock('../hooks/useUserSettings', () => ({
@@ -37,6 +39,8 @@ import {
     useTriggerEnrichment,
     useCancelEnrichment,
     useEnrichmentStream,
+    useGenerateRevision,
+    useApplyRevision,
 } from '../hooks/useContentAnalysis';
 import { useUserSettings } from '../hooks/useUserSettings';
 
@@ -48,6 +52,8 @@ const mockUseRevertItem = vi.mocked(useRevertItem);
 const mockUseTriggerEnrichment = vi.mocked(useTriggerEnrichment);
 const mockUseCancelEnrichment = vi.mocked(useCancelEnrichment);
 const mockUseEnrichmentStream = vi.mocked(useEnrichmentStream);
+const mockUseGenerateRevision = vi.mocked(useGenerateRevision);
+const mockUseApplyRevision = vi.mocked(useApplyRevision);
 const mockUseUserSettings = vi.mocked(useUserSettings);
 
 const queryClient = new QueryClient({
@@ -161,6 +167,15 @@ describe('AnalysisTriagePage', () => {
             isPending: false,
         } as unknown as ReturnType<typeof useCancelEnrichment>);
         mockUseEnrichmentStream.mockReturnValue(undefined);
+        mockUseGenerateRevision.mockReturnValue({
+            mutate: vi.fn(),
+            isPending: false,
+        } as unknown as ReturnType<typeof useGenerateRevision>);
+        mockUseApplyRevision.mockReturnValue({
+            mutate: vi.fn(),
+            mutateAsync: vi.fn(),
+            isPending: false,
+        } as unknown as ReturnType<typeof useApplyRevision>);
         mockUseUserSettings.mockReturnValue({
             data: undefined,
             isLoading: false,

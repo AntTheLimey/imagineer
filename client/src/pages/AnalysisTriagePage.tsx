@@ -58,6 +58,8 @@ import {
     Undo,
     ExpandMore,
     Assessment,
+    AutoFixHigh,
+    Edit as EditIcon,
 } from '@mui/icons-material';
 import FullScreenLayout from '../layouts/FullScreenLayout';
 import {
@@ -69,7 +71,10 @@ import {
     useEnrichmentStream,
     useTriggerEnrichment,
     useCancelEnrichment,
+    useGenerateRevision,
+    useApplyRevision,
 } from '../hooks/useContentAnalysis';
+import { createTwoFilesPatch } from 'diff';
 import { useQuery } from '@tanstack/react-query';
 import { useUserSettings } from '../hooks/useUserSettings';
 import {
@@ -671,6 +676,19 @@ export default function AnalysisTriagePage() {
         detectionType: string;
     } | null>(null);
 
+    // Revision workflow state
+    const [revisionState, setRevisionState] = useState<
+        'idle' | 'generating' | 'reviewing' | 'editing' | 'applied'
+    >('idle');
+    const [revisionResult, setRevisionResult] = useState<{
+        revisedContent: string;
+        originalContent: string;
+        summary: string;
+    } | null>(null);
+    const [editedRevision, setEditedRevision] = useState<string>('');
+    const generateRevision = useGenerateRevision(numericCampaignId);
+    const applyRevision = useApplyRevision(numericCampaignId);
+
     // Relationship type overrides keyed by analysis item ID.
     const [editedRelTypes, setEditedRelTypes] = useState<Map<number, string>>(
         () => new Map(),
@@ -1237,6 +1255,72 @@ export default function AnalysisTriagePage() {
         [resolveItem, advanceToNextPending],
     );
 
+    /**
+     * Whether the "Generate Revision" button should be visible.
+     * Shown when there are analysis-phase items, at least some have been
+     * acknowledged or accepted, and no revision has been generated yet.
+     */
+    const canGenerateRevision = useMemo(() => {
+        if (!analysisItems || analysisItems.length === 0) return false;
+        if (revisionState !== 'idle') return false;
+        const acknowledged = analysisItems.filter(
+            (i) =>
+                i.resolution === 'acknowledged' ||
+                i.resolution === 'accepted',
+        );
+        return acknowledged.length > 0;
+    }, [analysisItems, revisionState]);
+
+    /**
+     * Trigger revision generation from the backend.
+     */
+    const handleGenerateRevision = useCallback(() => {
+        setRevisionState('generating');
+        generateRevision.mutate(numericJobId, {
+            onSuccess: (data) => {
+                setRevisionResult(data);
+                setEditedRevision(data.revisedContent);
+                setRevisionState('reviewing');
+                // Clear any selected item so the right panel shows the
+                // revision review instead.
+                setSelectedItemId(null);
+                setSelectedEntityGroup(null);
+            },
+            onError: () => {
+                setRevisionState('idle');
+            },
+        });
+    }, [generateRevision, numericJobId]);
+
+    /**
+     * Accept and apply the revision (original or edited).
+     */
+    const handleAcceptRevision = useCallback(
+        (content: string) => {
+            applyRevision.mutate(
+                {
+                    jobId: numericJobId,
+                    req: { revisedContent: content },
+                },
+                {
+                    onSuccess: () => {
+                        setRevisionState('applied');
+                    },
+                },
+            );
+        },
+        [applyRevision, numericJobId],
+    );
+
+    /**
+     * Reject the revision and return to the normal triage view.
+     */
+    const handleRejectRevision = useCallback(() => {
+        setRevisionState('idle');
+        setRevisionResult(null);
+        setEditedRevision('');
+    }, []);
+
     if (Number.isNaN(numericCampaignId) || Number.isNaN(numericJobId)) {
         return (
             <Box sx={{ p: 4 }}>
@@ -1583,6 +1667,84 @@ export default function AnalysisTriagePage() {
                                         </span>
                                     </Tooltip>
                                 </Box>
+                                {/* Revision workflow controls */}
+                                {(canGenerateRevision ||
+                                    revisionState === 'generating' ||
+                                    revisionState === 'reviewing' ||
+                                    revisionState === 'editing' ||
+                                    revisionState === 'applied') && (
+                                    <Box
+                                        sx={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 1,
+                                            px: 2,
+                                            py: 1,
+                                            bgcolor: 'action.hover',
+                                        }}
+                                    >
+                                        {revisionState === 'idle' &&
+                                            canGenerateRevision && (
+                                            <Tooltip title="Generate an improved revision based on acknowledged findings">
+                                                <Button
+                                                    size="small"
+                                                    variant="contained"
+                                                    startIcon={
+                                                        <AutoFixHigh fontSize="small" />
+                                                    }
+                                                    onClick={
+                                                        handleGenerateRevision
+                                                    }
+                                                    sx={{
+                                                        textTransform: 'none',
+                                                        py: 0,
+                                                        minHeight: 28,
+                                                    }}
+                                                >
+                                                    Generate Revision
+                                                </Button>
+                                            </Tooltip>
+                                        )}
+                                        {revisionState === 'generating' && (
+                                            <Box
+                                                sx={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: 1,
+                                                }}
+                                            >
+                                                <CircularProgress size={16} />
+                                                <Typography
+                                                    variant="body2"
+                                                    color="text.secondary"
+                                                >
+                                                    Generating revision...
+                                                </Typography>
+                                            </Box>
+                                        )}
+                                        {(revisionState === 'reviewing' ||
+                                            revisionState === 'editing') && (
+                                            <Chip
+                                                label="Revision ready for review"
+                                                size="small"
+                                                color="info"
+                                                variant="outlined"
+                                                onClick={() => {
+                                                    setSelectedItemId(null);
+                                                    setSelectedEntityGroup(null);
+                                                }}
+                                                sx={{ cursor: 'pointer' }}
+                                            />
+                                        )}
+                                        {revisionState === 'applied' && (
+                                            <Chip
+                                                label="Revision applied"
+                                                size="small"
+                                                color="success"
+                                            />
+                                        )}
+                                    </Box>
+                                )}
                                 <Divider />
                                 {pendingAnalysisItems.map((item) => {
                                     const groupConfig =
@@ -3819,6 +3981,260 @@ export default function AnalysisTriagePage() {
                             )}
                         </Stack>
                         )
+                    ) : (revisionState === 'reviewing' ||
+                        revisionState === 'editing') &&
+                        revisionResult ? (
+                        /* Revision review panel */
+                        <Stack spacing={3}>
+                            <Box>
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 1,
+                                        mb: 1,
+                                    }}
+                                >
+                                    <AutoFixHigh
+                                        sx={{ color: '#1565c0' }}
+                                    />
+                                    <Typography
+                                        variant="h6"
+                                        sx={{ fontWeight: 600 }}
+                                    >
+                                        Revision Review
+                                    </Typography>
+                                </Box>
+                                <Alert
+                                    severity="info"
+                                    sx={{ mb: 2 }}
+                                >
+                                    {revisionResult.summary}
+                                </Alert>
+                            </Box>
+
+                            <Divider />
+
+                            {revisionState === 'editing' ? (
+                                /* Editable revision textarea */
+                                <Stack spacing={2}>
+                                    <Typography
+                                        variant="subtitle2"
+                                        gutterBottom
+                                    >
+                                        Edit Revised Content
+                                    </Typography>
+                                    <TextField
+                                        multiline
+                                        fullWidth
+                                        minRows={16}
+                                        maxRows={32}
+                                        value={editedRevision}
+                                        onChange={(e) =>
+                                            setEditedRevision(
+                                                e.target.value,
+                                            )
+                                        }
+                                        sx={{
+                                            '& .MuiInputBase-input': {
+                                                fontFamily: 'monospace',
+                                                fontSize: '0.85rem',
+                                                lineHeight: 1.6,
+                                            },
+                                        }}
+                                    />
+                                    <Stack
+                                        direction="row"
+                                        spacing={1}
+                                    >
+                                        <Button
+                                            variant="contained"
+                                            color="success"
+                                            startIcon={<Check />}
+                                            onClick={() =>
+                                                handleAcceptRevision(
+                                                    editedRevision,
+                                                )
+                                            }
+                                            disabled={
+                                                applyRevision.isPending
+                                            }
+                                        >
+                                            {applyRevision.isPending
+                                                ? 'Applying...'
+                                                : 'Save & Apply'}
+                                        </Button>
+                                        <Button
+                                            variant="outlined"
+                                            onClick={() =>
+                                                setRevisionState(
+                                                    'reviewing',
+                                                )
+                                            }
+                                        >
+                                            Cancel
+                                        </Button>
+                                    </Stack>
+                                </Stack>
+                            ) : (
+                                /* Diff view */
+                                <Stack spacing={2}>
+                                    <Typography
+                                        variant="subtitle2"
+                                        gutterBottom
+                                    >
+                                        Changes
+                                    </Typography>
+                                    <Box
+                                        sx={{
+                                            fontFamily: 'monospace',
+                                            fontSize: '0.8rem',
+                                            lineHeight: 1.6,
+                                            whiteSpace: 'pre-wrap',
+                                            wordBreak: 'break-word',
+                                            border: 1,
+                                            borderColor: 'divider',
+                                            borderRadius: 1,
+                                            overflow: 'auto',
+                                            maxHeight: 480,
+                                            p: 0,
+                                        }}
+                                    >
+                                        {createTwoFilesPatch(
+                                            'Original',
+                                            'Revised',
+                                            revisionResult.originalContent,
+                                            revisionResult.revisedContent,
+                                            '',
+                                            '',
+                                            { context: 3 },
+                                        )
+                                            .split('\n')
+                                            .map((line, idx) => {
+                                                let bgcolor =
+                                                    'transparent';
+                                                let color =
+                                                    'text.primary';
+                                                if (
+                                                    line.startsWith(
+                                                        '+++',
+                                                    ) ||
+                                                    line.startsWith(
+                                                        '---',
+                                                    )
+                                                ) {
+                                                    bgcolor =
+                                                        'action.hover';
+                                                    color =
+                                                        'text.secondary';
+                                                } else if (
+                                                    line.startsWith('@@')
+                                                ) {
+                                                    bgcolor =
+                                                        'rgba(33, 150, 243, 0.08)';
+                                                    color = 'info.main';
+                                                } else if (
+                                                    line.startsWith('+')
+                                                ) {
+                                                    bgcolor =
+                                                        'rgba(76, 175, 80, 0.12)';
+                                                    color =
+                                                        'success.dark';
+                                                } else if (
+                                                    line.startsWith('-')
+                                                ) {
+                                                    bgcolor =
+                                                        'rgba(244, 67, 54, 0.10)';
+                                                    color =
+                                                        'error.dark';
+                                                }
+                                                return (
+                                                    <Box
+                                                        key={idx}
+                                                        sx={{
+                                                            bgcolor,
+                                                            color,
+                                                            px: 1.5,
+                                                            py: 0,
+                                                            minHeight:
+                                                                '1.6em',
+                                                        }}
+                                                    >
+                                                        {line || ' '}
+                                                    </Box>
+                                                );
+                                            })}
+                                    </Box>
+
+                                    {/* Action buttons */}
+                                    <Stack
+                                        direction="row"
+                                        spacing={1}
+                                    >
+                                        <Button
+                                            variant="contained"
+                                            color="success"
+                                            startIcon={<Check />}
+                                            onClick={() =>
+                                                handleAcceptRevision(
+                                                    revisionResult.revisedContent,
+                                                )
+                                            }
+                                            disabled={
+                                                applyRevision.isPending
+                                            }
+                                        >
+                                            {applyRevision.isPending
+                                                ? 'Applying...'
+                                                : 'Accept Revision'}
+                                        </Button>
+                                        <Button
+                                            variant="outlined"
+                                            startIcon={
+                                                <EditIcon />
+                                            }
+                                            onClick={() => {
+                                                setEditedRevision(
+                                                    revisionResult.revisedContent,
+                                                );
+                                                setRevisionState(
+                                                    'editing',
+                                                );
+                                            }}
+                                        >
+                                            Edit Revision
+                                        </Button>
+                                        <Button
+                                            variant="outlined"
+                                            color="error"
+                                            startIcon={<Close />}
+                                            onClick={
+                                                handleRejectRevision
+                                            }
+                                        >
+                                            Reject Revision
+                                        </Button>
+                                    </Stack>
+                                </Stack>
+                            )}
+                        </Stack>
+                    ) : revisionState === 'applied' ? (
+                        /* Revision applied confirmation */
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                height: '100%',
+                                gap: 2,
+                            }}
+                        >
+                            <Alert severity="success">
+                                Revision has been applied to the source
+                                content successfully.
+                            </Alert>
+                        </Box>
                     ) : (
                         <Box
                             sx={{

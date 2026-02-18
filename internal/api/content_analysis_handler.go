@@ -1655,3 +1655,291 @@ func (h *ContentAnalysisHandler) TryAutoEnrich(
 		}
 	}()
 }
+
+// GenerateRevisionResponse is the response body for the generate
+// revision endpoint.
+type GenerateRevisionResponse struct {
+	RevisedContent  string `json:"revisedContent"`
+	Summary         string `json:"summary"`
+	OriginalContent string `json:"originalContent"`
+}
+
+// ApplyRevisionRequest is the request body for applying a revision to
+// the source content.
+type ApplyRevisionRequest struct {
+	RevisedContent string `json:"revisedContent"`
+}
+
+// GenerateRevision handles POST /api/campaigns/{id}/analysis/jobs/{jobId}/revision
+// Generates a revised version of the source content by incorporating
+// accepted analysis findings via the RevisionAgent LLM pipeline.
+func (h *ContentAnalysisHandler) GenerateRevision(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseInt64(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	if err := h.db.VerifyCampaignOwnership(r.Context(), campaignID, userID); err != nil {
+		respondError(w, http.StatusNotFound, "Campaign not found")
+		return
+	}
+
+	jobID, err := parseInt64(r, "jobId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid job ID")
+		return
+	}
+
+	// Verify the job exists and belongs to this campaign.
+	job, err := h.db.GetAnalysisJob(r.Context(), jobID)
+	if err != nil {
+		log.Printf("GenerateRevision: error getting analysis job %d: %v", jobID, err)
+		respondError(w, http.StatusNotFound, "Analysis job not found")
+		return
+	}
+	if job.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Analysis job not found")
+		return
+	}
+
+	// Fetch the source content based on the job's source table.
+	var originalContent string
+	switch job.SourceTable {
+	case "chapters":
+		chapter, chErr := h.db.GetChapter(r.Context(), job.SourceID)
+		if chErr != nil {
+			log.Printf("GenerateRevision: error fetching chapter %d: %v",
+				job.SourceID, chErr)
+			respondError(w, http.StatusInternalServerError,
+				"Failed to fetch source content")
+			return
+		}
+		if chapter.Overview != nil {
+			originalContent = *chapter.Overview
+		}
+	case "sessions":
+		session, sErr := h.db.GetSession(r.Context(), job.SourceID)
+		if sErr != nil {
+			log.Printf("GenerateRevision: error fetching session %d: %v",
+				job.SourceID, sErr)
+			respondError(w, http.StatusInternalServerError,
+				"Failed to fetch source content")
+			return
+		}
+		// Use the field indicated by the job's source_field.
+		switch job.SourceField {
+		case "prep_notes":
+			if session.PrepNotes != nil {
+				originalContent = *session.PrepNotes
+			}
+		case "actual_notes":
+			if session.ActualNotes != nil {
+				originalContent = *session.ActualNotes
+			}
+		default:
+			respondError(w, http.StatusBadRequest,
+				fmt.Sprintf("Unsupported session field: %s", job.SourceField))
+			return
+		}
+	default:
+		respondError(w, http.StatusBadRequest,
+			fmt.Sprintf("Unsupported source table for revision: %s", job.SourceTable))
+		return
+	}
+
+	// Get accepted analysis items for this job.
+	acceptedItems, err := h.db.ListAnalysisItemsByJob(
+		r.Context(), jobID, "acknowledged", "analysis",
+	)
+	if err != nil {
+		log.Printf("GenerateRevision: error listing accepted items for job %d: %v",
+			jobID, err)
+		respondError(w, http.StatusInternalServerError,
+			"Failed to list accepted analysis items")
+		return
+	}
+
+	// If no accepted items, return the original content unchanged.
+	if len(acceptedItems) == 0 {
+		respondJSON(w, http.StatusOK, GenerateRevisionResponse{
+			RevisedContent:  originalContent,
+			Summary:         "",
+			OriginalContent: originalContent,
+		})
+		return
+	}
+
+	// Get the LLM provider from user settings.
+	settings, err := h.db.GetUserSettings(r.Context(), userID)
+	if err != nil {
+		log.Printf("GenerateRevision: error getting user settings: %v", err)
+		respondError(w, http.StatusInternalServerError,
+			"Failed to get user settings")
+		return
+	}
+	if settings == nil || settings.ContentGenService == nil || settings.ContentGenAPIKey == nil {
+		respondError(w, http.StatusBadRequest,
+			"LLM service not configured. Configure an LLM in Account Settings.")
+		return
+	}
+
+	provider, err := llm.NewProvider(
+		*settings.ContentGenService, *settings.ContentGenAPIKey,
+	)
+	if err != nil {
+		log.Printf("GenerateRevision: error creating LLM provider: %v", err)
+		respondError(w, http.StatusInternalServerError,
+			"Failed to create LLM provider")
+		return
+	}
+
+	// Call the RevisionAgent to generate revised content.
+	revisionInput := enrichment.RevisionInput{
+		OriginalContent: originalContent,
+		AcceptedItems:   acceptedItems,
+		SourceTable:     job.SourceTable,
+		SourceID:        job.SourceID,
+	}
+
+	result, err := enrichment.NewRevisionAgent().GenerateRevision(
+		r.Context(), provider, revisionInput,
+	)
+	if err != nil {
+		log.Printf("GenerateRevision: revision agent failed for job %d: %v",
+			jobID, err)
+		respondError(w, http.StatusInternalServerError,
+			"Failed to generate revision")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, GenerateRevisionResponse{
+		RevisedContent:  result.RevisedContent,
+		Summary:         result.Summary,
+		OriginalContent: originalContent,
+	})
+}
+
+// ApplyRevision handles PUT /api/campaigns/{id}/analysis/jobs/{jobId}/revision/apply
+// Applies a previously generated revision to the source content, updating
+// the underlying chapter overview or session notes field.
+func (h *ContentAnalysisHandler) ApplyRevision(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseInt64(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	if err := h.db.VerifyCampaignOwnership(r.Context(), campaignID, userID); err != nil {
+		respondError(w, http.StatusNotFound, "Campaign not found")
+		return
+	}
+
+	jobID, err := parseInt64(r, "jobId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid job ID")
+		return
+	}
+
+	var req ApplyRevisionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if req.RevisedContent == "" {
+		respondError(w, http.StatusBadRequest, "revisedContent is required")
+		return
+	}
+
+	// Verify the job exists and belongs to this campaign.
+	job, err := h.db.GetAnalysisJob(r.Context(), jobID)
+	if err != nil {
+		log.Printf("ApplyRevision: error getting analysis job %d: %v", jobID, err)
+		respondError(w, http.StatusNotFound, "Analysis job not found")
+		return
+	}
+	if job.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Analysis job not found")
+		return
+	}
+
+	// Apply the revised content to the appropriate source.
+	switch job.SourceTable {
+	case "chapters":
+		chapter, chErr := h.db.GetChapter(r.Context(), job.SourceID)
+		if chErr != nil {
+			log.Printf("ApplyRevision: error fetching chapter %d: %v",
+				job.SourceID, chErr)
+			respondError(w, http.StatusInternalServerError,
+				"Failed to fetch source content")
+			return
+		}
+		_ = chapter // Verify the chapter exists before updating.
+		_, updateErr := h.db.UpdateChapter(r.Context(), job.SourceID,
+			models.UpdateChapterRequest{
+				Overview: &req.RevisedContent,
+			},
+		)
+		if updateErr != nil {
+			log.Printf("ApplyRevision: error updating chapter %d: %v",
+				job.SourceID, updateErr)
+			respondError(w, http.StatusInternalServerError,
+				"Failed to apply revision to chapter")
+			return
+		}
+
+	case "sessions":
+		session, sErr := h.db.GetSession(r.Context(), job.SourceID)
+		if sErr != nil {
+			log.Printf("ApplyRevision: error fetching session %d: %v",
+				job.SourceID, sErr)
+			respondError(w, http.StatusInternalServerError,
+				"Failed to fetch source content")
+			return
+		}
+		_ = session // Verify the session exists before updating.
+
+		updateReq := models.UpdateSessionRequest{}
+		switch job.SourceField {
+		case "prep_notes":
+			updateReq.PrepNotes = &req.RevisedContent
+		case "actual_notes":
+			updateReq.ActualNotes = &req.RevisedContent
+		default:
+			respondError(w, http.StatusBadRequest,
+				fmt.Sprintf("Unsupported session field: %s", job.SourceField))
+			return
+		}
+
+		_, updateErr := h.db.UpdateSession(r.Context(), job.SourceID, updateReq)
+		if updateErr != nil {
+			log.Printf("ApplyRevision: error updating session %d: %v",
+				job.SourceID, updateErr)
+			respondError(w, http.StatusInternalServerError,
+				"Failed to apply revision to session")
+			return
+		}
+
+	default:
+		respondError(w, http.StatusBadRequest,
+			fmt.Sprintf("Unsupported source table for revision: %s", job.SourceTable))
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{
+		"status": "applied",
+	})
+}

@@ -243,4 +243,61 @@ export const contentAnalysisApi = {
     },
 };
 
+/**
+ * Response from generating a revision based on analysis findings.
+ */
+export interface GenerateRevisionResponse {
+    revisedContent: string;
+    originalContent: string;
+    summary: string;
+}
+
+/**
+ * Response from applying a revision to the source content.
+ */
+export interface ApplyRevisionResponse {
+    status: string;
+}
+
+/**
+ * Request payload for applying a revision.
+ */
+export interface ApplyRevisionRequest {
+    revisedContent: string;
+}
+
+/**
+ * Revision-related API endpoints.
+ */
+export const revisionApi = {
+    /**
+     * Generate a revision from accepted analysis findings. The backend
+     * uses the accepted/acknowledged analysis items to produce improved
+     * source content.
+     */
+    generateRevision(
+        campaignId: number,
+        jobId: number,
+    ): Promise<GenerateRevisionResponse> {
+        return apiClient.post<GenerateRevisionResponse>(
+            `/campaigns/${campaignId}/analysis/jobs/${jobId}/revision`
+        );
+    },
+
+    /**
+     * Apply a (possibly user-edited) revision to the source content,
+     * replacing the original.
+     */
+    applyRevision(
+        campaignId: number,
+        jobId: number,
+        req: ApplyRevisionRequest,
+    ): Promise<ApplyRevisionResponse> {
+        return apiClient.put<ApplyRevisionResponse>(
+            `/campaigns/${campaignId}/analysis/jobs/${jobId}/revision/apply`,
+            req
+        );
+    },
+};
+
 export default contentAnalysisApi;

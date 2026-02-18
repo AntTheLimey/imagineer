@@ -14,7 +14,7 @@
 
 import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { contentAnalysisApi } from '../api/contentAnalysis';
+import { contentAnalysisApi, revisionApi } from '../api/contentAnalysis';
 import type {
     ContentAnalysisJob,
     ContentAnalysisItem,
@@ -22,6 +22,9 @@ import type {
     TriggerAnalysisRequest,
     TriggerAnalysisResponse,
     PendingCountResponse,
+    GenerateRevisionResponse,
+    ApplyRevisionResponse,
+    ApplyRevisionRequest,
 } from '../api/contentAnalysis';
 import { campaignKeys } from './useCampaigns';
 import { entityKeys } from './useEntities';
@@ -309,4 +312,58 @@ export function useEnrichmentStream(
 
         return () => clearInterval(interval);
     }, [campaignId, jobId, enabled, queryClient]);
+}
+
+/**
+ * Mutation to generate a revision from accepted analysis findings.
+ * The backend produces improved source content based on the
+ * acknowledged/accepted analysis items.
+ *
+ * @param campaignId - The campaign the job belongs to.
+ */
+export function useGenerateRevision(campaignId: number) {
+    return useMutation<
+        GenerateRevisionResponse,
+        Error,
+        number
+    >({
+        mutationFn: (jobId) =>
+            revisionApi.generateRevision(campaignId, jobId),
+    });
+}
+
+/**
+ * Mutation to apply a (possibly user-edited) revision to the source
+ * content. Invalidates content analysis, campaign, chapter, and
+ * session caches on success since the source content has changed.
+ *
+ * @param campaignId - The campaign the job belongs to.
+ */
+export function useApplyRevision(campaignId: number) {
+    const queryClient = useQueryClient();
+    return useMutation<
+        ApplyRevisionResponse,
+        Error,
+        { jobId: number; req: ApplyRevisionRequest }
+    >({
+        mutationFn: ({ jobId, req }) =>
+            revisionApi.applyRevision(campaignId, jobId, req),
+        onSuccess: () => {
+            queryClient.invalidateQueries({
+                queryKey: contentAnalysisKeys.all,
+            });
+            queryClient.invalidateQueries({
+                queryKey: campaignKeys.all,
+            });
+            queryClient.invalidateQueries({
+                queryKey: entityKeys.all,
+            });
+            queryClient.invalidateQueries({
+                queryKey: chapterKeys.all,
+            });
+            queryClient.invalidateQueries({
+                queryKey: sessionKeys.all,
+            });
+        },
+    });
 }
