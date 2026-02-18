@@ -74,6 +74,9 @@ beyond simple text editing.
   session entities with GM approval workflow.
 - [ ] `[MVP-2]` Campaign story integration that adds session
   summaries to the campaign timeline.
+- [ ] `[MVP-2]` Chapter auto-summary from sessions: aggregate
+  session wrap-up summaries to build and update the parent
+  chapter overview automatically.
 
 ### AI Features
 
@@ -100,6 +103,8 @@ infrastructure.
 - [ ] `[MVP-1]` Three-panel layout for session views (basic
   campaign nav exists, but the full three-panel layout with AI
   panel does not).
+- [ ] `[MVP-2]` Read-only chapter view page (view mode from
+  chapter list without entering editor).
 
 ### Evernote Import
 
@@ -340,6 +345,21 @@ Features planned for after the initial release.
 - [x] SaveSplitButton defaultMode prop for Play mode.
 - [x] Full Play mode integration in SessionEditorPage.
 - [x] Updated tests for Play mode changes.
+
+### Session Workflows Phase 3 — Wrap-up & Completed
+
+- [x] Wrap-up stage with actual date field, actual notes
+  MarkdownEditor, and collapsible reference panel (prep
+  notes, play notes, scene summary).
+- [x] Completed stage read-only view with session metadata,
+  notes, scenes, and Reopen Session button.
+- [x] AnalysisBadge integration for wrap-up stage.
+- [x] Auto-populate actual date on wrap-up entry.
+- [x] SaveSplitButton defaults to "Save & Analyze" in
+  wrap-up, hidden in completed stage.
+- [x] Import Notes available in wrap-up stage.
+- [x] Wrap-up and Completed tabs disabled for new sessions.
+- [x] Updated tests for Phase 3 components.
 
 ### Account Settings
 

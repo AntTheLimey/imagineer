@@ -22,20 +22,13 @@ import {
     AlertTitle,
     Box,
     Button,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    FormControlLabel,
     Link as MuiLink,
     Paper,
     Skeleton,
     Snackbar,
-    Switch,
     TextField,
     Typography,
 } from '@mui/material';
-import { Upload as UploadIcon } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import { FullScreenLayout } from '../layouts';
 import { SaveSplitButton } from '../components/SaveSplitButton';
@@ -145,7 +138,8 @@ export default function ChapterEditorPage() {
     // Check if embedding service is configured
     const { data: userSettings } = useUserSettings();
     const isEmbeddingConfigured = !!(
-        userSettings?.embeddingService && userSettings?.embeddingApiKey
+        userSettings?.embeddingService &&
+        (userSettings.embeddingService === 'ollama' || userSettings.embeddingApiKey)
     );
 
     // Form state
@@ -163,13 +157,13 @@ export default function ChapterEditorPage() {
 
     // Unsaved changes protection
     const { isDirty, setIsDirty, clearDirty, checkUnsavedChanges, ConfirmDialog } =
-        useUnsavedChanges({
-            message:
-                'You have unsaved changes to this chapter. Are you sure you want to leave?',
-        });
+        useUnsavedChanges({});
 
     // Track the last hydrated chapter ID to detect route changes
     const lastHydratedChapterIdRef = useRef<number | undefined>(undefined);
+
+    /** Guards against marking the form dirty during data hydration. */
+    const isHydratingRef = useRef(false);
 
     // Autosave
     const { lastSaved } = useAutosave({
@@ -194,11 +188,6 @@ export default function ChapterEditorPage() {
         message?: string;
     }>({ open: false, jobId: 0, count: 0 });
 
-    // Import dialog state
-    const [importDialogOpen, setImportDialogOpen] = useState(false);
-    const [importContent, setImportContent] = useState('');
-    const [importMode, setImportMode] = useState<'append' | 'replace'>('append');
-
     // Calculate next sort order for new chapters
     const nextSortOrder = useMemo(() => {
         if (!chapters || chapters.length === 0) return 0;
@@ -218,10 +207,17 @@ export default function ChapterEditorPage() {
                 clearDirty();
             }
 
+            isHydratingRef.current = true;
             setFormData({
                 title: existingChapter.title,
                 overview: existingChapter.overview ?? '',
                 sortOrder: existingChapter.sortOrder,
+            });
+            // Allow the MarkdownEditor's value-sync effect and TipTap's
+            // onUpdate to fire without marking dirty, then clear the flag.
+            requestAnimationFrame(() => {
+                isHydratingRef.current = false;
+                clearDirty();
             });
 
             lastHydratedChapterIdRef.current = existingChapter.id;
@@ -268,39 +264,13 @@ export default function ChapterEditorPage() {
     const updateField = useCallback(
         <K extends keyof ChapterFormData>(field: K, value: ChapterFormData[K]) => {
             setFormData((prev) => ({ ...prev, [field]: value }));
-            setIsDirty(true);
+            if (!isHydratingRef.current) {
+                setIsDirty(true);
+            }
             setFormErrors((prev) => ({ ...prev, [field]: undefined }));
         },
         [setIsDirty]
     );
-
-    /**
-     * Close the import dialog and reset its state.
-     */
-    const closeImportDialog = useCallback(() => {
-        setImportDialogOpen(false);
-        setImportContent('');
-        setImportMode('append');
-    }, []);
-
-    /**
-     * Handle importing content into the chapter overview.
-     */
-    const handleImport = useCallback(() => {
-        if (!importContent.trim()) return;
-
-        if (importMode === 'replace') {
-            updateField('overview', importContent);
-        } else {
-            const current = formData.overview;
-            const newContent = current
-                ? `${current}\n\n${importContent}`
-                : importContent;
-            updateField('overview', newContent);
-        }
-
-        closeImportDialog();
-    }, [importContent, importMode, formData.overview, updateField, closeImportDialog]);
 
     /**
      * Validate the form.
@@ -572,16 +542,6 @@ export default function ChapterEditorPage() {
             isSaving={isSaving}
             onBack={handleBack}
             subtitle={lastSaved ? `Auto-saved ${formatRelativeTime(lastSaved)}` : undefined}
-            actions={
-                <Button
-                    variant="outlined"
-                    size="small"
-                    startIcon={<UploadIcon />}
-                    onClick={() => setImportDialogOpen(true)}
-                >
-                    Import
-                </Button>
-            }
             renderSaveButtons={() => (
                 <SaveSplitButton
                     onSave={handleSave}
@@ -781,52 +741,6 @@ export default function ChapterEditorPage() {
                     </Paper>
                 </Box>
             </Box>
-
-            {/* Import dialog */}
-            <Dialog
-                open={importDialogOpen}
-                onClose={closeImportDialog}
-                maxWidth="md"
-                fullWidth
-            >
-                <DialogTitle>Import Content</DialogTitle>
-                <DialogContent>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Paste content below to import it into the chapter overview.
-                    </Typography>
-                    <TextField
-                        fullWidth
-                        multiline
-                        minRows={10}
-                        maxRows={20}
-                        value={importContent}
-                        onChange={(e) => setImportContent(e.target.value)}
-                        placeholder="Paste your content here..."
-                        sx={{ mb: 2 }}
-                    />
-                    <FormControlLabel
-                        control={
-                            <Switch
-                                checked={importMode === 'replace'}
-                                onChange={(e) =>
-                                    setImportMode(e.target.checked ? 'replace' : 'append')
-                                }
-                            />
-                        }
-                        label="Replace existing content (default: append)"
-                    />
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={closeImportDialog}>Cancel</Button>
-                    <Button
-                        variant="contained"
-                        onClick={handleImport}
-                        disabled={!importContent.trim()}
-                    >
-                        Import
-                    </Button>
-                </DialogActions>
-            </Dialog>
 
             {/* Analysis results snackbar */}
             <Snackbar

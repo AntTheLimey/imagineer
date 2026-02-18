@@ -107,10 +107,12 @@ export default function MarkdownEditor({
     const onChangeRef = useRef(onChange);
     onChangeRef.current = onChange;
 
-    // Track whether a content change originated from the editor
-    // itself so the value-sync useEffect can skip re-setting content
-    // that the editor already knows about (Bug 1 fix).
-    const isInternalUpdate = useRef(false);
+    // Track the last value reported by onUpdate so the value-sync
+    // effect can distinguish external value changes (from the parent)
+    // from internal changes (from the editor itself). This replaces
+    // the previous isInternalUpdate boolean flag, which was fragile
+    // and could become desynchronized during async rendering.
+    const lastEditorValueRef = useRef(value);
 
     // Build the extensions array, conditionally including the wiki
     // link suggestion plugin when a campaignId is available.
@@ -158,29 +160,24 @@ export default function MarkdownEditor({
         onUpdate: ({ editor }) => {
             const storage = editor.storage as unknown as MarkdownStorage;
             const markdown = storage.markdown.getMarkdown();
-            isInternalUpdate.current = true;
+            lastEditorValueRef.current = markdown;
             onChangeRef.current(markdown);
         },
     });
 
-    // Update editor content when value prop changes externally
+    // Update editor content when value prop changes externally.
+    // Compares the incoming value against what the editor last
+    // reported to avoid re-setting content the editor already has
+    // (which would reset the cursor position).
     useEffect(() => {
         if (!editor) return;
 
-        // Skip if this render was triggered by the editor's own
-        // onUpdate callback to avoid an infinite loop and cursor
-        // jumping.
-        if (isInternalUpdate.current) {
-            isInternalUpdate.current = false;
-            return;
-        }
+        // If the parent is reflecting back the same value the editor
+        // last produced, there is nothing to do.
+        if (value === lastEditorValueRef.current) return;
 
-        const storage = editor.storage as unknown as MarkdownStorage;
-        const currentMarkdown = storage.markdown.getMarkdown();
-
-        if (value !== currentMarkdown) {
-            editor.commands.setContent(value || '');
-        }
+        lastEditorValueRef.current = value;
+        editor.commands.setContent(value || '');
     }, [editor, value]);
 
     // Update editable state when disabled prop changes

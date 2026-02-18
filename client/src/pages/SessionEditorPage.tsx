@@ -283,13 +283,13 @@ export default function SessionEditorPage() {
 
     // Unsaved changes protection
     const { isDirty, setIsDirty, clearDirty, checkUnsavedChanges, ConfirmDialog } =
-        useUnsavedChanges({
-            message:
-                'You have unsaved changes to this session. Are you sure you want to leave?',
-        });
+        useUnsavedChanges({});
 
     // Track the last hydrated session ID to detect route changes
     const lastHydratedSessionIdRef = useRef<number | undefined>(undefined);
+
+    /** Guards against marking the form dirty during data hydration. */
+    const isHydratingRef = useRef(false);
 
     // Autosave
     const { lastSaved } = useAutosave({
@@ -345,6 +345,7 @@ export default function SessionEditorPage() {
                 clearDirty();
             }
 
+            isHydratingRef.current = true;
             setFormData({
                 title: session.title ?? '',
                 chapterId: session.chapterId ?? null,
@@ -354,6 +355,10 @@ export default function SessionEditorPage() {
                 prepNotes: session.prepNotes ?? '',
                 actualNotes: session.actualNotes ?? '',
                 playNotes: session.playNotes ?? '',
+            });
+            requestAnimationFrame(() => {
+                isHydratingRef.current = false;
+                clearDirty();
             });
 
             lastHydratedSessionIdRef.current = session.id;
@@ -394,7 +399,9 @@ export default function SessionEditorPage() {
     const updateField = useCallback(
         <K extends keyof SessionFormData>(field: K, value: SessionFormData[K]) => {
             setFormData((prev) => ({ ...prev, [field]: value }));
-            setIsDirty(true);
+            if (!isHydratingRef.current) {
+                setIsDirty(true);
+            }
             setFormErrors((prev) => ({ ...prev, [field]: undefined }));
         },
         [setIsDirty]

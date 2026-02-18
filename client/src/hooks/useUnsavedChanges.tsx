@@ -66,9 +66,9 @@ interface ConfirmDialogProps {
 function ConfirmNavigationDialog({
     open,
     title = 'Unsaved Changes',
-    message = 'You have unsaved changes. Are you sure you want to leave? Your changes will be lost.',
-    confirmText = 'Leave',
-    cancelText = 'Stay',
+    message = 'You have unsaved changes that have not been saved to the server. If you leave, a draft will be kept in your browser so you can recover it next time you edit.',
+    confirmText = 'Leave Without Saving',
+    cancelText = 'Stay and Keep Editing',
     onConfirm,
     onCancel,
 }: ConfirmDialogProps) {
