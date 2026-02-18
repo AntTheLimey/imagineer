@@ -768,3 +768,35 @@ type RelationshipSuggestion struct {
 	RelationshipType string `json:"relationshipType"`
 	Description      string `json:"description"`
 }
+
+// Draft represents a server-side auto-saved draft for an editor page.
+type Draft struct {
+	ID            int64           `json:"id"`
+	CampaignID    int64           `json:"campaignId"`
+	UserID        int64           `json:"userId"`
+	SourceTable   string          `json:"sourceTable"`
+	SourceID      int64           `json:"sourceId"`
+	IsNew         bool            `json:"isNew"`
+	DraftData     json.RawMessage `json:"draftData"`
+	ServerVersion *int            `json:"serverVersion,omitempty"`
+	CreatedAt     time.Time       `json:"createdAt"`
+	UpdatedAt     time.Time       `json:"updatedAt"`
+}
+
+// DraftIndicator is a lightweight representation of a draft used in
+// list views to show which items have pending drafts.
+type DraftIndicator struct {
+	SourceTable string    `json:"sourceTable"`
+	SourceID    int64     `json:"sourceId"`
+	IsNew       bool      `json:"isNew"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+// SaveDraftRequest is the request body for saving or updating a draft.
+type SaveDraftRequest struct {
+	SourceTable   string          `json:"sourceTable"`
+	SourceID      int64           `json:"sourceId"`
+	IsNew         bool            `json:"isNew"`
+	DraftData     json.RawMessage `json:"draftData"`
+	ServerVersion *int            `json:"serverVersion,omitempty"`
+}

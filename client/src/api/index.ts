@@ -106,3 +106,10 @@ export type {
     CreateEntityLogInput,
     UpdateEntityLogInput,
 } from './entityLog';
+
+export { draftsApi } from './drafts';
+export type {
+    Draft,
+    DraftIndicator,
+    SaveDraftInput,
+} from './drafts';

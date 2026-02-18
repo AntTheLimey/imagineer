@@ -42,6 +42,8 @@ const stableClearDirty = vi.fn();
 const stableShowConfirmDialog = vi.fn();
 const stableHideConfirmDialog = vi.fn();
 const stableCheckUnsavedChanges = vi.fn(() => false);
+const stableSaveDraftToServer = vi.fn();
+const stableDeleteDraftFromServer = vi.fn();
 
 vi.mock('../hooks', () => ({
     useCampaign: vi.fn(() => ({
@@ -93,6 +95,16 @@ vi.mock('../hooks', () => ({
         hideConfirmDialog: stableHideConfirmDialog,
         checkUnsavedChanges: stableCheckUnsavedChanges,
         ConfirmDialog: null,
+    })),
+    useServerDraft: vi.fn(() => ({
+        serverDraft: null,
+        saveDraftToServer: stableSaveDraftToServer,
+        deleteDraftFromServer: stableDeleteDraftFromServer,
+        isDirty: false,
+        isLoading: false,
+        draftUpdatedAt: null,
+        hasDraft: false,
+        lastSaved: null,
     })),
 }));
 

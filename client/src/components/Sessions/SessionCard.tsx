@@ -29,6 +29,7 @@ import {
     Edit as EditIcon,
 } from '@mui/icons-material';
 import type { Session } from '../../types';
+import { DraftIndicator } from '../DraftIndicator';
 import SessionStageIndicator from './SessionStageIndicator';
 
 /**
@@ -45,6 +46,8 @@ export interface SessionCardProps {
     onEdit: () => void;
     /** Callback fired when the delete button is clicked. */
     onDelete: () => void;
+    /** Whether a draft exists for this session. */
+    hasDraft: boolean;
 }
 
 /**
@@ -106,6 +109,7 @@ export default function SessionCard({
     onClick,
     onEdit,
     onDelete,
+    hasDraft,
 }: SessionCardProps) {
     /**
      * Handles edit button click without triggering card click.
@@ -212,6 +216,7 @@ export default function SessionCard({
                             </Typography>
                         )}
                         <SessionStageIndicator stage={session.stage} />
+                        <DraftIndicator hasDraft={hasDraft} />
                         {session.status !== 'PLANNED' && (
                             <Chip
                                 label={session.status === 'COMPLETED' ? 'Done' : 'Skipped'}

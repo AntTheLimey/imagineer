@@ -54,7 +54,9 @@ import {
     useDeleteEntity,
     useSimilarEntities,
     useCampaignOwnership,
+    useDraftIndicators,
 } from '../hooks';
+import { DraftIndicator } from '../components/DraftIndicator';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import type { WikiLinkEntity } from '../components/MarkdownRenderer';
 import type { Entity, EntityType, SourceConfidence } from '../types';
@@ -192,6 +194,9 @@ export default function Entities() {
 
     // Check if current user is the campaign owner (GM)
     const { isOwner: isGM } = useCampaignOwnership(campaignId ?? 0);
+
+    // Draft indicators for entities
+    const { hasDraft } = useDraftIndicators(campaignId ?? 0, 'entities');
 
     /**
      * Navigate to entities page filtered by the clicked wiki link name.
@@ -587,9 +592,12 @@ export default function Entities() {
                                         onClick={() => handleRowClick(entity)}
                                     >
                                         <TableCell>
-                                            <Typography variant="body2" fontWeight="medium">
-                                                {entity.name}
-                                            </Typography>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                <Typography variant="body2" fontWeight="medium">
+                                                    {entity.name}
+                                                </Typography>
+                                                <DraftIndicator hasDraft={hasDraft(entity.id)} />
+                                            </Box>
                                         </TableCell>
                                         <TableCell>
                                             <Chip

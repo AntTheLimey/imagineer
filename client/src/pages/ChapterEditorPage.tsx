@@ -12,7 +12,7 @@
  *
  * Provides a focused editing experience for creating and editing chapters
  * with a two-column layout: form on the left, entity panel on the right.
- * Includes autosave, draft recovery, and unsaved changes protection.
+ * Includes server-backed draft persistence, autosave, and draft recovery.
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -40,9 +40,7 @@ import {
     useCreateChapter,
     useUpdateChapter,
     useCampaign,
-    useDraft,
-    useAutosave,
-    useUnsavedChanges,
+    useServerDraft,
 } from '../hooks';
 import { useChapterEntities, useCreateChapterEntity, useDeleteChapterEntity } from '../hooks/useChapterEntities';
 import { useUserSettings } from '../hooks/useUserSettings';
@@ -108,9 +106,6 @@ export default function ChapterEditorPage() {
     const navigate = useNavigate();
 
     const isNewChapter = !chapterId;
-    const draftKey = isNewChapter
-        ? `chapter-new-${campaignId}`
-        : `chapter-${chapterId}`;
 
     // Fetch campaign for breadcrumbs
     const { data: campaign } = useCampaign(campaignId ?? 0, {
@@ -151,26 +146,34 @@ export default function ChapterEditorPage() {
     // Pending entity links for new chapters
     const [pendingEntityLinks, setPendingEntityLinks] = useState<number[]>([]);
 
-    // Draft management
-    const { getDraft, deleteDraft } = useDraft();
-    const [showDraftRecovery, setShowDraftRecovery] = useState(false);
+    // Server-side draft management (replaces useDraft + useAutosave + useUnsavedChanges)
+    const {
+        serverDraft,
+        hasDraft: hasServerDraft,
+        saveDraftToServer,
+        deleteDraftFromServer,
+        isDirty,
+        lastSaved,
+        isLoading: draftLoading,
+        draftUpdatedAt,
+    } = useServerDraft<ChapterFormData>({
+        campaignId: campaignId ?? 0,
+        sourceTable: 'chapters',
+        sourceId: chapterId ?? 0,
+        isNew: isNewChapter,
+        committedData: existingChapter ? {
+            title: existingChapter.title,
+            overview: existingChapter.overview ?? '',
+            sortOrder: existingChapter.sortOrder,
+        } : undefined,
+        currentData: formData,
+        enabled: !!campaignId,
+    });
 
-    // Unsaved changes protection
-    const { isDirty, setIsDirty, clearDirty, checkUnsavedChanges, ConfirmDialog } =
-        useUnsavedChanges({});
+    const [showDraftRecovery, setShowDraftRecovery] = useState(false);
 
     // Track the last hydrated chapter ID to detect route changes
     const lastHydratedChapterIdRef = useRef<number | undefined>(undefined);
-
-    /** Guards against marking the form dirty during data hydration. */
-    const isHydratingRef = useRef(false);
-
-    // Autosave
-    const { lastSaved } = useAutosave({
-        data: formData,
-        key: draftKey,
-        enabled: isDirty,
-    });
 
     // Mutations
     const createChapter = useCreateChapter();
@@ -194,30 +197,16 @@ export default function ChapterEditorPage() {
         return Math.max(...chapters.map(c => c.sortOrder)) + 1;
     }, [chapters]);
 
-    // Initialize form data from existing chapter or check for draft
+    // Initialize form data from existing chapter
     useEffect(() => {
         if (!isNewChapter && existingChapter) {
             const isNewChapterRoute = existingChapter.id !== lastHydratedChapterIdRef.current;
+            if (!isNewChapterRoute) return;
 
-            if (!isNewChapterRoute && isDirty) {
-                return;
-            }
-
-            if (isNewChapterRoute && isDirty) {
-                clearDirty();
-            }
-
-            isHydratingRef.current = true;
             setFormData({
                 title: existingChapter.title,
                 overview: existingChapter.overview ?? '',
                 sortOrder: existingChapter.sortOrder,
-            });
-            // Allow the MarkdownEditor's value-sync effect and TipTap's
-            // onUpdate to fire without marking dirty, then clear the flag.
-            requestAnimationFrame(() => {
-                isHydratingRef.current = false;
-                clearDirty();
             });
 
             lastHydratedChapterIdRef.current = existingChapter.id;
@@ -229,47 +218,54 @@ export default function ChapterEditorPage() {
                 ...prev,
                 sortOrder: nextSortOrder,
             }));
-
-            // Check for existing draft
-            const draft = getDraft<ChapterFormData>(draftKey);
-            if (draft) {
-                setShowDraftRecovery(true);
-            }
         }
-    }, [existingChapter, isNewChapter, getDraft, draftKey, isDirty, clearDirty, nextSortOrder]);
+    }, [existingChapter, isNewChapter, nextSortOrder]);
+
+    // Auto-apply server draft on load: show draft data with a dismissable banner
+    useEffect(() => {
+        if (!draftLoading && hasServerDraft && serverDraft !== null) {
+            setFormData(serverDraft);
+            setShowDraftRecovery(true);
+        }
+    }, [draftLoading, hasServerDraft, serverDraft]);
 
     /**
-     * Recover draft data.
+     * Dismiss the draft banner without discarding the draft.
+     * The user continues editing with the auto-applied draft data.
      */
-    const handleRecoverDraft = useCallback(() => {
-        const draft = getDraft<ChapterFormData>(draftKey);
-        if (draft) {
-            setFormData(draft.data);
-            setIsDirty(true);
+    const handleDismissDraftBanner = useCallback(() => {
+        setShowDraftRecovery(false);
+    }, []);
+
+    /**
+     * Ditch the draft: delete it from the server and restore
+     * the committed data (or defaults for a new chapter).
+     */
+    const handleDitchDraft = useCallback(() => {
+        deleteDraftFromServer();
+        // Restore committed data
+        if (existingChapter) {
+            setFormData({
+                title: existingChapter.title,
+                overview: existingChapter.overview ?? '',
+                sortOrder: existingChapter.sortOrder,
+            });
+        } else {
+            setFormData(DEFAULT_FORM_DATA);
         }
         setShowDraftRecovery(false);
-    }, [getDraft, draftKey, setIsDirty]);
+    }, [deleteDraftFromServer, existingChapter]);
 
     /**
-     * Discard draft data.
-     */
-    const handleDiscardDraft = useCallback(() => {
-        deleteDraft(draftKey);
-        setShowDraftRecovery(false);
-    }, [deleteDraft, draftKey]);
-
-    /**
-     * Update a form field and mark as dirty.
+     * Update a form field. Dirty state is tracked automatically by
+     * useServerDraft via deep comparison of currentData vs committedData.
      */
     const updateField = useCallback(
         <K extends keyof ChapterFormData>(field: K, value: ChapterFormData[K]) => {
             setFormData((prev) => ({ ...prev, [field]: value }));
-            if (!isHydratingRef.current) {
-                setIsDirty(true);
-            }
             setFormErrors((prev) => ({ ...prev, [field]: undefined }));
         },
-        [setIsDirty]
+        []
     );
 
     /**
@@ -327,8 +323,7 @@ export default function ChapterEditorPage() {
                     }
                 }
 
-                deleteDraft(draftKey);
-                clearDirty();
+                await deleteDraftFromServer();
 
                 // Navigate to edit the newly created chapter
                 navigate(`/campaigns/${campaignId}/chapters/${newChapter.id}/edit`, {
@@ -372,8 +367,7 @@ export default function ChapterEditorPage() {
                     }
                 }
 
-                deleteDraft(draftKey);
-                clearDirty();
+                await deleteDraftFromServer();
             }
 
             return true;
@@ -391,21 +385,20 @@ export default function ChapterEditorPage() {
         chapterId,
         pendingEntityLinks,
         createChapterEntity,
-        deleteDraft,
-        draftKey,
-        clearDirty,
+        deleteDraftFromServer,
         navigate,
     ]);
 
     /**
-     * Handle back navigation with unsaved changes check.
+     * Handle back navigation. If there are unsaved changes, auto-save
+     * a draft to the server before navigating away.
      */
-    const handleBack = useCallback(() => {
-        const goBack = () => navigate(`/campaigns/${campaignId}/sessions`);
-        if (!checkUnsavedChanges(goBack)) {
-            goBack();
+    const handleBack = useCallback(async () => {
+        if (isDirty) {
+            await saveDraftToServer();
         }
-    }, [navigate, campaignId, checkUnsavedChanges]);
+        navigate(`/campaigns/${campaignId}/sessions`);
+    }, [isDirty, saveDraftToServer, navigate, campaignId]);
 
     /**
      * Link an entity to this chapter.
@@ -550,32 +543,29 @@ export default function ChapterEditorPage() {
                 />
             )}
         >
-            {/* Draft recovery alert */}
+            {/* Draft banner — auto-applied, dismissable */}
             {showDraftRecovery && (
                 <Alert
-                    severity="info"
+                    severity="warning"
+                    variant="filled"
                     sx={{ mb: 3 }}
+                    onClose={handleDismissDraftBanner}
                     action={
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                            <MuiLink
-                                component="button"
-                                variant="body2"
-                                onClick={handleRecoverDraft}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Button
+                                size="small"
+                                color="inherit"
+                                variant="outlined"
+                                onClick={handleDitchDraft}
+                                sx={{ whiteSpace: 'nowrap' }}
                             >
-                                Recover
-                            </MuiLink>
-                            <MuiLink
-                                component="button"
-                                variant="body2"
-                                onClick={handleDiscardDraft}
-                            >
-                                Discard
-                            </MuiLink>
+                                Ditch Draft
+                            </Button>
                         </Box>
                     }
                 >
-                    You have an unsaved draft from a previous session. Would you like
-                    to recover it?
+                    Showing draft
+                    {draftUpdatedAt ? ` — last saved ${formatRelativeTime(draftUpdatedAt)}` : ''}
                 </Alert>
             )}
 
@@ -776,9 +766,6 @@ export default function ChapterEditorPage() {
                     </Alert>
                 )}
             </Snackbar>
-
-            {/* Navigation confirmation dialog */}
-            {ConfirmDialog}
         </FullScreenLayout>
     );
 }
