@@ -18,23 +18,15 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-    Accordion,
-    AccordionDetails,
-    AccordionSummary,
     Alert,
-    AlertTitle,
     Box,
     Button,
-    Divider,
-    Link as MuiLink,
     Paper,
     Skeleton,
     Snackbar,
     TextField,
     Typography,
 } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { Link } from 'react-router-dom';
 import { FullScreenLayout } from '../layouts';
 import { SaveSplitButton } from '../components/SaveSplitButton';
 import type { SaveMode } from '../components/SaveSplitButton';
@@ -47,10 +39,7 @@ import {
     useCampaign,
     useServerDraft,
 } from '../hooks';
-import { useChapterEntities, useCreateChapterEntity, useDeleteChapterEntity } from '../hooks/useChapterEntities';
-import { useUserSettings } from '../hooks/useUserSettings';
-import { useEntities } from '../hooks/useEntities';
-import type { Entity } from '../types';
+import { useChapterEntities } from '../hooks/useChapterEntities';
 
 /**
  * Form data structure for chapter editing.
@@ -59,7 +48,6 @@ interface ChapterFormData {
     title: string;
     overview: string;
     sortOrder: number;
-    linkedEntityIds: number[];
 }
 
 /**
@@ -69,7 +57,6 @@ const DEFAULT_FORM_DATA: ChapterFormData = {
     title: '',
     overview: '',
     sortOrder: 0,
-    linkedEntityIds: [],
 };
 
 /**
@@ -134,16 +121,6 @@ export default function ChapterEditorPage() {
     // Fetch chapter entities for the entity panel
     const { data: chapterEntities } = useChapterEntities(campaignId ?? 0, chapterId ?? 0);
 
-    // Fetch all campaign entities for the entity selector
-    const { data: allEntities } = useEntities({ campaignId: campaignId ?? 0 });
-
-    // Check if embedding service is configured
-    const { data: userSettings } = useUserSettings();
-    const isEmbeddingConfigured = !!(
-        userSettings?.embeddingService &&
-        (userSettings.embeddingService === 'ollama' || userSettings.embeddingApiKey)
-    );
-
     // Form state
     const [formData, setFormData] = useState<ChapterFormData>(DEFAULT_FORM_DATA);
     const [formErrors, setFormErrors] = useState<
@@ -169,7 +146,6 @@ export default function ChapterEditorPage() {
             title: existingChapter.title,
             overview: existingChapter.overview ?? '',
             sortOrder: existingChapter.sortOrder,
-            linkedEntityIds: chapterEntities?.map(ce => ce.entityId) ?? [],
         } : undefined,
         currentData: formData,
         enabled: !!campaignId,
@@ -183,8 +159,6 @@ export default function ChapterEditorPage() {
     // Mutations
     const createChapter = useCreateChapter();
     const updateChapter = useUpdateChapter();
-    const createChapterEntity = useCreateChapterEntity();
-    const deleteChapterEntity = useDeleteChapterEntity();
 
     const isSaving = createChapter.isPending || updateChapter.isPending;
 
@@ -212,7 +186,6 @@ export default function ChapterEditorPage() {
                 title: existingChapter.title,
                 overview: existingChapter.overview ?? '',
                 sortOrder: existingChapter.sortOrder,
-                linkedEntityIds: chapterEntities?.map(ce => ce.entityId) ?? [],
             });
 
             lastHydratedChapterIdRef.current = existingChapter.id;
@@ -225,7 +198,7 @@ export default function ChapterEditorPage() {
                 sortOrder: nextSortOrder,
             }));
         }
-    }, [existingChapter, isNewChapter, nextSortOrder, chapterEntities]);
+    }, [existingChapter, isNewChapter, nextSortOrder]);
 
     // Auto-apply server draft on load: show draft data with a dismissable
     // banner. Uses a ref to ensure the draft is only applied once on
@@ -262,13 +235,12 @@ export default function ChapterEditorPage() {
                 title: existingChapter.title,
                 overview: existingChapter.overview ?? '',
                 sortOrder: existingChapter.sortOrder,
-                linkedEntityIds: chapterEntities?.map(ce => ce.entityId) ?? [],
             });
         } else {
             setFormData(DEFAULT_FORM_DATA);
         }
         setShowDraftRecovery(false);
-    }, [deleteDraftFromServer, existingChapter, chapterEntities]);
+    }, [deleteDraftFromServer, existingChapter]);
 
     /**
      * Update a form field. Dirty state is tracked automatically by
@@ -320,23 +292,6 @@ export default function ChapterEditorPage() {
                     },
                 });
 
-                // Create entity links using Promise.allSettled
-                if (formData.linkedEntityIds.length > 0) {
-                    const linkResults = await Promise.allSettled(
-                        formData.linkedEntityIds.map((entityId) =>
-                            createChapterEntity.mutateAsync({
-                                campaignId,
-                                chapterId: newChapter.id,
-                                input: { entityId },
-                            })
-                        )
-                    );
-                    const failedLinks = linkResults.filter((r) => r.status === 'rejected');
-                    if (failedLinks.length > 0) {
-                        console.warn(`Failed to create ${failedLinks.length} entity link(s)`);
-                    }
-                }
-
                 await deleteDraftFromServer();
 
                 // Navigate to edit the newly created chapter
@@ -381,33 +336,6 @@ export default function ChapterEditorPage() {
                     }
                 }
 
-                // Diff entity links against committed state
-                const committedIds = new Set(
-                    chapterEntities?.map(ce => ce.entityId) ?? []
-                );
-                const currentIds = new Set(formData.linkedEntityIds);
-
-                // Add new links
-                const toAdd = formData.linkedEntityIds.filter(id => !committedIds.has(id));
-                await Promise.allSettled(
-                    toAdd.map(entityId =>
-                        createChapterEntity.mutateAsync({
-                            campaignId, chapterId, input: { entityId },
-                        })
-                    )
-                );
-
-                // Remove deleted links
-                const toRemove = chapterEntities
-                    ?.filter(ce => !currentIds.has(ce.entityId)) ?? [];
-                await Promise.allSettled(
-                    toRemove.map(ce =>
-                        deleteChapterEntity.mutateAsync({
-                            campaignId, chapterId, linkId: ce.id,
-                        })
-                    )
-                );
-
                 await deleteDraftFromServer();
             }
 
@@ -424,9 +352,6 @@ export default function ChapterEditorPage() {
         createChapter,
         updateChapter,
         chapterId,
-        chapterEntities,
-        createChapterEntity,
-        deleteChapterEntity,
         deleteDraftFromServer,
         navigate,
     ]);
@@ -441,32 +366,6 @@ export default function ChapterEditorPage() {
         }
         navigate(`/campaigns/${campaignId}/sessions`);
     }, [isDirty, saveDraftToServer, navigate, campaignId]);
-
-    /**
-     * Link an entity to this chapter.
-     */
-    const handleLinkEntity = useCallback(
-        (entityId: number) => {
-            setFormData(prev => ({
-                ...prev,
-                linkedEntityIds: [...prev.linkedEntityIds, entityId],
-            }));
-        },
-        []
-    );
-
-    /**
-     * Unlink an entity from this chapter.
-     */
-    const handleUnlinkEntity = useCallback(
-        (_linkId: number, entityId: number) => {
-            setFormData(prev => ({
-                ...prev,
-                linkedEntityIds: prev.linkedEntityIds.filter(id => id !== entityId),
-            }));
-        },
-        []
-    );
 
     // Build breadcrumbs
     const breadcrumbs = useMemo(
@@ -485,36 +384,6 @@ export default function ChapterEditorPage() {
         [campaign, campaignId, isNewChapter, existingChapter]
     );
 
-    // Get linked entities for display
-    const linkedEntities = useMemo(() =>
-        formData.linkedEntityIds
-            .map(id => allEntities?.find(e => e.id === id))
-            .filter((e): e is Entity => !!e),
-        [formData.linkedEntityIds, allEntities]
-    );
-
-    // Get available entities (not yet linked)
-    const availableEntities = useMemo(() => {
-        const linked = new Set(formData.linkedEntityIds);
-        return allEntities?.filter(e => !linked.has(e.id)) ?? [];
-    }, [formData.linkedEntityIds, allEntities]);
-
-    /**
-     * Link all available entities to this chapter at once.
-     */
-    const handleLinkAllEntities = useCallback(() => {
-        setFormData(prev => ({
-            ...prev,
-            linkedEntityIds: [
-                ...prev.linkedEntityIds,
-                ...availableEntities.map(e => e.id),
-            ],
-        }));
-    }, [availableEntities]);
-
-    // Accordion expanded state for linked entities section
-    const [linkedAccordionExpanded, setLinkedAccordionExpanded] = useState(true);
-
     // Loading state
     if (!isNewChapter && chapterLoading) {
         return (
@@ -530,9 +399,11 @@ export default function ChapterEditorPage() {
                         <Skeleton variant="rectangular" height={300} sx={{ mb: 2 }} />
                         <Skeleton variant="rectangular" height={56} />
                     </Box>
-                    <Box sx={{ width: 320, flexShrink: 0 }}>
-                        <Skeleton variant="rectangular" height={400} />
-                    </Box>
+                    {!isNewChapter && (
+                        <Box sx={{ width: 320, flexShrink: 0 }}>
+                            <Skeleton variant="rectangular" height={400} />
+                        </Box>
+                    )}
                 </Box>
             </FullScreenLayout>
         );
@@ -641,156 +512,47 @@ export default function ChapterEditorPage() {
                     </Paper>
                 </Box>
 
-                {/* Right column - Entity Panel */}
-                <Box sx={{ width: 320, flexShrink: 0 }}>
-                    <Paper sx={{ p: 2, height: '100%' }}>
-                        <Typography variant="h6" gutterBottom>
-                            Linked Entities
-                        </Typography>
-
-                        {/* Embedding config warning */}
-                        {!isEmbeddingConfigured && (
-                            <Alert severity="warning" sx={{ mb: 2 }}>
-                                <AlertTitle>AI Features Unavailable</AlertTitle>
-                                Configure your embedding API key in{' '}
-                                <MuiLink component={Link} to="/settings">
-                                    Account Settings
-                                </MuiLink>{' '}
-                                to enable AI-powered entity detection.
-                            </Alert>
-                        )}
-
-                        {/* Available entities to link */}
-                        {availableEntities.length > 0 && (
-                            <Box sx={{ mb: 2 }}>
-                                <Box
-                                    sx={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        mb: 1,
-                                    }}
-                                >
-                                    <Typography variant="subtitle2">
-                                        Link an Entity
-                                    </Typography>
-                                    <Button
-                                        size="small"
-                                        variant="outlined"
-                                        onClick={handleLinkAllEntities}
-                                    >
-                                        Accept All
-                                    </Button>
-                                </Box>
-                                <Box sx={{ maxHeight: 300, overflow: 'auto' }}>
-                                    {availableEntities.map((entity) => (
+                {/* Right column - Linked Entities (read-only, existing chapters only) */}
+                {!isNewChapter && (
+                    <Box sx={{ width: 320, flexShrink: 0 }}>
+                        <Paper sx={{ p: 2, height: '100%' }}>
+                            <Typography variant="h6" gutterBottom>
+                                Linked Entities
+                            </Typography>
+                            {chapterEntities && chapterEntities.length > 0 ? (
+                                <Box sx={{ maxHeight: 400, overflow: 'auto' }}>
+                                    {chapterEntities.map((ce) => (
                                         <Box
-                                            key={entity.id}
+                                            key={ce.id}
                                             sx={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'space-between',
-                                                py: 0.5,
+                                                py: 1,
+                                                borderBottom: 1,
+                                                borderColor: 'divider',
                                             }}
                                         >
-                                            <Typography variant="body2" noWrap sx={{ flex: 1 }}>
-                                                {entity.name}
+                                            <Typography variant="body2">
+                                                {ce.entity?.name ?? `Entity #${ce.entityId}`}
                                             </Typography>
-                                            <MuiLink
-                                                component="button"
+                                            <Typography
                                                 variant="caption"
-                                                onClick={() => handleLinkEntity(entity.id)}
+                                                color="text.secondary"
                                             >
-                                                Link
-                                            </MuiLink>
+                                                {ce.entity?.entityType}
+                                            </Typography>
                                         </Box>
                                     ))}
                                 </Box>
-                            </Box>
-                        )}
-
-                        <Divider sx={{ my: 1 }} />
-
-                        {/* Linked entities - collapsible accordion */}
-                        <Accordion
-                            expanded={linkedAccordionExpanded}
-                            onChange={(_event, isExpanded) =>
-                                setLinkedAccordionExpanded(isExpanded)
-                            }
-                            disableGutters
-                            elevation={0}
-                            sx={{
-                                '&::before': { display: 'none' },
-                                backgroundColor: 'transparent',
-                            }}
-                        >
-                            <AccordionSummary
-                                expandIcon={<ExpandMoreIcon />}
-                                sx={{ px: 0, minHeight: 'unset' }}
-                            >
-                                <Typography variant="subtitle2">
-                                    Linked ({linkedEntities.length})
+                            ) : (
+                                <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                >
+                                    No entities linked yet. Save with analysis to detect entities.
                                 </Typography>
-                            </AccordionSummary>
-                            <AccordionDetails sx={{ px: 0, pt: 0 }}>
-                                {linkedEntities.length > 0 ? (
-                                    <Box sx={{ maxHeight: 300, overflow: 'auto' }}>
-                                        {linkedEntities.map((entity) => {
-                                            const link = chapterEntities?.find(
-                                                (ce) => ce.entityId === entity.id
-                                            );
-                                            return (
-                                                <Box
-                                                    key={entity.id}
-                                                    sx={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'space-between',
-                                                        py: 1,
-                                                        borderBottom: 1,
-                                                        borderColor: 'divider',
-                                                    }}
-                                                >
-                                                    <Box>
-                                                        <Typography variant="body2">
-                                                            {entity.name}
-                                                        </Typography>
-                                                        <Typography
-                                                            variant="caption"
-                                                            color="text.secondary"
-                                                        >
-                                                            {entity.entityType}
-                                                        </Typography>
-                                                    </Box>
-                                                    <MuiLink
-                                                        component="button"
-                                                        variant="caption"
-                                                        onClick={() =>
-                                                            handleUnlinkEntity(
-                                                                link?.id ?? 0,
-                                                                entity.id
-                                                            )
-                                                        }
-                                                        sx={{ color: 'error.main' }}
-                                                    >
-                                                        Remove
-                                                    </MuiLink>
-                                                </Box>
-                                            );
-                                        })}
-                                    </Box>
-                                ) : (
-                                    <Typography
-                                        variant="body2"
-                                        color="text.secondary"
-                                    >
-                                        No entities linked yet.
-                                    </Typography>
-                                )}
-                            </AccordionDetails>
-                        </Accordion>
-                    </Paper>
-                </Box>
+                            )}
+                        </Paper>
+                    </Box>
+                )}
             </Box>
 
             {/* Analysis results snackbar */}
