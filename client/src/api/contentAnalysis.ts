@@ -54,7 +54,10 @@ export interface ContentAnalysisItem {
         | 'content_suggestion'
         | 'mechanics_warning'
         | 'investigation_gap'
-        | 'pacing_note';
+        | 'pacing_note'
+        | 'canon_contradiction'
+        | 'temporal_inconsistency'
+        | 'character_inconsistency';
     matchedText: string;
     entityId?: number;
     similarity?: number;

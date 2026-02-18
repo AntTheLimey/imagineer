@@ -26,6 +26,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/antonypegg/imagineer/internal/agents/canon"
 	"github.com/antonypegg/imagineer/internal/agents/ttrpg"
 	"github.com/antonypegg/imagineer/internal/analysis"
 	"github.com/antonypegg/imagineer/internal/auth"
@@ -1426,12 +1427,13 @@ func (h *ContentAnalysisHandler) RunContentEnrichment(
 
 	// 5. Build pipeline and spawn background goroutine for enrichment.
 	ttrpgAgent := ttrpg.NewExpert()
+	canonAgent := canon.NewExpert()
 	enrichAgent := enrichment.NewEnrichmentAgent(h.db)
 	pipeline := enrichment.NewPipeline(h.db, []enrichment.Stage{
 		{
 			Name:   "analysis",
 			Phase:  "analysis",
-			Agents: []enrichment.PipelineAgent{ttrpgAgent},
+			Agents: []enrichment.PipelineAgent{ttrpgAgent, canonAgent},
 		},
 		{
 			Name:   "enrichment",
@@ -1588,12 +1590,13 @@ func (h *ContentAnalysisHandler) TryAutoEnrich(
 
 	// 8. Build pipeline and spawn background goroutine for enrichment.
 	ttrpgAgent := ttrpg.NewExpert()
+	canonAgent := canon.NewExpert()
 	enrichAgent := enrichment.NewEnrichmentAgent(h.db)
 	pipeline := enrichment.NewPipeline(h.db, []enrichment.Stage{
 		{
 			Name:   "analysis",
 			Phase:  "analysis",
-			Agents: []enrichment.PipelineAgent{ttrpgAgent},
+			Agents: []enrichment.PipelineAgent{ttrpgAgent, canonAgent},
 		},
 		{
 			Name:   "enrichment",

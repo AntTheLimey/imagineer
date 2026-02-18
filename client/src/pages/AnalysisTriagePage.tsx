@@ -176,6 +176,21 @@ const ANALYSIS_GROUPS: Record<
         color: '#00838f',
         description: 'Scene pacing or tension concern',
     },
+    canon_contradiction: {
+        label: 'Canon Contradiction',
+        color: '#c62828',
+        description: 'Contradiction with established campaign facts',
+    },
+    temporal_inconsistency: {
+        label: 'Timeline Conflict',
+        color: '#ad1457',
+        description: 'Inconsistency in timeline or chronology',
+    },
+    character_inconsistency: {
+        label: 'Character Inconsistency',
+        color: '#6a1b9a',
+        description: 'NPC behavior or attribute contradiction',
+    },
 };
 
 /**
@@ -2763,6 +2778,15 @@ export default function AnalysisTriagePage() {
                                         const lineReference = String(
                                             suggestion.lineReference ?? '',
                                         );
+                                        const establishedFact = String(
+                                            suggestion.establishedFact ?? '',
+                                        );
+                                        const conflictingText = String(
+                                            suggestion.conflictingText ?? '',
+                                        );
+                                        const canonSource = String(
+                                            suggestion.source ?? '',
+                                        );
                                         return (
                                             <Stack spacing={2}>
                                                 <Box
@@ -2825,6 +2849,47 @@ export default function AnalysisTriagePage() {
                                                             {description}
                                                         </Typography>
                                                     </Box>
+                                                )}
+                                                {establishedFact && (
+                                                    <Alert
+                                                        severity="info"
+                                                        sx={{ mt: 1 }}
+                                                    >
+                                                        <Typography
+                                                            variant="subtitle2"
+                                                            gutterBottom
+                                                        >
+                                                            Established Fact
+                                                        </Typography>
+                                                        <Typography variant="body2">
+                                                            {establishedFact}
+                                                        </Typography>
+                                                        {canonSource && (
+                                                            <Typography
+                                                                variant="caption"
+                                                                color="text.secondary"
+                                                                sx={{ mt: 0.5, display: 'block' }}
+                                                            >
+                                                                Source: {canonSource}
+                                                            </Typography>
+                                                        )}
+                                                    </Alert>
+                                                )}
+                                                {conflictingText && (
+                                                    <Alert
+                                                        severity="warning"
+                                                        sx={{ mt: 1 }}
+                                                    >
+                                                        <Typography
+                                                            variant="subtitle2"
+                                                            gutterBottom
+                                                        >
+                                                            Conflicting Text
+                                                        </Typography>
+                                                        <Typography variant="body2">
+                                                            {conflictingText}
+                                                        </Typography>
+                                                    </Alert>
                                                 )}
                                                 {suggestionText && (
                                                     <Box>
