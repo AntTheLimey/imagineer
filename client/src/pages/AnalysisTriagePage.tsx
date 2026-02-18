@@ -1014,16 +1014,25 @@ export default function AnalysisTriagePage() {
                 if (nextEntry.kind === 'item') {
                     setSelectedItemId(nextEntry.item.id);
                     setSelectedEntityGroup(null);
+                    setNewEntityName(nextEntry.item.matchedText);
+                    setNewEntityType('npc');
+                    setShowNewEntityForm(false);
                 } else {
                     setSelectedItemId(null);
                     setSelectedEntityGroup({
                         entityId: nextEntry.entityId,
                         detectionType: nextEntry.detectionType,
                     });
+                    setNewEntityName('');
+                    setNewEntityType('npc');
+                    setShowNewEntityForm(false);
                 }
             } else {
                 setSelectedItemId(null);
                 setSelectedEntityGroup(null);
+                setNewEntityName('');
+                setNewEntityType('npc');
+                setShowNewEntityForm(false);
             }
         },
         [leftPanelOrder, selectedEntityGroup],

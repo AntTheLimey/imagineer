@@ -127,6 +127,12 @@ export default function ChapterEditorPage() {
         Partial<Record<keyof ChapterFormData, string>>
     >({});
 
+    // Calculate next sort order for new chapters
+    const nextSortOrder = useMemo(() => {
+        if (!chapters || chapters.length === 0) return 0;
+        return Math.max(...chapters.map(c => c.sortOrder)) + 1;
+    }, [chapters]);
+
     // Server-side draft management (replaces useDraft + useAutosave + useUnsavedChanges)
     const {
         serverDraft,
@@ -146,7 +152,10 @@ export default function ChapterEditorPage() {
             title: existingChapter.title,
             overview: existingChapter.overview ?? '',
             sortOrder: existingChapter.sortOrder,
-        } : undefined,
+        } : {
+            ...DEFAULT_FORM_DATA,
+            sortOrder: nextSortOrder,
+        },
         currentData: formData,
         enabled: !!campaignId,
     });
@@ -169,12 +178,6 @@ export default function ChapterEditorPage() {
         count: number;
         message?: string;
     }>({ open: false, jobId: 0, count: 0 });
-
-    // Calculate next sort order for new chapters
-    const nextSortOrder = useMemo(() => {
-        if (!chapters || chapters.length === 0) return 0;
-        return Math.max(...chapters.map(c => c.sortOrder)) + 1;
-    }, [chapters]);
 
     // Initialize form data from existing chapter
     useEffect(() => {
@@ -291,6 +294,40 @@ export default function ChapterEditorPage() {
                         sortOrder: formData.sortOrder,
                     },
                 });
+
+                // If analysis/enrich requested, trigger it on the new chapter
+                if (mode !== 'save') {
+                    const result = await updateChapter.mutateAsync({
+                        campaignId,
+                        chapterId: newChapter.id,
+                        input: {
+                            title: formData.title,
+                            overview: formData.overview || undefined,
+                            sortOrder: formData.sortOrder,
+                        },
+                        options: {
+                            analyze: true,
+                            enrich: mode === 'enrich',
+                        },
+                    });
+
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const analysisResult = (result as any)?._analysis;
+                    if (analysisResult) {
+                        await deleteDraftFromServer();
+                        if (mode === 'enrich' && analysisResult.jobId) {
+                            navigate(`/campaigns/${campaignId}/analysis/${analysisResult.jobId}`, {
+                                replace: true,
+                            });
+                            return true;
+                        }
+                        // Navigate to edit, show snackbar from there
+                        navigate(`/campaigns/${campaignId}/chapters/${newChapter.id}/edit`, {
+                            replace: true,
+                        });
+                        return true;
+                    }
+                }
 
                 await deleteDraftFromServer();
 

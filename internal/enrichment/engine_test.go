@@ -426,6 +426,174 @@ func TestEnrichEntity_Success(t *testing.T) {
 	assert.Equal(t, int64(2), rs.TargetEntityID)
 }
 
+func TestEnrichEntity_SkipsDuplicateRelationship(t *testing.T) {
+	// The LLM suggests a relationship between entities 1 and 2, but one
+	// already exists. The suggestion should be silently skipped.
+	llmResponse := `{
+		"descriptionUpdates": [],
+		"logEntries": [],
+		"relationships": [
+			{
+				"sourceEntityId": 1,
+				"sourceEntityName": "Kael",
+				"targetEntityId": 2,
+				"targetEntityName": "Harbourmaster Grint",
+				"relationshipType": "enemy_of",
+				"description": "They were seen arguing."
+			}
+		]
+	}`
+
+	provider := &mockProvider{response: llmResponse}
+	engine := NewEngine(nil)
+
+	input := EnrichmentInput{
+		CampaignID:  1,
+		JobID:       42,
+		SourceTable: "chapters",
+		SourceID:    7,
+		Content:     "Kael argued with Harbourmaster Grint.",
+		Entity: models.Entity{
+			ID:         1,
+			EntityType: models.EntityTypeNPC,
+			Name:       "Kael",
+		},
+		Relationships: []models.Relationship{
+			{
+				ID:                   10,
+				CampaignID:           1,
+				SourceEntityID:       1,
+				TargetEntityID:       2,
+				RelationshipTypeName: "knows",
+			},
+		},
+	}
+
+	items, err := engine.EnrichEntity(context.Background(), provider, input)
+
+	require.NoError(t, err)
+	// Only description updates and log entries should remain; the
+	// relationship suggestion should be filtered out.
+	for _, item := range items {
+		assert.NotEqual(t, "relationship_suggestion", item.DetectionType,
+			"duplicate relationship should have been skipped")
+	}
+}
+
+func TestEnrichEntity_SkipsDuplicateRelationshipInverse(t *testing.T) {
+	// The existing relationship is stored as (2 -> 1) but the LLM
+	// suggests (1 -> 2). Because the model uses single-edge storage,
+	// these represent the same pair and the suggestion should be skipped.
+	llmResponse := `{
+		"descriptionUpdates": [],
+		"logEntries": [],
+		"relationships": [
+			{
+				"sourceEntityId": 1,
+				"sourceEntityName": "Kael",
+				"targetEntityId": 2,
+				"targetEntityName": "Harbourmaster Grint",
+				"relationshipType": "enemy_of",
+				"description": "They were seen arguing."
+			}
+		]
+	}`
+
+	provider := &mockProvider{response: llmResponse}
+	engine := NewEngine(nil)
+
+	input := EnrichmentInput{
+		CampaignID:  1,
+		JobID:       42,
+		SourceTable: "chapters",
+		SourceID:    7,
+		Content:     "Kael argued with Harbourmaster Grint.",
+		Entity: models.Entity{
+			ID:         1,
+			EntityType: models.EntityTypeNPC,
+			Name:       "Kael",
+		},
+		Relationships: []models.Relationship{
+			{
+				ID:                   10,
+				CampaignID:           1,
+				SourceEntityID:       2, // inverse direction
+				TargetEntityID:       1,
+				RelationshipTypeName: "knows",
+			},
+		},
+	}
+
+	items, err := engine.EnrichEntity(context.Background(), provider, input)
+
+	require.NoError(t, err)
+	for _, item := range items {
+		assert.NotEqual(t, "relationship_suggestion", item.DetectionType,
+			"inverse duplicate relationship should have been skipped")
+	}
+}
+
+func TestEnrichEntity_AllowsNewRelationshipPair(t *testing.T) {
+	// The LLM suggests a relationship between entities 1 and 3. An
+	// existing relationship exists between 1 and 2 only. The suggestion
+	// for the new pair (1, 3) should be kept.
+	llmResponse := `{
+		"descriptionUpdates": [],
+		"logEntries": [],
+		"relationships": [
+			{
+				"sourceEntityId": 1,
+				"sourceEntityName": "Kael",
+				"targetEntityId": 3,
+				"targetEntityName": "The Docks",
+				"relationshipType": "located_in",
+				"description": "Kael frequents the docks."
+			}
+		]
+	}`
+
+	provider := &mockProvider{response: llmResponse}
+	engine := NewEngine(nil)
+
+	input := EnrichmentInput{
+		CampaignID:  1,
+		JobID:       42,
+		SourceTable: "chapters",
+		SourceID:    7,
+		Content:     "Kael went to the docks.",
+		Entity: models.Entity{
+			ID:         1,
+			EntityType: models.EntityTypeNPC,
+			Name:       "Kael",
+		},
+		Relationships: []models.Relationship{
+			{
+				ID:                   10,
+				CampaignID:           1,
+				SourceEntityID:       1,
+				TargetEntityID:       2,
+				RelationshipTypeName: "knows",
+			},
+		},
+	}
+
+	items, err := engine.EnrichEntity(context.Background(), provider, input)
+
+	require.NoError(t, err)
+	// The relationship suggestion for the new pair should be present.
+	var found bool
+	for _, item := range items {
+		if item.DetectionType == "relationship_suggestion" {
+			found = true
+			var rs models.RelationshipSuggestion
+			require.NoError(t, json.Unmarshal(item.SuggestedContent, &rs))
+			assert.Equal(t, int64(3), rs.TargetEntityID)
+		}
+	}
+	assert.True(t, found,
+		"relationship suggestion for new pair should be present")
+}
+
 func TestEnrichEntity_LLMError(t *testing.T) {
 	provider := &mockProvider{
 		err: errors.New("API rate limit exceeded"),
