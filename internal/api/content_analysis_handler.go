@@ -1426,7 +1426,17 @@ func (h *ContentAnalysisHandler) RunContentEnrichment(
 		return
 	}
 
-	// 5. Build pipeline and spawn background goroutine for enrichment.
+	// 5. Look up the campaign to get its game system code for RAG context.
+	campaign, campaignErr := h.db.GetCampaign(ctx, campaignID)
+	var gameSystemCode string
+	if campaignErr != nil {
+		log.Printf("Content-enrich: failed to get campaign %d: %v",
+			campaignID, campaignErr)
+	} else if campaign.System != nil {
+		gameSystemCode = campaign.System.Code
+	}
+
+	// 6. Build pipeline and spawn background goroutine for enrichment.
 	ttrpgAgent := ttrpg.NewExpert()
 	canonAgent := canon.NewExpert()
 	enrichAgent := enrichment.NewEnrichmentAgent(h.db)
@@ -1451,12 +1461,27 @@ func (h *ContentAnalysisHandler) RunContentEnrichment(
 		defer cancel()
 		log.Printf("Content-enrich: starting enrichment for job %d", jobID)
 
+		// Build RAG context for the enrichment pipeline.
+		ctxBuilder := enrichment.NewContextBuilder(h.db, "")
+		ragCtx, ragErr := ctxBuilder.BuildContext(bgCtx, campaignID, content, gameSystemCode, nil)
+		if ragErr != nil {
+			log.Printf("Content-enrich: failed to build RAG context for job %d: %v",
+				jobID, ragErr)
+		}
+
+		var gameSystemID *int64
+		if campaign != nil {
+			gameSystemID = campaign.SystemID
+		}
+
 		input := enrichment.PipelineInput{
-			CampaignID:  campaignID,
-			JobID:       jobID,
-			SourceTable: job.SourceTable,
-			SourceID:    job.SourceID,
-			Content:     content,
+			CampaignID:   campaignID,
+			JobID:        jobID,
+			SourceTable:  job.SourceTable,
+			SourceID:     job.SourceID,
+			Content:      content,
+			GameSystemID: gameSystemID,
+			Context:      ragCtx,
 		}
 
 		enrichItems, err := pipeline.Run(bgCtx, provider, input)
@@ -1590,7 +1615,17 @@ func (h *ContentAnalysisHandler) TryAutoEnrich(
 		entities = append(entities, *entity)
 	}
 
-	// 8. Build pipeline and spawn background goroutine for enrichment.
+	// 8. Look up the campaign to get its game system code for RAG context.
+	campaign, campaignErr := h.db.GetCampaign(ctx, job.CampaignID)
+	var gameSystemCode string
+	if campaignErr != nil {
+		log.Printf("Auto-enrich: failed to get campaign %d: %v",
+			job.CampaignID, campaignErr)
+	} else if campaign.System != nil {
+		gameSystemCode = campaign.System.Code
+	}
+
+	// 9. Build pipeline and spawn background goroutine for enrichment.
 	ttrpgAgent := ttrpg.NewExpert()
 	canonAgent := canon.NewExpert()
 	enrichAgent := enrichment.NewEnrichmentAgent(h.db)
@@ -1616,13 +1651,28 @@ func (h *ContentAnalysisHandler) TryAutoEnrich(
 		log.Printf("Auto-enrich: starting enrichment for job %d with %d entities",
 			jobID, len(entities))
 
+		// Build RAG context for the enrichment pipeline.
+		ctxBuilder := enrichment.NewContextBuilder(h.db, "")
+		ragCtx, ragErr := ctxBuilder.BuildContext(bgCtx, job.CampaignID, content, gameSystemCode, entities)
+		if ragErr != nil {
+			log.Printf("Auto-enrich: failed to build RAG context for job %d: %v",
+				jobID, ragErr)
+		}
+
+		var gameSystemID *int64
+		if campaign != nil {
+			gameSystemID = campaign.SystemID
+		}
+
 		input := enrichment.PipelineInput{
-			CampaignID:  job.CampaignID,
-			JobID:       jobID,
-			SourceTable: job.SourceTable,
-			SourceID:    job.SourceID,
-			Content:     content,
-			Entities:    entities,
+			CampaignID:   job.CampaignID,
+			JobID:        jobID,
+			SourceTable:  job.SourceTable,
+			SourceID:     job.SourceID,
+			Content:      content,
+			Entities:     entities,
+			GameSystemID: gameSystemID,
+			Context:      ragCtx,
 		}
 
 		enrichItems, err := pipeline.Run(bgCtx, provider, input)

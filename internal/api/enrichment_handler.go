@@ -189,6 +189,15 @@ func (h *EnrichmentHandler) TriggerEnrichment(w http.ResponseWriter, r *http.Req
 		entities = append(entities, *entity)
 	}
 
+	// Look up the campaign to get its game system code for RAG context.
+	campaign, campaignErr := h.db.GetCampaign(r.Context(), campaignID)
+	var gameSystemCode string
+	if campaignErr != nil {
+		log.Printf("Enrichment: failed to get campaign %d: %v", campaignID, campaignErr)
+	} else if campaign.System != nil {
+		gameSystemCode = campaign.System.Code
+	}
+
 	// Spawn background goroutine for enrichment processing
 	go func() {
 		bgCtx := context.Background()
@@ -207,13 +216,28 @@ func (h *EnrichmentHandler) TriggerEnrichment(w http.ResponseWriter, r *http.Req
 			}
 		}()
 
+		// Build RAG context for the enrichment pipeline.
+		ctxBuilder := enrichment.NewContextBuilder(h.db, "")
+		ragCtx, ragErr := ctxBuilder.BuildContext(bgCtx, campaignID, content, gameSystemCode, entities)
+		if ragErr != nil {
+			log.Printf("Enrichment: failed to build RAG context for job %d: %v",
+				jobID, ragErr)
+		}
+
+		var gameSystemID *int64
+		if campaign != nil {
+			gameSystemID = campaign.SystemID
+		}
+
 		input := enrichment.PipelineInput{
-			CampaignID:  campaignID,
-			JobID:       jobID,
-			SourceTable: job.SourceTable,
-			SourceID:    job.SourceID,
-			Content:     content,
-			Entities:    entities,
+			CampaignID:   campaignID,
+			JobID:        jobID,
+			SourceTable:  job.SourceTable,
+			SourceID:     job.SourceID,
+			Content:      content,
+			Entities:     entities,
+			GameSystemID: gameSystemID,
+			Context:      ragCtx,
 		}
 
 		enrichItems, err := pipeline.Run(bgCtx, provider, input)
