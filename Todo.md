@@ -95,16 +95,15 @@ analysis and triage workflow.
   Orphean Society" but actually an alias for "18 Grosvenor
   Square"), the user needs an autocomplete entity picker to
   redirect the alias to the correct entity.
-- [ ] `[MVP-2]` Enrichment pipeline should check existing
+- [x] `[MVP-2]` Enrichment pipeline should check existing
   relationships (including inverses) before suggesting new
-  ones. Currently the pipeline can suggest "A leads B" when
-  "A leads B" or "B is_led_by A" already exists in the
-  graph.
-- [ ] `[MVP-2]` Lightweight ontology for relationship types
-  — define which relationship types are valid between which
-  entity type pairs (e.g., "leads/is_led_by" valid for
-  Person to Organization, not Location to Item). Enforce
-  during analysis to prevent nonsensical suggestions.
+  ones. The Graph Expert agent now validates relationship
+  suggestions after entity enrichment.
+- [x] `[MVP-2]` Lightweight ontology for relationship types
+  — the `relationship_type_constraints` table (migration
+  014) defines which relationship types are valid between
+  which entity type pairs, and the Graph Expert enforces
+  these constraints during analysis.
 
 ### Graph Maintenance
 
@@ -128,8 +127,10 @@ infrastructure.
 - [ ] `[MVP-1]` AI Memory System with campaign, chapter, and
   session memory hierarchy (persistent context, inheritance,
   management UI).
-- [ ] `[MVP-1]` Context assembly service with campaign-scoped
-  content retrieval and token budget management.
+- [x] `[MVP-1]` Context assembly service with campaign-scoped
+  content retrieval and token budget management. The
+  ContextBuilder uses content-derived queries, deduplication,
+  and a 4000-token soft limit.
 - [ ] `[MVP-1]` Entity AI assistance buttons: "Flesh out
   details", "Check canon", and "Suggest relationships".
 - [ ] `[MVP-1]` AI summary panel component (reusable, displays
@@ -170,10 +171,12 @@ infrastructure.
 
 ### Deferred Design
 
-The enrichment pipeline improvements have a design document at
+The enrichment pipeline improvements design at
 `docs/plans/2026-02-10-enrichment-pipeline-improvements-design.md`
-and cover content-diff, budgets, parallel sub-agents, and
-relationship type governance.
+has been implemented across Phases 1-6 of the multi-agent
+enrichment pipeline. The implementation covers the pipeline
+orchestrator, TTRPG Expert, Canon Expert, Revision, Graph
+Expert agents, and RAG context assembly with token budgets.
 
 ---
 
@@ -536,6 +539,45 @@ Features planned for after the initial release.
   dismissing a suggestion.
 - [x] Accepted description updates and log entries apply to
   entities immediately.
+
+### Multi-Agent Enrichment Pipeline (Phases 1-6)
+
+- [x] Pipeline infrastructure with `PipelineAgent` interface,
+  topological sort orchestrator, shared `PipelineInput`
+  context, and `EnrichmentAgent` adapter.
+- [x] Migration 013 adds `agent_name` and `pipeline_run_id`
+  columns to `content_analysis_items`.
+- [x] TTRPG Expert agent analysing content quality across
+  eight dimensions (pacing, investigation, spotlight balance,
+  NPC development, mechanics validation, PC agency,
+  continuity, setting) with holistic report and atomic triage
+  items.
+- [x] Canon Expert agent detecting contradictions against
+  established campaign facts via RAG (factual, temporal, and
+  character inconsistencies).
+- [x] Revision agent generating revised content from accepted
+  Stage 1 findings with `POST /revision` and
+  `PUT /revision/apply` endpoints.
+- [x] Frontend side-by-side diff view for revisions with edit
+  mode and apply workflow.
+- [x] Graph Expert agent validating relationships with dual
+  mode: structural checks (no LLM) and semantic checks
+  (with LLM).
+- [x] Migration 014 adds the `relationship_type_constraints`
+  table with seed data for entity type pair validation.
+- [x] ContextBuilder for RAG context assembly with
+  content-derived queries, deduplication by
+  `(SourceTable, SourceID)`, and 4000-token budget tracking.
+- [x] ContextBuilder wired into all three pipeline handler
+  sites with game system schema loading.
+- [x] 36 context tests covering query derivation,
+  deduplication, token budgets, and schema loading.
+- [x] Frontend analysis groups in the triage UI with
+  expandable report view and canon item rendering.
+- [x] Path traversal validation in `loadGameSystemSchema`.
+- [x] Rune-safe truncation in TTRPG Expert prompts.
+- [x] Fixed `allKnownEntities` bug in `DetectNewEntities`.
+- [x] Added `acknowledged` resolution to backend validation.
 
 ### Entity & Campaign Features
 

@@ -74,6 +74,61 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Wiki links and the entity list view icon now navigate to
     the entity view page instead of opening a dialog or
     navigating to edit.
+- Multi-Agent Enrichment Pipeline (Phases 1-6)
+  - Pipeline infrastructure with `PipelineAgent` interface
+    (`Name()`, `Run()`, `DependsOn()`), topological sort
+    orchestrator for dependency ordering, shared
+    `PipelineInput` context, and `EnrichmentAgent` adapter
+    wrapping the existing engine as a pipeline stage.
+  - Migration 013 adds `agent_name` and `pipeline_run_id`
+    columns to `content_analysis_items` for multi-agent
+    tracking.
+  - TTRPG Expert agent analyses content quality across eight
+    dimensions: pacing, investigation (Three Clue Rule),
+    spotlight balance, NPC development, mechanics validation,
+    PC agency, continuity, and setting.
+  - TTRPG Expert produces a holistic report and atomic triage
+    items with new detection types (`analysis_report`,
+    `content_suggestion`, `mechanics_warning`,
+    `investigation_gap`, `pacing_note`) using
+    `phase="analysis"` to distinguish analysis output from
+    enrichment output.
+  - Frontend analysis groups in the triage UI with an
+    expandable report view for TTRPG Expert results.
+  - Canon Expert agent detects contradictions against
+    established campaign facts via RAG, covering factual,
+    temporal, and character inconsistencies with new detection
+    types (`canon_contradiction`, `temporal_inconsistency`,
+    `character_inconsistency`).
+  - Frontend canon items in the triage UI with established
+    fact and conflicting text rendering.
+  - Revision agent generates revised content incorporating
+    accepted Stage 1 findings, with two new API endpoints
+    (`POST /revision` and `PUT /revision/apply`).
+  - Frontend side-by-side diff view for revisions (original
+    vs revised) with edit mode and apply workflow using
+    green/red line highlighting.
+  - Graph Expert agent validates relationships after entity
+    enrichment with dual mode: structural checks (orphans,
+    type pair constraints) without LLM and semantic checks
+    (redundant and implied edges) with LLM.
+  - Migration 014 adds the `relationship_type_constraints`
+    table with seed data for entity type pair validation.
+  - Graph Expert introduces new detection types
+    (`graph_warning`, `redundant_edge`, `invalid_type_pair`,
+    `orphan_warning`) and depends on the enrichment stage
+    via `DependsOn()=["enrichment"]`.
+  - ContextBuilder for RAG context assembly using
+    content-derived queries (extracts multiple search queries
+    from content summary and entity name batches of five),
+    deduplication by `(SourceTable, SourceID)` keeping the
+    highest combined score, and token budget tracking (4000
+    token soft limit with `estimateTokens` heuristic).
+  - ContextBuilder wired into all three pipeline handler
+    sites with campaign lookup for game system code and
+    schema loading via `loadGameSystemSchema`.
+  - 36 context tests covering query derivation,
+    deduplication, token budgets, and schema loading.
 - Content Enrichment Improvements
   - `RunContentEnrichment` method scans content for entity
     mentions independently of Phase 1 analysis, enabling
@@ -308,6 +363,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Path traversal vulnerability in `loadGameSystemSchema`; the
+  function now validates file paths before loading schema files.
+- Rune-safe truncation in TTRPG Expert prompts preventing
+  invalid UTF-8 sequences when truncating multi-byte content.
+- `allKnownEntities` bug where `DetectNewEntities` did not see
+  all campaign entities; the function now receives the complete
+  entity list.
+- Missing `acknowledged` resolution in backend validation; the
+  resolver now accepts the `acknowledged` value.
+- Unused `campaignId` prop removed from the CompletedStage
+  component.
+- Redundant `@types/diff` devDependency removed from the
+  client package.
 - Enrichment skipping when triggered via "Save, Analyze &
   Enrich" button; the system now runs `RunContentEnrichment`
   independently of Phase 1 analysis results.
