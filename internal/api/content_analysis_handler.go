@@ -220,7 +220,7 @@ func (h *ContentAnalysisHandler) ListJobItems(w http.ResponseWriter, r *http.Req
 
 // ResolveItem handles PUT /api/campaigns/{id}/analysis/items/{itemId}
 // Resolves a content analysis item with the given resolution. Supported
-// resolutions are "accepted", "new_entity", and "dismissed".
+// resolutions are "accepted", "new_entity", "dismissed", and "acknowledged".
 func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Request) {
 	campaignID, err := parseInt64(r, "id")
 	if err != nil {
@@ -276,11 +276,11 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 
 	// Validate the resolution value
 	switch req.Resolution {
-	case "accepted", "new_entity", "dismissed":
+	case "accepted", "new_entity", "dismissed", "acknowledged":
 		// valid
 	default:
 		respondError(w, http.StatusBadRequest,
-			"Resolution must be one of: accepted, new_entity, dismissed")
+			"Resolution must be one of: accepted, new_entity, dismissed, acknowledged")
 		return
 	}
 
@@ -333,6 +333,9 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 		resolvedEntityID = entityID
 
 	case "dismissed":
+		resolvedEntityID = nil
+
+	case "acknowledged":
 		resolvedEntityID = nil
 	}
 
@@ -533,11 +536,11 @@ func (h *ContentAnalysisHandler) BatchResolve(w http.ResponseWriter, r *http.Req
 	}
 
 	switch req.Resolution {
-	case "accepted", "dismissed":
+	case "accepted", "dismissed", "acknowledged":
 		// valid
 	default:
 		respondError(w, http.StatusBadRequest,
-			"Resolution must be one of: accepted, dismissed")
+			"Resolution must be one of: accepted, dismissed, acknowledged")
 		return
 	}
 

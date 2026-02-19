@@ -66,20 +66,22 @@ func (a *EnrichmentAgent) Run(
 	// Determine entities to enrich. Prefer entities provided in the
 	// pipeline input; fall back to scanning content for entity name
 	// mentions.
+	var allCampaignEntities []models.Entity
 	entities := input.Entities
 	if len(entities) == 0 {
-		allEntities, err := a.db.ListEntitiesByCampaign(ctx, input.CampaignID)
+		var err error
+		allCampaignEntities, err = a.db.ListEntitiesByCampaign(ctx, input.CampaignID)
 		if err != nil {
 			log.Printf(
 				"enrichment-agent: failed to list entities for campaign %d: %v",
 				input.CampaignID, err,
 			)
 			// Cannot determine entities; run only new-entity detection.
-			allEntities = nil
+			allCampaignEntities = nil
 		}
 
 		lowerContent := strings.ToLower(input.Content)
-		for _, entity := range allEntities {
+		for _, entity := range allCampaignEntities {
 			if entity.Name == "" {
 				continue
 			}
@@ -92,10 +94,10 @@ func (a *EnrichmentAgent) Run(
 	var allItems []models.ContentAnalysisItem
 
 	// Build the full entity list for the OtherEntities field and for
-	// new-entity detection. When entities were provided in the input
-	// we use them directly; otherwise we use the filtered set plus any
-	// remaining campaign entities we already loaded.
-	allKnownEntities := entities
+	// new-entity detection. DetectNewEntities needs ALL campaign
+	// entities (not just the mentioned subset) so it can check for
+	// duplicates against every existing entity.
+	allKnownEntities := allCampaignEntities
 	if len(input.Entities) > 0 {
 		// Input entities were explicit; load campaign entities for the
 		// full known-entity list used by DetectNewEntities.
@@ -105,9 +107,14 @@ func (a *EnrichmentAgent) Run(
 				"enrichment-agent: failed to list campaign entities for new-entity detection: %v",
 				err,
 			)
+			allKnownEntities = entities
 		} else {
 			allKnownEntities = campaignEntities
 		}
+	} else if allKnownEntities == nil {
+		// Fallback: if ListEntitiesByCampaign failed above, use
+		// whatever mentioned entities we found.
+		allKnownEntities = entities
 	}
 
 	// Enrich each entity individually.

@@ -281,8 +281,16 @@ func estimateTokens(s string) float64 {
 
 // loadGameSystemSchema reads the YAML schema file for the given game
 // system code. It returns the file contents as a string, or an empty
-// string if the file does not exist or cannot be read.
+// string if the file does not exist or cannot be read. The code is
+// validated to contain only alphanumeric characters and hyphens to
+// prevent path traversal attacks.
 func (cb *ContextBuilder) loadGameSystemSchema(code string) string {
+	for _, r := range code {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-') {
+			log.Printf("enrichment: invalid game system code %q", code)
+			return ""
+		}
+	}
 	path := filepath.Join(cb.schemasDir, code+".yaml")
 	data, err := os.ReadFile(path)
 	if err != nil {

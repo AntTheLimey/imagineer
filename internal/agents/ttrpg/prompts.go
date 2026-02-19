@@ -106,15 +106,15 @@ func buildUserPrompt(input enrichment.PipelineInput) string {
 
 	b.WriteString("## Content to Analyse\n\n")
 
-	content := input.Content
-	if len(content) > maxContentLength {
-		content = content[:maxContentLength]
+	contentRunes := []rune(input.Content)
+	if len(contentRunes) > maxContentLength {
+		content := string(contentRunes[:maxContentLength])
 		b.WriteString(content)
 		b.WriteString("\n\n[Content truncated at ")
 		b.WriteString(fmt.Sprintf("%d", maxContentLength))
 		b.WriteString(" characters]\n")
 	} else {
-		b.WriteString(content)
+		b.WriteString(input.Content)
 		b.WriteString("\n")
 	}
 
@@ -189,14 +189,16 @@ func buildUserPrompt(input enrichment.PipelineInput) string {
 	return b.String()
 }
 
-// truncateString truncates a string to the specified maximum length,
-// appending an ellipsis if truncation occurs.
+// truncateString truncates a string to the specified maximum number
+// of runes, appending an ellipsis if truncation occurs. This uses
+// rune-based operations to avoid splitting multi-byte characters.
 func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
 		return s
 	}
 	if maxLen <= 3 {
-		return s[:maxLen]
+		return string(runes[:maxLen])
 	}
-	return s[:maxLen-3] + "..."
+	return string(runes[:maxLen-3]) + "..."
 }

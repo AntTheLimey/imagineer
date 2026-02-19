@@ -34,8 +34,6 @@ import SceneSummaryList from './SceneSummaryList';
  * Props for the CompletedStage component.
  */
 export interface CompletedStageProps {
-    /** The campaign this session belongs to. */
-    campaignId: number;
     /** The session title. */
     title: string;
     /** The session number, if assigned. */
