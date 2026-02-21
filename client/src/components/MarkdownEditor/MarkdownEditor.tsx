@@ -16,6 +16,8 @@ import {
     Paper,
 } from '@mui/material';
 import { Extension } from '@tiptap/core';
+import { DOMParser as ProseMirrorDOMParser } from '@tiptap/pm/model';
+import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -35,8 +37,85 @@ import { buildWikiLinkSuggestion } from './WikiLinkSuggestion';
 interface MarkdownStorage {
     markdown: {
         getMarkdown: () => string;
+        parser: {
+            parse: (
+                content: string,
+                options?: { inline?: boolean },
+            ) => string;
+        };
     };
 }
+
+/**
+ * Block-level markdown paste handler.
+ *
+ * The default tiptap-markdown clipboard plugin parses pasted text
+ * with `{ inline: true }`, which strips block-level markdown
+ * (headings, lists, blockquotes, horizontal rules). This extension
+ * intercepts plain-text paste when the text contains block-level
+ * markdown patterns and parses it as full markdown instead.
+ *
+ * Priority 150 ensures this runs before the tiptap-markdown
+ * `clipboardTextParser` plugin (default priority 100).
+ */
+const MarkdownPasteHandler = Extension.create({
+    name: 'markdownPasteHandler',
+    priority: 150,
+
+    addProseMirrorPlugins() {
+        const { editor } = this;
+        return [
+            new Plugin({
+                key: new PluginKey('markdownPasteHandler'),
+                props: {
+                    handlePaste: (view, event) => {
+                        // If HTML is on the clipboard, let the
+                        // default handler deal with it.
+                        const html =
+                            event.clipboardData?.getData('text/html');
+                        if (html) return false;
+
+                        const text =
+                            event.clipboardData?.getData('text/plain');
+                        if (!text) return false;
+
+                        // Only intercept when the text contains
+                        // block-level markdown patterns.
+                        const blockPattern =
+                            /^(#{1,6}\s|[-*+]\s|\d+\.\s|>\s|---|\*\*\*|___)/m;
+                        if (!blockPattern.test(text)) return false;
+
+                        // Parse as full markdown (not inline) to
+                        // preserve block-level elements. The parser
+                        // returns an HTML string.
+                        const storage =
+                            editor.storage as unknown as MarkdownStorage;
+                        const parsedHtml =
+                            storage.markdown.parser.parse(text);
+                        if (!parsedHtml) return false;
+
+                        // Convert the HTML string to a DOM element,
+                        // then parse it into a ProseMirror Slice.
+                        const wrapper =
+                            document.createElement('div');
+                        wrapper.innerHTML = parsedHtml;
+                        const slice =
+                            ProseMirrorDOMParser.fromSchema(
+                                view.state.schema,
+                            ).parseSlice(wrapper, {
+                                preserveWhitespace: true,
+                            });
+
+                        const { tr } = view.state;
+                        tr.replaceSelection(slice);
+                        view.dispatch(tr);
+                        return true;
+                    },
+                },
+            }),
+        ];
+    },
+});
 
 /**
  * Props for the MarkdownEditor component.
@@ -128,6 +207,7 @@ export default function MarkdownEditor({
                 transformPastedText: true,
             }),
             WikiLinkNode,
+            MarkdownPasteHandler,
         ];
 
         if (campaignId) {
