@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/antonypegg/imagineer/internal/agents"
 	"github.com/antonypegg/imagineer/internal/enrichment"
 )
 
@@ -138,7 +139,7 @@ func buildUserPrompt(input enrichment.PipelineInput) string {
 			b.WriteString("** (")
 			b.WriteString(result.SourceTable)
 			b.WriteString("): ")
-			b.WriteString(truncateString(result.ChunkContent, 300))
+			b.WriteString(agents.TruncateString(result.ChunkContent, 300))
 			b.WriteString("\n")
 		}
 	}
@@ -154,7 +155,7 @@ func buildUserPrompt(input enrichment.PipelineInput) string {
 			b.WriteString(string(entity.EntityType))
 			b.WriteString(")")
 			if entity.Description != nil && *entity.Description != "" {
-				desc := truncateString(*entity.Description, 100)
+				desc := agents.TruncateString(*entity.Description, 100)
 				b.WriteString(": ")
 				b.WriteString(desc)
 			}
@@ -187,18 +188,4 @@ func buildUserPrompt(input enrichment.PipelineInput) string {
 	}
 
 	return b.String()
-}
-
-// truncateString truncates a string to the specified maximum number
-// of runes, appending an ellipsis if truncation occurs. This uses
-// rune-based operations to avoid splitting multi-byte characters.
-func truncateString(s string, maxLen int) string {
-	runes := []rune(s)
-	if len(runes) <= maxLen {
-		return s
-	}
-	if maxLen <= 3 {
-		return string(runes[:maxLen])
-	}
-	return string(runes[:maxLen-3]) + "..."
 }

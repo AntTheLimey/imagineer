@@ -16,6 +16,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/antonypegg/imagineer/internal/agents"
 	"github.com/antonypegg/imagineer/internal/enrichment"
 	"github.com/antonypegg/imagineer/internal/models"
 )
@@ -124,7 +125,7 @@ func buildUserPrompt(
 			b.WriteString(rs.TargetEntityName)
 			if rs.Description != "" {
 				b.WriteString(" (")
-				b.WriteString(truncateString(rs.Description, 100))
+				b.WriteString(agents.TruncateString(rs.Description, 100))
 				b.WriteString(")")
 			}
 			b.WriteString("\n")
@@ -146,16 +147,4 @@ func buildUserPrompt(
 	}
 
 	return b.String()
-}
-
-// truncateString truncates a string to the specified maximum length,
-// appending an ellipsis if truncation occurs.
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	if maxLen <= 3 {
-		return s[:maxLen]
-	}
-	return s[:maxLen-3] + "..."
 }

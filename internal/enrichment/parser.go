@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/antonypegg/imagineer/internal/agents"
 	"github.com/antonypegg/imagineer/internal/models"
 )
 
@@ -32,7 +33,7 @@ type enrichmentResponse struct {
 // whatever it can parse. On complete parse failure it returns an empty
 // response rather than an error, providing graceful degradation.
 func parseEnrichmentResponse(responseText string) (*enrichmentResponse, error) {
-	cleaned := stripCodeFences(responseText)
+	cleaned := agents.StripCodeFences(responseText)
 	cleaned = strings.TrimSpace(cleaned)
 
 	if cleaned == "" {
@@ -83,7 +84,7 @@ type newEntitySuggestion struct {
 // as parseEnrichmentResponse: strip code fences, unmarshal JSON, and
 // return an empty response on failure rather than propagating errors.
 func parseNewEntityResponse(responseText string) (*newEntityResponse, error) {
-	cleaned := stripCodeFences(responseText)
+	cleaned := agents.StripCodeFences(responseText)
 	cleaned = strings.TrimSpace(cleaned)
 
 	if cleaned == "" {
@@ -164,31 +165,4 @@ func convertNewEntitiesToItems(
 	}
 
 	return items
-}
-
-// stripCodeFences removes markdown code fences from the LLM response.
-// It handles both ```json ... ``` and ``` ... ``` patterns, including
-// fences with trailing language identifiers.
-func stripCodeFences(text string) string {
-	text = strings.TrimSpace(text)
-
-	// Check for opening code fence with optional language tag.
-	if strings.HasPrefix(text, "```") {
-		// Remove the opening fence line.
-		idx := strings.Index(text, "\n")
-		if idx >= 0 {
-			text = text[idx+1:]
-		} else {
-			// The entire text is just the opening fence.
-			return ""
-		}
-
-		// Remove the closing fence.
-		if strings.HasSuffix(strings.TrimSpace(text), "```") {
-			text = strings.TrimSpace(text)
-			text = text[:len(text)-3]
-		}
-	}
-
-	return strings.TrimSpace(text)
 }

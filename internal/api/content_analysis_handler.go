@@ -22,13 +22,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/antonypegg/imagineer/internal/agents/canon"
-	"github.com/antonypegg/imagineer/internal/agents/graph"
-	"github.com/antonypegg/imagineer/internal/agents/ttrpg"
 	"github.com/antonypegg/imagineer/internal/analysis"
 	"github.com/antonypegg/imagineer/internal/auth"
 	"github.com/antonypegg/imagineer/internal/database"
@@ -36,6 +34,10 @@ import (
 	"github.com/antonypegg/imagineer/internal/llm"
 	"github.com/antonypegg/imagineer/internal/models"
 )
+
+// maxRequestBodyBytes is the maximum allowed size for request bodies
+// to prevent oversized payloads from consuming excessive memory.
+const maxRequestBodyBytes = 1 << 20 // 1 MB
 
 // ContentAnalysisHandler handles content analysis API requests.
 type ContentAnalysisHandler struct {
@@ -268,6 +270,7 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
 	var req models.ResolveAnalysisItemRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid request body")
@@ -298,6 +301,20 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 		if req.EntityName == nil || *req.EntityName == "" {
 			respondError(w, http.StatusBadRequest,
 				"Entity name is required for new_entity resolution")
+			return
+		}
+
+		// Validate entity type against known types.
+		switch models.EntityType(*req.EntityType) {
+		case models.EntityTypeNPC, models.EntityTypeLocation,
+			models.EntityTypeItem, models.EntityTypeFaction,
+			models.EntityTypeClue, models.EntityTypeCreature,
+			models.EntityTypeOrganization, models.EntityTypeEvent,
+			models.EntityTypeDocument, models.EntityTypeOther:
+			// valid
+		default:
+			respondError(w, http.StatusBadRequest,
+				fmt.Sprintf("Invalid entity type: %s", *req.EntityType))
 			return
 		}
 
@@ -524,6 +541,7 @@ func (h *ContentAnalysisHandler) BatchResolve(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
 	var req BatchResolveRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid request body")
@@ -676,6 +694,7 @@ func (h *ContentAnalysisHandler) TriggerAnalysis(w http.ResponseWriter, r *http.
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
 	var req TriggerAnalysisRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid request body")
@@ -694,7 +713,7 @@ func (h *ContentAnalysisHandler) TriggerAnalysis(w http.ResponseWriter, r *http.
 	}
 
 	// Fetch the content from the appropriate table and field
-	content, err := h.fetchSourceContent(r.Context(), req.SourceTable, req.SourceID, req.SourceField)
+	content, err := fetchSourceContent(r.Context(), h.db, campaignID, req.SourceTable, req.SourceID, req.SourceField)
 	if err != nil {
 		log.Printf("Error fetching source content: %v", err)
 		respondError(w, http.StatusBadRequest, err.Error())
@@ -774,43 +793,6 @@ func (h *ContentAnalysisHandler) getItemJobID(ctx context.Context, itemID int64)
 		itemID,
 	).Scan(&jobID)
 	return jobID, err
-}
-
-// fetchSourceContent retrieves the text content from the appropriate
-// source table and field using parameterized queries.
-func (h *ContentAnalysisHandler) fetchSourceContent(
-	ctx context.Context,
-	sourceTable string,
-	sourceID int64,
-	sourceField string,
-) (string, error) {
-	var query string
-
-	switch sourceTable + "." + sourceField {
-	case "entities.description":
-		query = "SELECT COALESCE(description, '') FROM entities WHERE id = $1"
-	case "entities.gm_notes":
-		query = "SELECT COALESCE(gm_notes, '') FROM entities WHERE id = $1"
-	case "chapters.overview":
-		query = "SELECT COALESCE(overview, '') FROM chapters WHERE id = $1"
-	case "sessions.prep_notes":
-		query = "SELECT COALESCE(prep_notes, '') FROM sessions WHERE id = $1"
-	case "sessions.actual_notes":
-		query = "SELECT COALESCE(actual_notes, '') FROM sessions WHERE id = $1"
-	case "campaigns.description":
-		query = "SELECT COALESCE(description, '') FROM campaigns WHERE id = $1"
-	default:
-		return "", fmt.Errorf("unsupported source: %s.%s", sourceTable, sourceField)
-	}
-
-	var content string
-	err := h.db.QueryRow(ctx, query, sourceID).Scan(&content)
-	if err != nil {
-		return "", fmt.Errorf("failed to fetch content from %s.%s: %w",
-			sourceTable, sourceField, err)
-	}
-
-	return content, nil
 }
 
 // applyContentFix modifies the source content at the specified position,
@@ -1007,7 +989,7 @@ func (h *ContentAnalysisHandler) RevertItem(w http.ResponseWriter, r *http.Reque
 		posStart != nil && posEnd != nil {
 
 		delta, fixErr := h.revertContentFix(
-			r.Context(), srcTable, srcID, srcField,
+			r.Context(), campaignID, srcTable, srcID, srcField,
 			*posStart, matchedText,
 		)
 		if fixErr != nil {
@@ -1072,6 +1054,7 @@ func (h *ContentAnalysisHandler) RevertItem(w http.ResponseWriter, r *http.Reque
 // delta (negative, since brackets are removed).
 func (h *ContentAnalysisHandler) revertContentFix(
 	ctx context.Context,
+	campaignID int64,
 	sourceTable string,
 	sourceID int64,
 	sourceField string,
@@ -1079,8 +1062,8 @@ func (h *ContentAnalysisHandler) revertContentFix(
 	matchedText string,
 ) (int, error) {
 	// Fetch the current source text.
-	content, err := h.fetchSourceContent(
-		ctx, sourceTable, sourceID, sourceField,
+	content, err := fetchSourceContent(
+		ctx, h.db, campaignID, sourceTable, sourceID, sourceField,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch content for revert: %w", err)
@@ -1440,24 +1423,9 @@ func (h *ContentAnalysisHandler) RunContentEnrichment(
 	}
 
 	// 6. Build pipeline and spawn background goroutine for enrichment.
-	ttrpgAgent := ttrpg.NewExpert()
-	canonAgent := canon.NewExpert()
-	enrichAgent := enrichment.NewEnrichmentAgent(h.db)
-	graphAgent := graph.NewExpert(h.db)
-	pipeline := enrichment.NewPipeline(h.db, []enrichment.Stage{
-		{
-			Name:   "analysis",
-			Phase:  "analysis",
-			Agents: []enrichment.PipelineAgent{ttrpgAgent, canonAgent},
-		},
-		{
-			Name:   "enrichment",
-			Phase:  "enrichment",
-			Agents: []enrichment.PipelineAgent{enrichAgent, graphAgent},
-		},
-	})
+	pipeline := buildDefaultPipeline(h.db)
 
-	bgCtx, cancel := context.WithCancel(context.Background())
+	bgCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	h.enrichCancels.Store(jobID, cancel)
 	go func() {
 		defer h.enrichCancels.Delete(jobID)
@@ -1491,7 +1459,14 @@ func (h *ContentAnalysisHandler) RunContentEnrichment(
 		if err != nil {
 			log.Printf("Content-enrich: pipeline run failed for job %d: %v",
 				jobID, err)
-		} else if len(enrichItems) > 0 {
+			_ = h.db.Exec(context.Background(),
+				"UPDATE content_analysis_jobs SET status = 'failed' WHERE id = $1",
+				jobID,
+			)
+			return
+		}
+
+		if len(enrichItems) > 0 {
 			if err := h.db.CreateAnalysisItems(bgCtx, enrichItems); err != nil {
 				log.Printf(
 					"Content-enrich: failed to save items for job %d: %v",
@@ -1594,8 +1569,8 @@ func (h *ContentAnalysisHandler) TryAutoEnrich(
 	}
 
 	// 6. Fetch source content.
-	content, err := h.fetchSourceContent(
-		ctx, job.SourceTable, job.SourceID, job.SourceField,
+	content, err := fetchSourceContent(
+		ctx, h.db, job.CampaignID, job.SourceTable, job.SourceID, job.SourceField,
 	)
 	if err != nil {
 		log.Printf("Auto-enrich: failed to fetch content for job %d: %v",
@@ -1618,6 +1593,11 @@ func (h *ContentAnalysisHandler) TryAutoEnrich(
 		entities = append(entities, *entity)
 	}
 
+	// Strip GM-only content from entities before passing to pipeline.
+	for i := range entities {
+		entities[i].GMNotes = nil
+	}
+
 	// 8. Look up the campaign to get its game system code for RAG context.
 	campaign, campaignErr := h.db.GetCampaign(ctx, job.CampaignID)
 	var gameSystemCode string
@@ -1629,24 +1609,9 @@ func (h *ContentAnalysisHandler) TryAutoEnrich(
 	}
 
 	// 9. Build pipeline and spawn background goroutine for enrichment.
-	ttrpgAgent := ttrpg.NewExpert()
-	canonAgent := canon.NewExpert()
-	enrichAgent := enrichment.NewEnrichmentAgent(h.db)
-	graphAgent := graph.NewExpert(h.db)
-	pipeline := enrichment.NewPipeline(h.db, []enrichment.Stage{
-		{
-			Name:   "analysis",
-			Phase:  "analysis",
-			Agents: []enrichment.PipelineAgent{ttrpgAgent, canonAgent},
-		},
-		{
-			Name:   "enrichment",
-			Phase:  "enrichment",
-			Agents: []enrichment.PipelineAgent{enrichAgent, graphAgent},
-		},
-	})
+	pipeline := buildDefaultPipeline(h.db)
 
-	bgCtx, cancel := context.WithCancel(context.Background())
+	bgCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	h.enrichCancels.Store(jobID, cancel)
 	go func() {
 		defer h.enrichCancels.Delete(jobID)
@@ -1682,7 +1647,14 @@ func (h *ContentAnalysisHandler) TryAutoEnrich(
 		if err != nil {
 			log.Printf("Auto-enrich: pipeline run failed for job %d: %v",
 				jobID, err)
-		} else if len(enrichItems) > 0 {
+			_ = h.db.Exec(context.Background(),
+				"UPDATE content_analysis_jobs SET status = 'failed' WHERE id = $1",
+				jobID,
+			)
+			return
+		}
+
+		if len(enrichItems) > 0 {
 			if err := h.db.CreateAnalysisItems(bgCtx, enrichItems); err != nil {
 				log.Printf(
 					"Auto-enrich: failed to save items for job %d: %v",
@@ -1909,6 +1881,7 @@ func (h *ContentAnalysisHandler) ApplyRevision(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
 	var req ApplyRevisionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid request body")

@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/antonypegg/imagineer/internal/agents"
 	"github.com/antonypegg/imagineer/internal/llm"
 	"github.com/antonypegg/imagineer/internal/models"
 )
@@ -141,7 +142,7 @@ func buildRevisionUserPrompt(input RevisionInput) string {
 // text is used as the revised content with an empty summary (fallback
 // for cases where the LLM returns plain text instead of JSON).
 func parseRevisionResponse(raw string) *RevisionResult {
-	cleaned := stripCodeFences(raw)
+	cleaned := agents.StripCodeFences(raw)
 	cleaned = strings.TrimSpace(cleaned)
 
 	if cleaned == "" {

@@ -18,9 +18,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/antonypegg/imagineer/internal/agents/canon"
-	"github.com/antonypegg/imagineer/internal/agents/graph"
-	"github.com/antonypegg/imagineer/internal/agents/ttrpg"
 	"github.com/antonypegg/imagineer/internal/auth"
 	"github.com/antonypegg/imagineer/internal/database"
 	"github.com/antonypegg/imagineer/internal/enrichment"
@@ -148,7 +145,7 @@ func (h *EnrichmentHandler) TriggerEnrichment(w http.ResponseWriter, r *http.Req
 	}
 
 	// Fetch source content for the enrichment engine
-	content, err := h.fetchSourceContent(r.Context(), job.SourceTable, job.SourceID, job.SourceField)
+	content, err := fetchSourceContent(r.Context(), h.db, campaignID, job.SourceTable, job.SourceID, job.SourceField)
 	if err != nil {
 		log.Printf("Error fetching source content: %v", err)
 		// Reset job status and return error
@@ -161,22 +158,7 @@ func (h *EnrichmentHandler) TriggerEnrichment(w http.ResponseWriter, r *http.Req
 	}
 
 	// Build the pipeline with analysis and enrichment stages.
-	ttrpgAgent := ttrpg.NewExpert()
-	canonAgent := canon.NewExpert()
-	enrichAgent := enrichment.NewEnrichmentAgent(h.db)
-	graphAgent := graph.NewExpert(h.db)
-	pipeline := enrichment.NewPipeline(h.db, []enrichment.Stage{
-		{
-			Name:   "analysis",
-			Phase:  "analysis",
-			Agents: []enrichment.PipelineAgent{ttrpgAgent, canonAgent},
-		},
-		{
-			Name:   "enrichment",
-			Phase:  "enrichment",
-			Agents: []enrichment.PipelineAgent{enrichAgent, graphAgent},
-		},
-	})
+	pipeline := buildDefaultPipeline(h.db)
 
 	// Pre-load entity objects from the accepted entity IDs.
 	entities := make([]models.Entity, 0, len(entityIDs))
@@ -200,7 +182,8 @@ func (h *EnrichmentHandler) TriggerEnrichment(w http.ResponseWriter, r *http.Req
 
 	// Spawn background goroutine for enrichment processing
 	go func() {
-		bgCtx := context.Background()
+		bgCtx, bgCancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer bgCancel()
 
 		defer func() {
 			if r := recover(); r != nil {
@@ -229,6 +212,11 @@ func (h *EnrichmentHandler) TriggerEnrichment(w http.ResponseWriter, r *http.Req
 			gameSystemID = campaign.SystemID
 		}
 
+		// Strip GM-only content from entities before passing to pipeline.
+		for i := range entities {
+			entities[i].GMNotes = nil
+		}
+
 		input := enrichment.PipelineInput{
 			CampaignID:   campaignID,
 			JobID:        jobID,
@@ -243,7 +231,16 @@ func (h *EnrichmentHandler) TriggerEnrichment(w http.ResponseWriter, r *http.Req
 		enrichItems, err := pipeline.Run(bgCtx, provider, input)
 		if err != nil {
 			log.Printf("Enrichment: pipeline run failed for job %d: %v", jobID, err)
-		} else if len(enrichItems) > 0 {
+			if dbErr := h.db.Exec(bgCtx,
+				"UPDATE content_analysis_jobs SET status = 'failed' WHERE id = $1",
+				jobID,
+			); dbErr != nil {
+				log.Printf("Enrichment: error setting job %d to failed: %v", jobID, dbErr)
+			}
+			return
+		}
+
+		if len(enrichItems) > 0 {
 			if err := h.db.CreateAnalysisItems(bgCtx, enrichItems); err != nil {
 				log.Printf("Enrichment: error inserting items for job %d: %v",
 					jobID, err)
@@ -379,41 +376,4 @@ func (h *EnrichmentHandler) EnrichmentStream(w http.ResponseWriter, r *http.Requ
 			}
 		}
 	}
-}
-
-// fetchSourceContent retrieves the text content from the appropriate
-// source table and field using parameterized queries.
-func (h *EnrichmentHandler) fetchSourceContent(
-	ctx context.Context,
-	sourceTable string,
-	sourceID int64,
-	sourceField string,
-) (string, error) {
-	var query string
-
-	switch sourceTable + "." + sourceField {
-	case "entities.description":
-		query = "SELECT COALESCE(description, '') FROM entities WHERE id = $1"
-	case "entities.gm_notes":
-		query = "SELECT COALESCE(gm_notes, '') FROM entities WHERE id = $1"
-	case "chapters.overview":
-		query = "SELECT COALESCE(overview, '') FROM chapters WHERE id = $1"
-	case "sessions.prep_notes":
-		query = "SELECT COALESCE(prep_notes, '') FROM sessions WHERE id = $1"
-	case "sessions.actual_notes":
-		query = "SELECT COALESCE(actual_notes, '') FROM sessions WHERE id = $1"
-	case "campaigns.description":
-		query = "SELECT COALESCE(description, '') FROM campaigns WHERE id = $1"
-	default:
-		return "", fmt.Errorf("unsupported source: %s.%s", sourceTable, sourceField)
-	}
-
-	var content string
-	err := h.db.QueryRow(ctx, query, sourceID).Scan(&content)
-	if err != nil {
-		return "", fmt.Errorf("failed to fetch content from %s.%s: %w",
-			sourceTable, sourceField, err)
-	}
-
-	return content, nil
 }

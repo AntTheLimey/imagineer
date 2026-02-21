@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/antonypegg/imagineer/internal/agents"
 	"github.com/antonypegg/imagineer/internal/enrichment"
 )
 
@@ -102,8 +103,9 @@ func buildUserPrompt(input enrichment.PipelineInput) string {
 	b.WriteString("## New Content to Check\n\n")
 
 	content := input.Content
-	if len(content) > maxContentLength {
-		content = content[:maxContentLength]
+	contentRunes := []rune(content)
+	if len(contentRunes) > maxContentLength {
+		content = string(contentRunes[:maxContentLength])
 		b.WriteString(content)
 		b.WriteString("\n\n[Content truncated at ")
 		b.WriteString(fmt.Sprintf("%d", maxContentLength))
@@ -129,7 +131,7 @@ func buildUserPrompt(input enrichment.PipelineInput) string {
 			b.WriteString("** (")
 			b.WriteString(result.SourceTable)
 			b.WriteString("): ")
-			b.WriteString(truncateString(result.ChunkContent, 500))
+			b.WriteString(agents.TruncateString(result.ChunkContent, 500))
 			b.WriteString("\n")
 		}
 	}
@@ -150,7 +152,7 @@ func buildUserPrompt(input enrichment.PipelineInput) string {
 			b.WriteString(string(entity.SourceConfidence))
 			b.WriteString(")")
 			if entity.Description != nil && *entity.Description != "" {
-				desc := truncateString(*entity.Description, 200)
+				desc := agents.TruncateString(*entity.Description, 200)
 				b.WriteString(": ")
 				b.WriteString(desc)
 			}
@@ -197,16 +199,4 @@ func buildUserPrompt(input enrichment.PipelineInput) string {
 	}
 
 	return b.String()
-}
-
-// truncateString truncates a string to the specified maximum length,
-// appending an ellipsis if truncation occurs.
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	if maxLen <= 3 {
-		return s[:maxLen]
-	}
-	return s[:maxLen-3] + "..."
 }

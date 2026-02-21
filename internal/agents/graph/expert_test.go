@@ -15,6 +15,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/antonypegg/imagineer/internal/agents"
 	"github.com/antonypegg/imagineer/internal/enrichment"
 	"github.com/antonypegg/imagineer/internal/llm"
 	"github.com/antonypegg/imagineer/internal/models"
@@ -426,7 +427,7 @@ func TestStripCodeFences(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			result := stripCodeFences(tc.input)
+			result := agents.StripCodeFences(tc.input)
 			assert.Equal(t, tc.expected, result)
 		})
 	}

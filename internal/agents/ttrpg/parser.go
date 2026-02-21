@@ -17,6 +17,8 @@ import (
 	"fmt"
 	"log"
 	"strings"
+
+	"github.com/antonypegg/imagineer/internal/agents"
 )
 
 // expertResponse represents the expected JSON output from the LLM.
@@ -60,7 +62,7 @@ var validSeverities = map[string]bool{
 // and returns nil with the error, allowing the caller to degrade
 // gracefully.
 func parseExpertResponse(raw string) (*expertResponse, error) {
-	cleaned := stripCodeFences(raw)
+	cleaned := agents.StripCodeFences(raw)
 	cleaned = strings.TrimSpace(cleaned)
 
 	if cleaned == "" {
@@ -119,33 +121,6 @@ func parseExpertResponse(raw string) (*expertResponse, error) {
 	resp.Findings = validated
 
 	return &resp, nil
-}
-
-// stripCodeFences removes markdown code fences from the LLM response.
-// It handles both ```json ... ``` and ``` ... ``` patterns, including
-// fences with trailing language identifiers.
-func stripCodeFences(text string) string {
-	text = strings.TrimSpace(text)
-
-	// Check for opening code fence with optional language tag.
-	if strings.HasPrefix(text, "```") {
-		// Remove the opening fence line.
-		idx := strings.Index(text, "\n")
-		if idx >= 0 {
-			text = text[idx+1:]
-		} else {
-			// The entire text is just the opening fence.
-			return ""
-		}
-
-		// Remove the closing fence.
-		if strings.HasSuffix(strings.TrimSpace(text), "```") {
-			text = strings.TrimSpace(text)
-			text = text[:len(text)-3]
-		}
-	}
-
-	return strings.TrimSpace(text)
 }
 
 // categoryToDetectionType maps a finding category to the corresponding
