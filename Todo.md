@@ -181,6 +181,20 @@ enrichment pipeline. The implementation covers the pipeline
 orchestrator, TTRPG Expert, Canon Expert, Revision, Graph
 Expert agents, and RAG context assembly with token budgets.
 
+- [ ] `[MVP-2]` Rewrite/style-choice capability: add a
+  Revision Agent mode to the Revise phase that can rewrite
+  content in different styles (prose, bullet notes, narrative
+  recap).
+- [ ] `[MVP-2]` Phase strip on other pages: roll out
+  `PhaseStrip` to ChapterEditor, SessionEditor, and
+  EntityEditor.
+- [ ] `[MVP-2]` Scope-aware RAG filtering: filter and weight
+  RAG context results by scope level (currently the pipeline
+  only adds scope metadata to prompts).
+- [ ] `[MVP-2]` Phase-specific triage screens: break the
+  `AnalysisTriagePage` into separate screens for each phase
+  (Identify, Revise, Enrich) to improve UX flow.
+
 ---
 
 ## MVP Backlog

@@ -8,6 +8,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Campaign Deletion UI
+  - "Delete Campaign" danger zone on Campaign Settings with a
+    confirmation dialog requiring the user to type the campaign
+    name. On success, the system clears campaign context and
+    navigates to `/campaigns`.
+- TTRPG Expert Scope Awareness
+  - `SourceScope` enum on `PipelineInput` derived from
+    `SourceTable` (campaigns, chapters, sessions, entities).
+    TTRPG Expert and Canon Expert prompts now vary analysis
+    and continuity guidance based on content level
+    (campaign = world-building, chapter = narrative arc,
+    session = tactical detail, entity = character
+    consistency).
+- Phase Strip UI
+  - `PhaseStrip` component replaces `SaveSplitButton` on
+    Campaign Overview. Three independent workflow phases
+    (Identify, Revise, Enrich) display as labelled checkboxes
+    with a Save & Go button. Phase selection persists in
+    `localStorage` for downstream use on the triage page.
 - Session Workflows Phase 1
   - Full-screen session editor page with two-column prep
     layout (form and scene sidebar), stage tabs (Prep active,
@@ -363,6 +382,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Markdown paste in TipTap editor rendering raw markdown
+  syntax (headings, lists, blockquotes, horizontal rules) as
+  plain text instead of formatted content. A new
+  `MarkdownPasteHandler` extension intercepts plain-text
+  paste events containing block-level markdown patterns and
+  converts them to rich content.
 - Cross-campaign IDOR in `fetchSourceContent` queries; all
   content retrieval now scopes by `campaign_id` to prevent
   unauthorized access to other campaigns' data (VULN-004).
