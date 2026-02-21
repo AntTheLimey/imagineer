@@ -1344,7 +1344,6 @@ export default function AnalysisTriagePage() {
         setRevisionResult(null);
         setEditedRevision('');
     }, []);
-
     if (Number.isNaN(numericCampaignId) || Number.isNaN(numericJobId)) {
         return (
             <Box sx={{ p: 4 }}>
