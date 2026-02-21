@@ -165,6 +165,9 @@ infrastructure.
 
 ### Security
 
+- [x] `[MVP-2]` Security audit of enrichment pipeline:
+  cross-campaign IDOR, request body limits, GM note
+  stripping, goroutine timeouts, entity type validation.
 - [ ] `[MVP-3]` Import validation with duplicate detection
   (Levenshtein name similarity check, post-import consistency
   checks).
@@ -578,6 +581,23 @@ Features planned for after the initial release.
 - [x] Rune-safe truncation in TTRPG Expert prompts.
 - [x] Fixed `allKnownEntities` bug in `DetectNewEntities`.
 - [x] Added `acknowledged` resolution to backend validation.
+- [x] Cross-campaign IDOR fix: `fetchSourceContent` queries
+  now scope by `campaign_id` to prevent unauthorised
+  access.
+- [x] Request body size limits (1 MB) on all JSON-accepting
+  API endpoints via `http.MaxBytesReader`.
+- [x] GM notes stripped from entities before pipeline input.
+- [x] Background goroutine timeouts (10 minutes) replacing
+  unbounded `context.Background()`.
+- [x] Entity type validation on `new_entity` resolution.
+- [x] Rune-based truncation in Canon and Graph Expert
+  prompts (was byte-based, could split UTF-8 characters).
+- [x] Failed pipeline runs now set job status to `'failed'`
+  instead of `'completed'`.
+- [x] Extracted shared utilities: `agents.StripCodeFences`,
+  `agents.TruncateString`, shared `fetchSourceContent`,
+  and `buildDefaultPipeline` factory (minus 198 net
+  lines).
 
 ### Entity & Campaign Features
 

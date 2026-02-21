@@ -363,6 +363,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Cross-campaign IDOR in `fetchSourceContent` queries; all
+  content retrieval now scopes by `campaign_id` to prevent
+  unauthorized access to other campaigns' data (VULN-004).
+- Request body size limits added to all API endpoints that
+  accept JSON bodies, preventing oversized payloads via
+  `http.MaxBytesReader` with a 1 MB limit (VULN-001).
+- GM notes stripped from entity objects before passing to
+  the enrichment pipeline, preventing sensitive GM-only
+  content from leaking into LLM prompts (VULN-003).
+- Background enrichment goroutines now use a 10-minute
+  timeout instead of unbounded `context.Background()`,
+  preventing resource leaks from stalled LLM calls
+  (VULN-005).
+- Entity type validated against known constants when
+  resolving `new_entity` analysis items, rejecting invalid
+  types with HTTP 400 (VULN-006).
+- Byte-based string truncation in Canon Expert and Graph
+  Expert prompts replaced with rune-based truncation,
+  preventing split multi-byte UTF-8 characters
+  (BUG-002/003).
+- Failed enrichment pipeline runs now set job status to
+  `'failed'` instead of `'completed'`, correctly reflecting
+  the error state (MAJOR-005).
 - Path traversal vulnerability in `loadGameSystemSchema`; the
   function now validates file paths before loading schema files.
 - Rune-safe truncation in TTRPG Expert prompts preventing
@@ -422,6 +445,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Extracted shared utilities to reduce code duplication
+  (-198 net lines): `agents.StripCodeFences` (was 4 copies),
+  `agents.TruncateString` (was 3 copies), shared
+  `fetchSourceContent` (was 2 copies), and
+  `buildDefaultPipeline` factory (was 3 copies).
 - Squashed 10 incremental database migrations into two files:
   `001_schema.sql` (complete schema with 20 tables, indexes,
   triggers, functions, views, and vectorization) and
