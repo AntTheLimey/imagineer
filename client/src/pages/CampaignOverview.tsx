@@ -41,8 +41,8 @@ import {
     Check as CheckIcon,
 } from '@mui/icons-material';
 import { AnalysisBadge } from '../components/AnalysisBadge';
-import { SaveSplitButton } from '../components/SaveSplitButton';
-import type { SaveMode } from '../components/SaveSplitButton';
+import { PhaseStrip } from '../components/PhaseStrip';
+import type { PhaseSelection } from '../components/PhaseStrip';
 import { MarkdownEditor } from '../components/MarkdownEditor';
 import { GENRE_OPTIONS } from '../components/CampaignSettings';
 import {
@@ -260,20 +260,20 @@ export default function CampaignOverview() {
     };
 
     /**
-     * Save all changes with an optional save mode that controls whether
-     * analysis and enrichment pipelines are triggered after saving.
+     * Save all changes with phase selection that controls which pipeline
+     * stages run after saving.
      *
-     * @param mode - The save mode: "save" (no analysis), "analyze"
-     *   (phase 1 only), or "enrich" (phase 1 + phase 2). Defaults to
-     *   "analyze" to preserve the existing auto-analyze behavior.
+     * @param phases - Which workflow phases the GM has selected.
      */
-    const handleSaveAll = useCallback(async (mode: SaveMode = 'analyze') => {
+    const handleSaveAll = useCallback(async (phases: PhaseSelection) => {
         if (!campaignId) return;
 
         if (!formData.name.trim()) {
             // TODO: Show validation error
             return;
         }
+
+        const hasAnyPhase = phases.identify || phases.revise || phases.enrich;
 
         try {
             const result = await updateCampaign.mutateAsync({
@@ -287,32 +287,40 @@ export default function CampaignOverview() {
                     },
                 },
                 options: {
-                    analyze: mode !== 'save',
-                    enrich: mode === 'enrich',
+                    analyze: phases.identify || phases.revise,
+                    enrich: phases.enrich,
                 },
             });
+
+            // Store phase selection so triage page knows the workflow
+            if (hasAnyPhase) {
+                localStorage.setItem(
+                    'imagineer:activePhases',
+                    JSON.stringify(phases),
+                );
+            }
 
             // Check for analysis results
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const analysisResult = (result as any)?._analysis;
-            if (mode !== 'save' && analysisResult) {
-                if (mode === 'enrich' && analysisResult.jobId) {
-                    // Go directly to triage — no snackbar
-                    navigate(`/campaigns/${campaignId}/analysis/${analysisResult.jobId}`);
-                } else if (analysisResult.pendingCount > 0) {
-                    setAnalysisSnackbar({
-                        open: true,
-                        jobId: analysisResult.jobId,
-                        count: analysisResult.pendingCount,
-                    });
-                } else {
-                    setAnalysisSnackbar({
-                        open: true,
-                        jobId: analysisResult.jobId,
-                        count: 0,
-                        message: 'Analysis complete: no issues found.',
-                    });
-                }
+            if (hasAnyPhase && analysisResult?.jobId) {
+                navigate(`/campaigns/${campaignId}/analysis/${analysisResult.jobId}`);
+            } else if (hasAnyPhase && analysisResult?.pendingCount > 0) {
+                setAnalysisSnackbar({
+                    open: true,
+                    jobId: analysisResult.jobId,
+                    count: analysisResult.pendingCount,
+                });
+            } else if (!hasAnyPhase) {
+                // Plain save - no navigation
+                setIsEditing(false);
+            } else {
+                setAnalysisSnackbar({
+                    open: true,
+                    jobId: analysisResult?.jobId ?? 0,
+                    count: 0,
+                    message: 'Analysis complete: no issues found.',
+                });
             }
 
             setIsEditing(false);
@@ -390,7 +398,7 @@ export default function CampaignOverview() {
                     Campaign Overview
                 </Typography>
                 {isEditing ? (
-                    <SaveSplitButton
+                    <PhaseStrip
                         onSave={handleSaveAll}
                         isDirty={isEditing}
                         isSaving={updateCampaign.isPending}
