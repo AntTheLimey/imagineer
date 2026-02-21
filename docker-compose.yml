@@ -4,8 +4,6 @@ services:
       context: ./docker/ollama
       dockerfile: Dockerfile
     container_name: imagineer-ollama
-    volumes:
-      - ollama-models:/root/.ollama
     ports:
       - "11434:11434"
     healthcheck:
@@ -18,7 +16,11 @@ services:
       - imagineer-network
 
   postgres:
-    image: ghcr.io/pgedge/pgedge-postgres:18-spock5-standard
+    build:
+      context: .
+      dockerfile: docker/postgres/Dockerfile
+      additional_contexts:
+        vectorizer: ../pgedge-vectorizer
     container_name: imagineer-postgres
     depends_on:
       ollama:
@@ -79,6 +81,3 @@ services:
 networks:
   imagineer-network:
     driver: bridge
-
-volumes:
-  ollama-models:

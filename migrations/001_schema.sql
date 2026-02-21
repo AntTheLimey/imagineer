@@ -8,8 +8,8 @@
  *-------------------------------------------------------------------------
  */
 
--- Squashed Schema Migration
--- Replaces migrations 001-010 with the complete final database state.
+-- Consolidated Schema Migration
+-- Replaces migrations 001-014 with the complete final database state.
 -- This file represents the canonical schema for the Imagineer platform.
 
 -- ============================================
@@ -39,7 +39,7 @@ $$ LANGUAGE plpgsql;
 
 -- ============================================
 -- Game Systems Table
--- Defines TTRPG systems (CoC 7e, GURPS 4e, FitD, etc.)
+-- Defines TTRPG systems (CoC 7e, GURPS 4e, etc.)
 -- ============================================
 CREATE TABLE game_systems (
     id                       BIGSERIAL PRIMARY KEY,
@@ -118,10 +118,10 @@ CREATE TRIGGER update_campaigns_updated_at BEFORE UPDATE ON campaigns
 
 -- ============================================
 -- User Settings Table
--- Stores per-user LLM API keys and service preferences
+-- Stores per-user LLM API keys and preferences
 -- ============================================
 CREATE TABLE user_settings (
-    user_id             BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    user_id            BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     content_gen_service TEXT CHECK (content_gen_service IN ('anthropic', 'openai', 'gemini')),
     content_gen_api_key TEXT,
     embedding_service   TEXT CHECK (embedding_service IN ('voyage', 'openai', 'gemini', 'ollama')),
@@ -135,11 +135,11 @@ CREATE TABLE user_settings (
 COMMENT ON TABLE user_settings IS 'User preferences and API keys for LLM services (content, embeddings, images)';
 COMMENT ON COLUMN user_settings.user_id IS 'One-to-one relationship with users table';
 COMMENT ON COLUMN user_settings.content_gen_service IS 'Selected service for content generation: anthropic (Claude), openai (GPT), or gemini';
-COMMENT ON COLUMN user_settings.content_gen_api_key IS 'API key for content generation service (encrypted at application layer)';
+COMMENT ON COLUMN user_settings.content_gen_api_key IS 'Content generation API key — encrypted at application layer (AES-256-GCM)';
 COMMENT ON COLUMN user_settings.embedding_service IS 'Selected service for embedding generation: voyage, openai, gemini, or ollama';
-COMMENT ON COLUMN user_settings.embedding_api_key IS 'API key for embedding service (encrypted at application layer)';
+COMMENT ON COLUMN user_settings.embedding_api_key IS 'Embedding API key — encrypted at application layer (AES-256-GCM)';
 COMMENT ON COLUMN user_settings.image_gen_service IS 'Selected service for image generation: openai (DALL-E) or stability (Stable Diffusion)';
-COMMENT ON COLUMN user_settings.image_gen_api_key IS 'API key for image generation service (encrypted at application layer)';
+COMMENT ON COLUMN user_settings.image_gen_api_key IS 'Image generation API key — encrypted at application layer (AES-256-GCM)';
 
 CREATE TRIGGER update_user_settings_updated_at BEFORE UPDATE ON user_settings
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -173,6 +173,9 @@ CREATE TRIGGER update_chapters_updated_at BEFORE UPDATE ON chapters
 -- ============================================
 -- Sessions Table
 -- Game sessions within a campaign
+-- NOTE: planned_scenes, discoveries, player_decisions,
+-- and consequences JSONB columns were removed in favour
+-- of the scenes table and structured data.
 -- ============================================
 CREATE TABLE sessions (
     id               BIGSERIAL PRIMARY KEY,
@@ -185,21 +188,17 @@ CREATE TABLE sessions (
     stage            TEXT DEFAULT 'prep' CHECK (stage IN ('prep', 'play', 'wrap_up')),
     title            TEXT,
     prep_notes       TEXT,
-    planned_scenes   JSONB,
     actual_notes     TEXT,
-    discoveries      JSONB DEFAULT '[]',
-    player_decisions JSONB DEFAULT '[]',
-    consequences     JSONB DEFAULT '[]',
+    play_notes       TEXT,
     created_at       TIMESTAMPTZ DEFAULT NOW(),
     updated_at       TIMESTAMPTZ DEFAULT NOW()
 );
 
 COMMENT ON TABLE sessions IS 'Individual game sessions within a campaign';
 COMMENT ON COLUMN sessions.chapter_id IS 'Chapter this session belongs to (NULL for uncategorized)';
-COMMENT ON COLUMN sessions.discoveries IS 'Array of {entity_id, how_discovered} objects';
-COMMENT ON COLUMN sessions.player_decisions IS 'Notable player choices made during the session';
 COMMENT ON COLUMN sessions.stage IS 'Workflow stage: prep (preparation), play (active session), wrap_up (post-session notes)';
 COMMENT ON COLUMN sessions.title IS 'Session title (e.g., "The Haunted Mansion")';
+COMMENT ON COLUMN sessions.play_notes IS 'Notes taken during active play';
 
 CREATE INDEX idx_sessions_campaign_id ON sessions(campaign_id);
 CREATE INDEX idx_sessions_status ON sessions(status);
@@ -250,44 +249,13 @@ CREATE TRIGGER update_entities_updated_at BEFORE UPDATE ON entities
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================
--- Relationships Table
--- Connections between entities
--- ============================================
-CREATE TABLE relationships (
-    id                BIGSERIAL PRIMARY KEY,
-    campaign_id       BIGINT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-    source_entity_id  BIGINT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-    target_entity_id  BIGINT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-    relationship_type TEXT NOT NULL,
-    tone              TEXT CHECK (tone IN ('friendly', 'hostile', 'neutral', 'romantic', 'professional', 'fearful', 'respectful', 'unknown')),
-    description       TEXT,
-    bidirectional     BOOLEAN DEFAULT false,
-    strength          INT CHECK (strength >= 1 AND strength <= 10),
-    created_at        TIMESTAMPTZ DEFAULT NOW(),
-    updated_at        TIMESTAMPTZ DEFAULT NOW(),
-
-    CONSTRAINT no_self_relationship CHECK (source_entity_id != target_entity_id)
-);
-
-COMMENT ON TABLE relationships IS 'Connections between campaign entities';
-COMMENT ON COLUMN relationships.relationship_type IS 'Type of relationship (knows, owns, located_at, opposes, etc.)';
-COMMENT ON COLUMN relationships.strength IS 'Optional weight for graph algorithms (1-10)';
-
-CREATE INDEX idx_relationships_campaign_id ON relationships(campaign_id);
-CREATE INDEX idx_relationships_source ON relationships(source_entity_id);
-CREATE INDEX idx_relationships_target ON relationships(target_entity_id);
-CREATE INDEX idx_relationships_type ON relationships(relationship_type);
-
-CREATE TRIGGER update_relationships_updated_at BEFORE UPDATE ON relationships
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
--- ============================================
 -- Relationship Types Table
 -- Defines relationship types with inverse mappings
+-- Campaign-scoped (no NULL campaign_id rows)
 -- ============================================
 CREATE TABLE relationship_types (
     id                    BIGSERIAL PRIMARY KEY,
-    campaign_id           BIGINT REFERENCES campaigns(id) ON DELETE CASCADE,
+    campaign_id           BIGINT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
     name                  TEXT NOT NULL,
     inverse_name          TEXT NOT NULL,
     is_symmetric          BOOLEAN NOT NULL DEFAULT false,
@@ -298,13 +266,13 @@ CREATE TABLE relationship_types (
     updated_at            TIMESTAMPTZ DEFAULT NOW(),
 
     CONSTRAINT unique_relationship_type_per_campaign
-        UNIQUE NULLS NOT DISTINCT (campaign_id, name),
+        UNIQUE (campaign_id, name),
     CONSTRAINT symmetric_inverse_match
         CHECK (NOT is_symmetric OR name = inverse_name)
 );
 
-COMMENT ON TABLE relationship_types IS 'Relationship type definitions with inverse mappings, supporting per-campaign customization';
-COMMENT ON COLUMN relationship_types.campaign_id IS 'Campaign this type belongs to; NULL for system-wide default types';
+COMMENT ON TABLE relationship_types IS 'Relationship type definitions with inverse mappings, campaign-scoped';
+COMMENT ON COLUMN relationship_types.campaign_id IS 'Campaign this type belongs to (always set; system defaults live in relationship_type_templates)';
 COMMENT ON COLUMN relationship_types.name IS 'Relationship type name used in relationships table (e.g., "owns", "knows")';
 COMMENT ON COLUMN relationship_types.inverse_name IS 'Inverse relationship type (e.g., "owned_by" for "owns", or same name if symmetric)';
 COMMENT ON COLUMN relationship_types.is_symmetric IS 'TRUE if relationship reads the same in both directions (e.g., "knows")';
@@ -316,6 +284,76 @@ CREATE INDEX idx_relationship_types_symmetric ON relationship_types(is_symmetric
 
 CREATE TRIGGER update_relationship_types_updated_at BEFORE UPDATE ON relationship_types
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================
+-- Relationship Type Templates Table
+-- System-default types copied to each new campaign
+-- ============================================
+CREATE TABLE relationship_type_templates (
+    id                    BIGSERIAL PRIMARY KEY,
+    name                  TEXT NOT NULL UNIQUE,
+    inverse_name          TEXT NOT NULL,
+    is_symmetric          BOOLEAN NOT NULL DEFAULT false,
+    display_label         TEXT NOT NULL,
+    inverse_display_label TEXT NOT NULL,
+    description           TEXT,
+    created_at            TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT tpl_symmetric_inverse_match
+        CHECK (NOT is_symmetric OR name = inverse_name)
+);
+
+COMMENT ON TABLE relationship_type_templates IS 'System-default relationship types copied to each new campaign';
+
+-- ============================================
+-- Relationships Table
+-- Connections between entities (single-edge model)
+-- ============================================
+CREATE TABLE relationships (
+    id                   BIGSERIAL PRIMARY KEY,
+    campaign_id          BIGINT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+    source_entity_id     BIGINT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+    target_entity_id     BIGINT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+    relationship_type_id BIGINT NOT NULL REFERENCES relationship_types(id),
+    tone                 TEXT CHECK (tone IN ('friendly', 'hostile', 'neutral', 'romantic', 'professional', 'fearful', 'respectful', 'unknown')),
+    description          TEXT,
+    strength             INT CHECK (strength >= 1 AND strength <= 10),
+    created_at           TIMESTAMPTZ DEFAULT NOW(),
+    updated_at           TIMESTAMPTZ DEFAULT NOW(),
+
+    CONSTRAINT no_self_relationship CHECK (source_entity_id != target_entity_id),
+    CONSTRAINT uq_relationships_source_target_type
+        UNIQUE (campaign_id, source_entity_id, target_entity_id, relationship_type_id)
+);
+
+COMMENT ON TABLE relationships IS 'Connections between campaign entities (single-edge LPG model)';
+COMMENT ON COLUMN relationships.relationship_type_id IS 'Reference to relationship_types defining forward/inverse labels';
+COMMENT ON COLUMN relationships.strength IS 'Optional weight for graph algorithms (1-10)';
+
+CREATE INDEX idx_relationships_campaign_id ON relationships(campaign_id);
+CREATE INDEX idx_relationships_source ON relationships(source_entity_id);
+CREATE INDEX idx_relationships_target ON relationships(target_entity_id);
+
+CREATE TRIGGER update_relationships_updated_at BEFORE UPDATE ON relationships
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================
+-- Relationship Type Constraints Table
+-- Valid entity type pairs for each relationship type
+-- ============================================
+CREATE TABLE relationship_type_constraints (
+    id                   BIGSERIAL PRIMARY KEY,
+    relationship_type_id BIGINT NOT NULL
+                         REFERENCES relationship_types(id) ON DELETE CASCADE,
+    source_entity_type   TEXT NOT NULL,
+    target_entity_type   TEXT NOT NULL,
+    created_at           TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(relationship_type_id, source_entity_type, target_entity_type)
+);
+
+COMMENT ON TABLE relationship_type_constraints IS 'Defines valid entity type pairs for each relationship type, used by Graph Expert for ontology validation';
+COMMENT ON COLUMN relationship_type_constraints.relationship_type_id IS 'The relationship type this constraint applies to';
+COMMENT ON COLUMN relationship_type_constraints.source_entity_type IS 'The valid source entity type (e.g., npc, location, item)';
+COMMENT ON COLUMN relationship_type_constraints.target_entity_type IS 'The valid target entity type';
 
 -- ============================================
 -- Timeline Events Table
@@ -630,6 +668,236 @@ CREATE INDEX idx_session_entities_entity ON session_entities(entity_id);
 CREATE INDEX idx_session_entities_role ON session_entities(role);
 
 -- ============================================
+-- Scenes Table
+-- Structured scenes within game sessions
+-- ============================================
+CREATE TABLE scenes (
+    id                BIGSERIAL PRIMARY KEY,
+    session_id        BIGINT NOT NULL
+                      REFERENCES sessions(id) ON DELETE CASCADE,
+    campaign_id       BIGINT NOT NULL
+                      REFERENCES campaigns(id) ON DELETE CASCADE,
+    title             TEXT NOT NULL,
+    description       TEXT,
+    scene_type        TEXT NOT NULL DEFAULT 'other',
+    status            TEXT NOT NULL DEFAULT 'planned',
+    sort_order        INT NOT NULL DEFAULT 0,
+    objective         TEXT,
+    gm_notes          TEXT,
+    entity_ids        BIGINT[] DEFAULT '{}',
+    system_data       JSONB DEFAULT '{}',
+    source            TEXT NOT NULL DEFAULT 'manual',
+    source_confidence TEXT NOT NULL DEFAULT 'DRAFT',
+    connections       JSONB DEFAULT '[]',
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE scenes IS 'Structured scenes within game sessions for planning and tracking';
+COMMENT ON COLUMN scenes.scene_type IS 'Type of scene: exploration, combat, social, puzzle, chase, travel, downtime, other';
+COMMENT ON COLUMN scenes.status IS 'Scene status: planned, active, completed, skipped';
+COMMENT ON COLUMN scenes.sort_order IS 'Order within session for display (0-based)';
+COMMENT ON COLUMN scenes.entity_ids IS 'Array of entity IDs involved in this scene';
+COMMENT ON COLUMN scenes.source_confidence IS 'Canon status: DRAFT, AUTHORITATIVE, or SUPERSEDED';
+COMMENT ON COLUMN scenes.connections IS 'JSON array of connections to other scenes or entities';
+
+CREATE INDEX idx_scenes_session ON scenes(session_id, sort_order);
+CREATE INDEX idx_scenes_campaign ON scenes(campaign_id);
+
+CREATE TRIGGER update_scenes_updated_at
+    BEFORE UPDATE ON scenes
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================
+-- Session Chat Messages Table
+-- AI chat messages within session workflow
+-- ============================================
+CREATE TABLE session_chat_messages (
+    id          BIGSERIAL PRIMARY KEY,
+    session_id  BIGINT NOT NULL
+                REFERENCES sessions(id) ON DELETE CASCADE,
+    campaign_id BIGINT NOT NULL
+                REFERENCES campaigns(id) ON DELETE CASCADE,
+    role        TEXT NOT NULL,
+    content     TEXT NOT NULL,
+    sort_order  INT NOT NULL DEFAULT 0,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE session_chat_messages IS 'AI chat messages within session workflow for prep, play, and wrap-up';
+COMMENT ON COLUMN session_chat_messages.role IS 'Message author: user or assistant';
+
+CREATE INDEX idx_session_chat_session ON session_chat_messages(session_id, sort_order);
+CREATE INDEX idx_session_chat_campaign ON session_chat_messages(campaign_id);
+
+-- ============================================
+-- Drafts Table
+-- Server-side persistence of unsaved edits
+-- ============================================
+CREATE TABLE drafts (
+    id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    campaign_id     BIGINT NOT NULL
+                    REFERENCES campaigns(id) ON DELETE CASCADE,
+    user_id         BIGINT NOT NULL
+                    REFERENCES users(id) ON DELETE CASCADE,
+    source_table    TEXT NOT NULL,
+    source_id       BIGINT NOT NULL DEFAULT 0,
+    is_new          BOOLEAN NOT NULL DEFAULT FALSE,
+    draft_data      JSONB NOT NULL,
+    server_version  INT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE drafts IS 'Server-side persistence of unsaved editor changes, keyed by user, campaign, and source record';
+COMMENT ON COLUMN drafts.campaign_id IS 'Campaign this draft belongs to';
+COMMENT ON COLUMN drafts.user_id IS 'User who owns this draft';
+COMMENT ON COLUMN drafts.source_table IS 'Table name of the record being edited (e.g., entities, chapters, sessions)';
+COMMENT ON COLUMN drafts.source_id IS 'Primary key of the record being edited; 0 for new (unsaved) records';
+COMMENT ON COLUMN drafts.is_new IS 'TRUE when the draft represents a brand-new record not yet committed';
+COMMENT ON COLUMN drafts.draft_data IS 'JSONB snapshot of the in-progress form fields';
+COMMENT ON COLUMN drafts.server_version IS 'Version of the committed record at the time the draft was created, used for conflict detection';
+COMMENT ON COLUMN drafts.created_at IS 'Timestamp when the draft was first saved';
+COMMENT ON COLUMN drafts.updated_at IS 'Timestamp of the most recent draft save';
+
+CREATE UNIQUE INDEX idx_drafts_user_target
+    ON drafts (user_id, source_table, source_id, campaign_id);
+
+CREATE INDEX idx_drafts_campaign_table
+    ON drafts (campaign_id, source_table);
+
+CREATE TRIGGER update_drafts_updated_at
+    BEFORE UPDATE ON drafts
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================
+-- Content Analysis Jobs Table
+-- Tracks analysis runs for campaign content fields
+-- ============================================
+CREATE TABLE content_analysis_jobs (
+    id                 BIGSERIAL PRIMARY KEY,
+    campaign_id        BIGINT NOT NULL
+                       REFERENCES campaigns(id) ON DELETE CASCADE,
+    source_table       TEXT NOT NULL,
+    source_id          BIGINT NOT NULL,
+    source_field       TEXT NOT NULL,
+    status             TEXT NOT NULL DEFAULT 'completed',
+    total_items        INT NOT NULL DEFAULT 0,
+    resolved_items     INT NOT NULL DEFAULT 0,
+    enrichment_total   INT NOT NULL DEFAULT 0,
+    enrichment_resolved INT NOT NULL DEFAULT 0,
+    created_at         TIMESTAMPTZ DEFAULT NOW(),
+    updated_at         TIMESTAMPTZ DEFAULT NOW()
+);
+
+COMMENT ON TABLE content_analysis_jobs IS 'Tracks content analysis runs for campaign content fields';
+COMMENT ON COLUMN content_analysis_jobs.campaign_id IS 'Campaign this analysis job belongs to';
+COMMENT ON COLUMN content_analysis_jobs.source_table IS 'Name of the table containing the analysed content (e.g., sessions, chapters)';
+COMMENT ON COLUMN content_analysis_jobs.source_id IS 'Row ID within source_table that was analysed';
+COMMENT ON COLUMN content_analysis_jobs.source_field IS 'Column name within source_table that was analysed (e.g., prep_notes, overview)';
+COMMENT ON COLUMN content_analysis_jobs.status IS 'Job status: completed, pending, failed';
+COMMENT ON COLUMN content_analysis_jobs.total_items IS 'Total number of detected items in this analysis run';
+COMMENT ON COLUMN content_analysis_jobs.resolved_items IS 'Number of items that have been reviewed or resolved';
+COMMENT ON COLUMN content_analysis_jobs.enrichment_total IS 'Total number of enrichment suggestions generated by LLM';
+COMMENT ON COLUMN content_analysis_jobs.enrichment_resolved IS 'Number of enrichment suggestions that have been reviewed';
+
+CREATE INDEX idx_content_analysis_jobs_field
+    ON content_analysis_jobs(campaign_id, source_table, source_id, source_field);
+CREATE INDEX idx_content_analysis_jobs_status
+    ON content_analysis_jobs(campaign_id, status);
+
+CREATE TRIGGER update_content_analysis_jobs_updated_at
+    BEFORE UPDATE ON content_analysis_jobs
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================
+-- Content Analysis Items Table
+-- Individual detections within an analysis job
+-- ============================================
+CREATE TABLE content_analysis_items (
+    id                 BIGSERIAL PRIMARY KEY,
+    job_id             BIGINT NOT NULL
+                       REFERENCES content_analysis_jobs(id)
+                       ON DELETE CASCADE,
+    detection_type     TEXT NOT NULL,
+    matched_text       TEXT NOT NULL,
+    entity_id          BIGINT
+                       REFERENCES entities(id) ON DELETE SET NULL,
+    similarity         FLOAT,
+    context_snippet    TEXT,
+    position_start     INT,
+    position_end       INT,
+    resolution         TEXT NOT NULL DEFAULT 'pending',
+    resolved_entity_id BIGINT
+                       REFERENCES entities(id) ON DELETE SET NULL,
+    resolved_at        TIMESTAMPTZ,
+    suggested_content  JSONB,
+    phase              TEXT NOT NULL DEFAULT 'identification',
+    agent_name         TEXT,
+    pipeline_run_id    BIGINT,
+    created_at         TIMESTAMPTZ DEFAULT NOW()
+);
+
+COMMENT ON TABLE content_analysis_items IS 'Individual entity detections within a content analysis job';
+COMMENT ON COLUMN content_analysis_items.job_id IS 'Analysis job this item belongs to';
+COMMENT ON COLUMN content_analysis_items.detection_type IS 'How the entity was detected: wiki_link_resolved, wiki_link_unresolved, untagged_mention, misspelling';
+COMMENT ON COLUMN content_analysis_items.matched_text IS 'Text that triggered the detection';
+COMMENT ON COLUMN content_analysis_items.entity_id IS 'Existing entity matched by the detection (NULL if no match found)';
+COMMENT ON COLUMN content_analysis_items.similarity IS 'Similarity score for vector or fuzzy matches (0.0 to 1.0)';
+COMMENT ON COLUMN content_analysis_items.context_snippet IS 'Surrounding text providing context for the detection';
+COMMENT ON COLUMN content_analysis_items.position_start IS 'Character offset where the matched text begins in the source field';
+COMMENT ON COLUMN content_analysis_items.position_end IS 'Character offset where the matched text ends in the source field';
+COMMENT ON COLUMN content_analysis_items.resolution IS 'Review status: pending, accepted, new_entity, dismissed';
+COMMENT ON COLUMN content_analysis_items.resolved_entity_id IS 'Entity assigned after resolution (may differ from initial entity_id)';
+COMMENT ON COLUMN content_analysis_items.resolved_at IS 'Timestamp when the item was resolved';
+COMMENT ON COLUMN content_analysis_items.suggested_content IS 'Structured JSON payload for enrichment suggestions (description updates, log entries, relationships)';
+COMMENT ON COLUMN content_analysis_items.phase IS 'Analysis phase: identification (Phase 1 text analysis) or enrichment (Phase 2 LLM suggestions)';
+COMMENT ON COLUMN content_analysis_items.agent_name IS 'Name of the analysis agent that produced this detection (e.g., entity_detector, enrichment_agent)';
+COMMENT ON COLUMN content_analysis_items.pipeline_run_id IS 'Identifier correlating all items produced within the same pipeline execution';
+
+CREATE INDEX idx_content_analysis_items_resolution
+    ON content_analysis_items(job_id, resolution);
+
+-- ============================================
+-- Entity Log Table
+-- Chronological event history per entity
+-- ============================================
+CREATE TABLE entity_log (
+    id           BIGSERIAL PRIMARY KEY,
+    entity_id    BIGINT NOT NULL
+                 REFERENCES entities(id) ON DELETE CASCADE,
+    campaign_id  BIGINT NOT NULL
+                 REFERENCES campaigns(id) ON DELETE CASCADE,
+    chapter_id   BIGINT REFERENCES chapters(id)
+                 ON DELETE SET NULL,
+    session_id   BIGINT REFERENCES sessions(id)
+                 ON DELETE SET NULL,
+    source_table TEXT,
+    source_id    BIGINT,
+    content      TEXT NOT NULL,
+    occurred_at  TEXT,
+    sort_order   INT,
+    created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+COMMENT ON TABLE entity_log IS 'Chronological event history entries for campaign entities';
+COMMENT ON COLUMN entity_log.entity_id IS 'Entity this log entry belongs to';
+COMMENT ON COLUMN entity_log.campaign_id IS 'Campaign this log entry belongs to';
+COMMENT ON COLUMN entity_log.chapter_id IS 'Chapter where this event occurred (optional)';
+COMMENT ON COLUMN entity_log.session_id IS 'Session where this event occurred (optional)';
+COMMENT ON COLUMN entity_log.source_table IS 'Source table that generated this log entry (e.g., from enrichment)';
+COMMENT ON COLUMN entity_log.source_id IS 'Row ID in the source table';
+COMMENT ON COLUMN entity_log.content IS 'Description of the event or log entry';
+COMMENT ON COLUMN entity_log.occurred_at IS 'When the event occurred in the game timeline (free-text)';
+COMMENT ON COLUMN entity_log.sort_order IS 'Manual ordering within the entity timeline';
+
+CREATE INDEX idx_entity_log_entity_sort
+    ON entity_log(entity_id, sort_order);
+CREATE INDEX idx_entity_log_campaign_entity
+    ON entity_log(campaign_id, entity_id);
+
+-- ============================================
 -- Helper Function: Get Inverse Relationship Type
 -- ============================================
 CREATE OR REPLACE FUNCTION get_inverse_relationship_type(
@@ -644,18 +912,11 @@ BEGIN
     WHERE campaign_id = p_campaign_id
       AND name = p_relationship_type;
 
-    IF v_inverse_name IS NULL THEN
-        SELECT inverse_name INTO v_inverse_name
-        FROM relationship_types
-        WHERE campaign_id IS NULL
-          AND name = p_relationship_type;
-    END IF;
-
     RETURN v_inverse_name;
 END;
 $$ LANGUAGE plpgsql STABLE;
 
-COMMENT ON FUNCTION get_inverse_relationship_type IS 'Returns inverse relationship type name, checking campaign-specific first then system defaults';
+COMMENT ON FUNCTION get_inverse_relationship_type IS 'Returns inverse relationship type name for a given campaign and type name';
 
 -- ============================================
 -- Helper Function: Validate Relationship Type
@@ -668,34 +929,116 @@ BEGIN
     RETURN EXISTS (
         SELECT 1 FROM relationship_types
         WHERE name = p_relationship_type
-          AND (campaign_id = p_campaign_id OR campaign_id IS NULL)
+          AND campaign_id = p_campaign_id
     );
 END;
 $$ LANGUAGE plpgsql STABLE;
 
-COMMENT ON FUNCTION validate_relationship_type IS 'Returns TRUE if relationship type exists for campaign (including system defaults)';
+COMMENT ON FUNCTION validate_relationship_type IS 'Returns TRUE if relationship type exists for the given campaign';
+
+-- ============================================
+-- Trigger: Prevent Inverse Relationship Duplicates
+-- ============================================
+CREATE OR REPLACE FUNCTION prevent_inverse_relationship()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- For symmetric types: block same type with swapped entities
+    IF EXISTS (
+        SELECT 1 FROM relationships r
+        JOIN relationship_types rt ON rt.id = NEW.relationship_type_id
+        WHERE rt.is_symmetric = true
+        AND r.campaign_id = NEW.campaign_id
+        AND r.source_entity_id = NEW.target_entity_id
+        AND r.target_entity_id = NEW.source_entity_id
+        AND r.relationship_type_id = NEW.relationship_type_id
+        AND (TG_OP = 'INSERT' OR r.id != NEW.id)
+    ) THEN
+        RAISE EXCEPTION 'Symmetric inverse relationship already exists'
+            USING ERRCODE = 'unique_violation';
+    END IF;
+
+    -- For asymmetric types: block if inverse type exists with
+    -- swapped entities
+    IF EXISTS (
+        SELECT 1 FROM relationships r
+        JOIN relationship_types rt_new
+            ON rt_new.id = NEW.relationship_type_id
+        JOIN relationship_types rt_inv
+            ON rt_inv.campaign_id = rt_new.campaign_id
+            AND rt_inv.name = rt_new.inverse_name
+        WHERE rt_new.is_symmetric = false
+        AND r.campaign_id = NEW.campaign_id
+        AND r.source_entity_id = NEW.target_entity_id
+        AND r.target_entity_id = NEW.source_entity_id
+        AND r.relationship_type_id = rt_inv.id
+        AND (TG_OP = 'INSERT' OR r.id != NEW.id)
+    ) THEN
+        RAISE EXCEPTION 'Inverse relationship already exists'
+            USING ERRCODE = 'unique_violation';
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION prevent_inverse_relationship() IS
+    'Prevents inserting a relationship that is the logical inverse of an existing one, for both symmetric and asymmetric types';
+
+CREATE TRIGGER trg_prevent_inverse_relationship
+    BEFORE INSERT OR UPDATE ON relationships
+    FOR EACH ROW
+    EXECUTE FUNCTION prevent_inverse_relationship();
+
+-- ============================================
+-- Trigger: Stale Draft Auto-Delete
+-- ============================================
+CREATE OR REPLACE FUNCTION delete_stale_draft()
+RETURNS TRIGGER AS $$
+BEGIN
+    DELETE FROM drafts
+    WHERE source_table = TG_ARGV[0]
+      AND source_id = NEW.id
+      AND campaign_id = NEW.campaign_id;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION delete_stale_draft() IS 'Trigger function that deletes drafts matching the updated source record, preventing stale draft resumption';
+
+CREATE TRIGGER trg_entities_delete_draft
+    AFTER UPDATE ON entities
+    FOR EACH ROW
+    EXECUTE FUNCTION delete_stale_draft('entities');
+
+CREATE TRIGGER trg_chapters_delete_draft
+    AFTER UPDATE ON chapters
+    FOR EACH ROW
+    EXECUTE FUNCTION delete_stale_draft('chapters');
+
+CREATE TRIGGER trg_sessions_delete_draft
+    AFTER UPDATE ON sessions
+    FOR EACH ROW
+    EXECUTE FUNCTION delete_stale_draft('sessions');
 
 -- ============================================
 -- View: Available Relationship Types
--- All available types per campaign (defaults + custom)
+-- All available types per campaign
 -- ============================================
 CREATE OR REPLACE VIEW available_relationship_types AS
-SELECT DISTINCT ON (c.id, rt.name)
-    c.id as campaign_id,
-    rt.id as relationship_type_id,
+SELECT DISTINCT ON (rt.campaign_id, rt.name)
+    rt.campaign_id,
+    rt.id AS relationship_type_id,
     rt.name,
     rt.inverse_name,
     rt.is_symmetric,
     rt.display_label,
     rt.inverse_display_label,
     rt.description,
-    rt.campaign_id IS NOT NULL as is_custom
-FROM campaigns c
-CROSS JOIN relationship_types rt
-WHERE rt.campaign_id IS NULL OR rt.campaign_id = c.id
-ORDER BY c.id, rt.name, rt.campaign_id NULLS LAST;
+    true AS is_custom
+FROM relationship_types rt
+ORDER BY rt.campaign_id, rt.name;
 
-COMMENT ON VIEW available_relationship_types IS 'All available relationship types per campaign (system defaults + campaign-specific)';
+COMMENT ON VIEW available_relationship_types IS 'All available relationship types per campaign';
 
 -- ============================================
 -- View: Entity Appearances
@@ -735,87 +1078,190 @@ JOIN sessions s ON s.id = se.session_id;
 COMMENT ON VIEW entity_appearances IS 'Unified view of all entity appearances across chapters and sessions';
 
 -- ============================================
+-- View: Entity Relationships
+-- Both forward and inverse directions
+-- ============================================
+CREATE VIEW entity_relationships_view AS
+-- Forward: entity is source, use display_label
+SELECT
+    r.id,
+    r.campaign_id,
+    r.source_entity_id AS from_entity_id,
+    r.target_entity_id AS to_entity_id,
+    r.relationship_type_id,
+    rt.name AS relationship_type,
+    rt.display_label,
+    r.tone,
+    r.description,
+    r.strength,
+    r.created_at,
+    r.updated_at,
+    se.name AS from_entity_name,
+    se.entity_type AS from_entity_type,
+    te.name AS to_entity_name,
+    te.entity_type AS to_entity_type,
+    'forward' AS direction
+FROM relationships r
+JOIN relationship_types rt ON rt.id = r.relationship_type_id
+JOIN entities se ON se.id = r.source_entity_id
+JOIN entities te ON te.id = r.target_entity_id
+
+UNION ALL
+
+-- Inverse: entity is target, flip source/target, use inverse labels
+SELECT
+    r.id,
+    r.campaign_id,
+    r.target_entity_id AS from_entity_id,
+    r.source_entity_id AS to_entity_id,
+    r.relationship_type_id,
+    rt.inverse_name AS relationship_type,
+    rt.inverse_display_label AS display_label,
+    r.tone,
+    r.description,
+    r.strength,
+    r.created_at,
+    r.updated_at,
+    te.name AS from_entity_name,
+    te.entity_type AS from_entity_type,
+    se.name AS to_entity_name,
+    se.entity_type AS to_entity_type,
+    'inverse' AS direction
+FROM relationships r
+JOIN relationship_types rt ON rt.id = r.relationship_type_id
+JOIN entities se ON se.id = r.source_entity_id
+JOIN entities te ON te.id = r.target_entity_id
+WHERE rt.is_symmetric = false;
+
+COMMENT ON VIEW entity_relationships_view IS
+    'Provides both forward and inverse views of all relationships for display purposes, joining entity names and type labels';
+
+-- ============================================
 -- Vectorization Setup (Conditional)
 -- Requires pgedge_vectorizer extension
 -- ============================================
 DO $$
 BEGIN
-    IF EXISTS (
+    IF NOT EXISTS (
         SELECT 1 FROM pg_extension WHERE extname = 'pgedge_vectorizer'
     ) THEN
-        -- entities.name
-        PERFORM pgedge_vectorizer.enable_vectorization(
-            source_table := 'entities',
-            source_column := 'name',
-            chunk_strategy := 'token_based',
-            chunk_size := 100,
-            chunk_overlap := 10,
-            embedding_dimension := 1024
-        );
-
-        -- entities.description
-        PERFORM pgedge_vectorizer.enable_vectorization(
-            source_table := 'entities',
-            source_column := 'description',
-            chunk_strategy := 'markdown',
-            chunk_size := 400,
-            chunk_overlap := 50,
-            embedding_dimension := 1024
-        );
-
-        -- chapters.overview
-        PERFORM pgedge_vectorizer.enable_vectorization(
-            source_table := 'chapters',
-            source_column := 'overview',
-            chunk_strategy := 'markdown',
-            chunk_size := 300,
-            chunk_overlap := 30,
-            embedding_dimension := 1024
-        );
-
-        -- sessions.prep_notes
-        PERFORM pgedge_vectorizer.enable_vectorization(
-            source_table := 'sessions',
-            source_column := 'prep_notes',
-            chunk_strategy := 'markdown',
-            chunk_size := 500,
-            chunk_overlap := 50,
-            embedding_dimension := 1024
-        );
-
-        -- sessions.actual_notes
-        PERFORM pgedge_vectorizer.enable_vectorization(
-            source_table := 'sessions',
-            source_column := 'actual_notes',
-            chunk_strategy := 'markdown',
-            chunk_size := 500,
-            chunk_overlap := 50,
-            embedding_dimension := 1024
-        );
-
-        -- campaign_memories.content
-        PERFORM pgedge_vectorizer.enable_vectorization(
-            source_table := 'campaign_memories',
-            source_column := 'content',
-            chunk_strategy := 'markdown',
-            chunk_size := 400,
-            chunk_overlap := 50,
-            embedding_dimension := 1024
-        );
-
-        -- Comments on auto-generated chunk tables
-        COMMENT ON TABLE entities_name_chunks IS 'Auto-generated by pgedge_vectorizer for entity name embeddings';
-        COMMENT ON TABLE entities_description_chunks IS 'Auto-generated by pgedge_vectorizer for entity description embeddings';
-        COMMENT ON TABLE chapters_overview_chunks IS 'Auto-generated by pgedge_vectorizer for chapter overview embeddings';
-        COMMENT ON TABLE sessions_prep_notes_chunks IS 'Auto-generated by pgedge_vectorizer for session prep notes embeddings';
-        COMMENT ON TABLE sessions_actual_notes_chunks IS 'Auto-generated by pgedge_vectorizer for session actual notes embeddings';
-        COMMENT ON TABLE campaign_memories_content_chunks IS 'Auto-generated by pgedge_vectorizer for campaign memory embeddings';
-
-        RAISE NOTICE 'pgEdge vectorizer enabled on all content tables';
-    ELSE
         RAISE NOTICE 'pgedge_vectorizer extension not found. Skipping vectorization setup.';
-        RAISE NOTICE 'To enable semantic search, install the pgedge_vectorizer extension.';
+        RETURN;
     END IF;
+
+    -- campaigns.description
+    PERFORM pgedge_vectorizer.enable_vectorization(
+        source_table := 'campaigns',
+        source_column := 'description',
+        chunk_strategy := 'markdown',
+        chunk_size := 200,
+        chunk_overlap := 25,
+        embedding_dimension := 1024
+    );
+
+    -- entities.name
+    PERFORM pgedge_vectorizer.enable_vectorization(
+        source_table := 'entities',
+        source_column := 'name',
+        chunk_strategy := 'token_based',
+        chunk_size := 100,
+        chunk_overlap := 10,
+        embedding_dimension := 1024
+    );
+
+    -- entities.description
+    PERFORM pgedge_vectorizer.enable_vectorization(
+        source_table := 'entities',
+        source_column := 'description',
+        chunk_strategy := 'markdown',
+        chunk_size := 400,
+        chunk_overlap := 50,
+        embedding_dimension := 1024
+    );
+
+    -- chapters.overview
+    PERFORM pgedge_vectorizer.enable_vectorization(
+        source_table := 'chapters',
+        source_column := 'overview',
+        chunk_strategy := 'markdown',
+        chunk_size := 300,
+        chunk_overlap := 30,
+        embedding_dimension := 1024
+    );
+
+    -- sessions.prep_notes
+    PERFORM pgedge_vectorizer.enable_vectorization(
+        source_table := 'sessions',
+        source_column := 'prep_notes',
+        chunk_strategy := 'markdown',
+        chunk_size := 500,
+        chunk_overlap := 50,
+        embedding_dimension := 1024
+    );
+
+    -- sessions.actual_notes
+    PERFORM pgedge_vectorizer.enable_vectorization(
+        source_table := 'sessions',
+        source_column := 'actual_notes',
+        chunk_strategy := 'markdown',
+        chunk_size := 500,
+        chunk_overlap := 50,
+        embedding_dimension := 1024
+    );
+
+    -- campaign_memories.content
+    PERFORM pgedge_vectorizer.enable_vectorization(
+        source_table := 'campaign_memories',
+        source_column := 'content',
+        chunk_strategy := 'markdown',
+        chunk_size := 400,
+        chunk_overlap := 50,
+        embedding_dimension := 1024
+    );
+
+    -- scenes.description
+    PERFORM pgedge_vectorizer.enable_vectorization(
+        source_table := 'scenes',
+        source_column := 'description',
+        chunk_strategy := 'markdown',
+        chunk_size := 400,
+        chunk_overlap := 50,
+        embedding_dimension := 1024
+    );
+
+    -- scenes.gm_notes
+    PERFORM pgedge_vectorizer.enable_vectorization(
+        source_table := 'scenes',
+        source_column := 'gm_notes',
+        chunk_strategy := 'markdown',
+        chunk_size := 400,
+        chunk_overlap := 50,
+        embedding_dimension := 1024
+    );
+
+    -- session_chat_messages.content
+    PERFORM pgedge_vectorizer.enable_vectorization(
+        source_table := 'session_chat_messages',
+        source_column := 'content',
+        chunk_strategy := 'token_based',
+        chunk_size := 200,
+        chunk_overlap := 20,
+        embedding_dimension := 1024
+    );
+
+    -- Comments on auto-generated chunk tables
+    COMMENT ON TABLE campaigns_description_chunks IS 'pgedge_vectorizer: campaign description embeddings';
+    COMMENT ON TABLE entities_name_chunks IS 'Auto-generated by pgedge_vectorizer for entity name embeddings';
+    COMMENT ON TABLE entities_description_chunks IS 'Auto-generated by pgedge_vectorizer for entity description embeddings';
+    COMMENT ON TABLE chapters_overview_chunks IS 'Auto-generated by pgedge_vectorizer for chapter overview embeddings';
+    COMMENT ON TABLE sessions_prep_notes_chunks IS 'Auto-generated by pgedge_vectorizer for session prep notes embeddings';
+    COMMENT ON TABLE sessions_actual_notes_chunks IS 'Auto-generated by pgedge_vectorizer for session actual notes embeddings';
+    COMMENT ON TABLE campaign_memories_content_chunks IS 'Auto-generated by pgedge_vectorizer for campaign memory embeddings';
+    COMMENT ON TABLE scenes_description_chunks IS 'Auto-generated by pgedge_vectorizer for scene description embeddings';
+    COMMENT ON TABLE scenes_gm_notes_chunks IS 'Auto-generated by pgedge_vectorizer for scene GM notes embeddings';
+    COMMENT ON TABLE session_chat_messages_content_chunks IS 'Auto-generated by pgedge_vectorizer for session chat message embeddings';
+
+    RAISE NOTICE 'pgEdge vectorizer enabled on all content tables';
 END $$;
 
 -- ============================================
@@ -824,181 +1270,285 @@ END $$;
 -- ============================================
 DO $$
 BEGIN
-    -- Only create function if pgedge_vectorizer extension exists
-    IF EXISTS (
+    IF NOT EXISTS (
         SELECT 1 FROM pg_extension WHERE extname = 'pgedge_vectorizer'
     ) THEN
-        -- Drop function if it already exists
-        DROP FUNCTION IF EXISTS search_campaign_content(BIGINT, TEXT, INT);
-
-        -- Create the hybrid search function using dynamic SQL
-        -- This approach handles missing chunk tables gracefully
-        EXECUTE $func$
-        CREATE OR REPLACE FUNCTION search_campaign_content(
-            p_campaign_id BIGINT,
-            p_query TEXT,
-            p_limit INT DEFAULT 10
-        ) RETURNS TABLE (
-            source_table TEXT,
-            source_id BIGINT,
-            source_name TEXT,
-            chunk_content TEXT,
-            vector_score FLOAT,
-            combined_score FLOAT
-        ) AS $body$
-        DECLARE
-            query_embedding vector;
-            sql_query TEXT;
-            union_parts TEXT[];
-        BEGIN
-            -- Generate embedding for the query once
-            query_embedding := pgedge_vectorizer.generate_embedding(p_query);
-
-            -- Build array of UNION parts based on which tables exist
-            union_parts := ARRAY[]::TEXT[];
-
-            -- Check entities_name_chunks
-            IF EXISTS (
-                SELECT 1 FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = 'entities_name_chunks'
-            ) THEN
-                union_parts := array_append(union_parts, $q$
-                    SELECT
-                        'entities' AS source_table,
-                        e.id AS source_id,
-                        e.name AS source_name,
-                        c.chunk AS chunk_content,
-                        (1 - (c.embedding <=> $1))::FLOAT AS vector_score,
-                        (0.7 * (1 - (c.embedding <=> $1)) +
-                         0.3 * ts_rank(to_tsvector('english', c.chunk), plainto_tsquery('english', $2)))::FLOAT AS combined_score
-                    FROM entities_name_chunks c
-                    JOIN entities e ON c.source_id = e.id
-                    WHERE e.campaign_id = $3
-                $q$);
-            END IF;
-
-            -- Check entities_description_chunks
-            IF EXISTS (
-                SELECT 1 FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = 'entities_description_chunks'
-            ) THEN
-                union_parts := array_append(union_parts, $q$
-                    SELECT
-                        'entities' AS source_table,
-                        e.id AS source_id,
-                        e.name AS source_name,
-                        c.chunk AS chunk_content,
-                        (1 - (c.embedding <=> $1))::FLOAT AS vector_score,
-                        (0.7 * (1 - (c.embedding <=> $1)) +
-                         0.3 * ts_rank(to_tsvector('english', c.chunk), plainto_tsquery('english', $2)))::FLOAT AS combined_score
-                    FROM entities_description_chunks c
-                    JOIN entities e ON c.source_id = e.id
-                    WHERE e.campaign_id = $3
-                $q$);
-            END IF;
-
-            -- Check chapters_overview_chunks
-            IF EXISTS (
-                SELECT 1 FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = 'chapters_overview_chunks'
-            ) THEN
-                union_parts := array_append(union_parts, $q$
-                    SELECT
-                        'chapters' AS source_table,
-                        ch.id AS source_id,
-                        ch.title AS source_name,
-                        c.chunk AS chunk_content,
-                        (1 - (c.embedding <=> $1))::FLOAT AS vector_score,
-                        (0.7 * (1 - (c.embedding <=> $1)) +
-                         0.3 * ts_rank(to_tsvector('english', c.chunk), plainto_tsquery('english', $2)))::FLOAT AS combined_score
-                    FROM chapters_overview_chunks c
-                    JOIN chapters ch ON c.source_id = ch.id
-                    WHERE ch.campaign_id = $3
-                $q$);
-            END IF;
-
-            -- Check sessions_prep_notes_chunks
-            IF EXISTS (
-                SELECT 1 FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = 'sessions_prep_notes_chunks'
-            ) THEN
-                union_parts := array_append(union_parts, $q$
-                    SELECT
-                        'sessions' AS source_table,
-                        s.id AS source_id,
-                        COALESCE(s.title, 'Session #' || s.session_number::TEXT) AS source_name,
-                        c.chunk AS chunk_content,
-                        (1 - (c.embedding <=> $1))::FLOAT AS vector_score,
-                        (0.7 * (1 - (c.embedding <=> $1)) +
-                         0.3 * ts_rank(to_tsvector('english', c.chunk), plainto_tsquery('english', $2)))::FLOAT AS combined_score
-                    FROM sessions_prep_notes_chunks c
-                    JOIN sessions s ON c.source_id = s.id
-                    WHERE s.campaign_id = $3
-                $q$);
-            END IF;
-
-            -- Check sessions_actual_notes_chunks
-            IF EXISTS (
-                SELECT 1 FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = 'sessions_actual_notes_chunks'
-            ) THEN
-                union_parts := array_append(union_parts, $q$
-                    SELECT
-                        'sessions' AS source_table,
-                        s.id AS source_id,
-                        COALESCE(s.title, 'Session #' || s.session_number::TEXT) AS source_name,
-                        c.chunk AS chunk_content,
-                        (1 - (c.embedding <=> $1))::FLOAT AS vector_score,
-                        (0.7 * (1 - (c.embedding <=> $1)) +
-                         0.3 * ts_rank(to_tsvector('english', c.chunk), plainto_tsquery('english', $2)))::FLOAT AS combined_score
-                    FROM sessions_actual_notes_chunks c
-                    JOIN sessions s ON c.source_id = s.id
-                    WHERE s.campaign_id = $3
-                $q$);
-            END IF;
-
-            -- Check campaign_memories_content_chunks
-            IF EXISTS (
-                SELECT 1 FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = 'campaign_memories_content_chunks'
-            ) THEN
-                union_parts := array_append(union_parts, $q$
-                    SELECT
-                        'campaign_memories' AS source_table,
-                        cm.id AS source_id,
-                        COALESCE(cm.title, cm.memory_type) AS source_name,
-                        c.chunk AS chunk_content,
-                        (1 - (c.embedding <=> $1))::FLOAT AS vector_score,
-                        (0.7 * (1 - (c.embedding <=> $1)) +
-                         0.3 * ts_rank(to_tsvector('english', c.chunk), plainto_tsquery('english', $2)))::FLOAT AS combined_score
-                    FROM campaign_memories_content_chunks c
-                    JOIN campaign_memories cm ON c.source_id = cm.id
-                    WHERE cm.campaign_id = $3
-                $q$);
-            END IF;
-
-            -- If no chunk tables exist, return empty result
-            IF array_length(union_parts, 1) IS NULL THEN
-                RETURN;
-            END IF;
-
-            -- Build and execute the final query
-            sql_query := array_to_string(union_parts, ' UNION ALL ') ||
-                        ' ORDER BY combined_score DESC LIMIT $4';
-
-            RETURN QUERY EXECUTE sql_query
-                USING query_embedding, p_query, p_campaign_id, p_limit;
-        END;
-        $body$ LANGUAGE plpgsql STABLE;
-        $func$;
-
-        COMMENT ON FUNCTION search_campaign_content(BIGINT, TEXT, INT) IS
-            'Hybrid semantic + text search across all vectorized campaign content. Combines vector similarity (70%) with PostgreSQL text search (30%).';
-
-        RAISE NOTICE 'Hybrid search function search_campaign_content created';
-    ELSE
         RAISE NOTICE 'pgedge_vectorizer extension not found. Skipping search function creation.';
+        RETURN;
     END IF;
+
+    DROP FUNCTION IF EXISTS search_campaign_content(BIGINT, TEXT, INT);
+
+    EXECUTE $func$
+    CREATE OR REPLACE FUNCTION search_campaign_content(
+        p_campaign_id BIGINT,
+        p_query TEXT,
+        p_limit INT DEFAULT 10
+    ) RETURNS TABLE (
+        source_table TEXT,
+        source_id BIGINT,
+        source_name TEXT,
+        chunk_content TEXT,
+        vector_score FLOAT,
+        combined_score FLOAT
+    ) AS $body$
+    DECLARE
+        query_embedding vector;
+        sql_query TEXT;
+        union_parts TEXT[];
+    BEGIN
+        query_embedding := pgedge_vectorizer.generate_embedding(p_query);
+        union_parts := ARRAY[]::TEXT[];
+
+        -- campaigns_description_chunks
+        IF EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = 'campaigns_description_chunks'
+        ) THEN
+            union_parts := array_append(union_parts, $q$
+                SELECT
+                    'campaigns' AS source_table,
+                    camp.id AS source_id,
+                    camp.name AS source_name,
+                    c.content AS chunk_content,
+                    (1 - (c.embedding <=> $1))::FLOAT AS vector_score,
+                    (0.7 * (1 - (c.embedding <=> $1)) +
+                     0.3 * ts_rank(to_tsvector('english', c.content),
+                        plainto_tsquery('english', $2)))::FLOAT
+                        AS combined_score
+                FROM campaigns_description_chunks c
+                JOIN campaigns camp ON c.source_id = camp.id
+                WHERE camp.id = $3
+            $q$);
+        END IF;
+
+        -- entities_name_chunks
+        IF EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = 'entities_name_chunks'
+        ) THEN
+            union_parts := array_append(union_parts, $q$
+                SELECT
+                    'entities' AS source_table,
+                    e.id AS source_id,
+                    e.name AS source_name,
+                    c.content AS chunk_content,
+                    (1 - (c.embedding <=> $1))::FLOAT AS vector_score,
+                    (0.7 * (1 - (c.embedding <=> $1)) +
+                     0.3 * ts_rank(to_tsvector('english', c.content),
+                        plainto_tsquery('english', $2)))::FLOAT
+                        AS combined_score
+                FROM entities_name_chunks c
+                JOIN entities e ON c.source_id = e.id
+                WHERE e.campaign_id = $3
+            $q$);
+        END IF;
+
+        -- entities_description_chunks
+        IF EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = 'entities_description_chunks'
+        ) THEN
+            union_parts := array_append(union_parts, $q$
+                SELECT
+                    'entities' AS source_table,
+                    e.id AS source_id,
+                    e.name AS source_name,
+                    c.content AS chunk_content,
+                    (1 - (c.embedding <=> $1))::FLOAT AS vector_score,
+                    (0.7 * (1 - (c.embedding <=> $1)) +
+                     0.3 * ts_rank(to_tsvector('english', c.content),
+                        plainto_tsquery('english', $2)))::FLOAT
+                        AS combined_score
+                FROM entities_description_chunks c
+                JOIN entities e ON c.source_id = e.id
+                WHERE e.campaign_id = $3
+            $q$);
+        END IF;
+
+        -- chapters_overview_chunks
+        IF EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = 'chapters_overview_chunks'
+        ) THEN
+            union_parts := array_append(union_parts, $q$
+                SELECT
+                    'chapters' AS source_table,
+                    ch.id AS source_id,
+                    ch.title AS source_name,
+                    c.content AS chunk_content,
+                    (1 - (c.embedding <=> $1))::FLOAT AS vector_score,
+                    (0.7 * (1 - (c.embedding <=> $1)) +
+                     0.3 * ts_rank(to_tsvector('english', c.content),
+                        plainto_tsquery('english', $2)))::FLOAT
+                        AS combined_score
+                FROM chapters_overview_chunks c
+                JOIN chapters ch ON c.source_id = ch.id
+                WHERE ch.campaign_id = $3
+            $q$);
+        END IF;
+
+        -- sessions_prep_notes_chunks
+        IF EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = 'sessions_prep_notes_chunks'
+        ) THEN
+            union_parts := array_append(union_parts, $q$
+                SELECT
+                    'sessions' AS source_table,
+                    s.id AS source_id,
+                    COALESCE(s.title, 'Session #' ||
+                        s.session_number::TEXT) AS source_name,
+                    c.content AS chunk_content,
+                    (1 - (c.embedding <=> $1))::FLOAT AS vector_score,
+                    (0.7 * (1 - (c.embedding <=> $1)) +
+                     0.3 * ts_rank(to_tsvector('english', c.content),
+                        plainto_tsquery('english', $2)))::FLOAT
+                        AS combined_score
+                FROM sessions_prep_notes_chunks c
+                JOIN sessions s ON c.source_id = s.id
+                WHERE s.campaign_id = $3
+            $q$);
+        END IF;
+
+        -- sessions_actual_notes_chunks
+        IF EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = 'sessions_actual_notes_chunks'
+        ) THEN
+            union_parts := array_append(union_parts, $q$
+                SELECT
+                    'sessions' AS source_table,
+                    s.id AS source_id,
+                    COALESCE(s.title, 'Session #' ||
+                        s.session_number::TEXT) AS source_name,
+                    c.content AS chunk_content,
+                    (1 - (c.embedding <=> $1))::FLOAT AS vector_score,
+                    (0.7 * (1 - (c.embedding <=> $1)) +
+                     0.3 * ts_rank(to_tsvector('english', c.content),
+                        plainto_tsquery('english', $2)))::FLOAT
+                        AS combined_score
+                FROM sessions_actual_notes_chunks c
+                JOIN sessions s ON c.source_id = s.id
+                WHERE s.campaign_id = $3
+            $q$);
+        END IF;
+
+        -- campaign_memories_content_chunks
+        IF EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = 'campaign_memories_content_chunks'
+        ) THEN
+            union_parts := array_append(union_parts, $q$
+                SELECT
+                    'campaign_memories' AS source_table,
+                    cm.id AS source_id,
+                    COALESCE(cm.title, cm.memory_type) AS source_name,
+                    c.content AS chunk_content,
+                    (1 - (c.embedding <=> $1))::FLOAT AS vector_score,
+                    (0.7 * (1 - (c.embedding <=> $1)) +
+                     0.3 * ts_rank(to_tsvector('english', c.content),
+                        plainto_tsquery('english', $2)))::FLOAT
+                        AS combined_score
+                FROM campaign_memories_content_chunks c
+                JOIN campaign_memories cm ON c.source_id = cm.id
+                WHERE cm.campaign_id = $3
+            $q$);
+        END IF;
+
+        -- scenes_description_chunks
+        IF EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = 'scenes_description_chunks'
+        ) THEN
+            union_parts := array_append(union_parts, $q$
+                SELECT
+                    'scenes' AS source_table,
+                    s.id AS source_id,
+                    s.title AS source_name,
+                    c.content AS chunk_content,
+                    (1 - (c.embedding <=> $1))::FLOAT AS vector_score,
+                    (0.7 * (1 - (c.embedding <=> $1)) +
+                     0.3 * ts_rank(to_tsvector('english', c.content),
+                        plainto_tsquery('english', $2)))::FLOAT
+                        AS combined_score
+                FROM scenes_description_chunks c
+                JOIN scenes s ON c.source_id = s.id
+                WHERE s.campaign_id = $3
+            $q$);
+        END IF;
+
+        -- scenes_gm_notes_chunks
+        IF EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = 'scenes_gm_notes_chunks'
+        ) THEN
+            union_parts := array_append(union_parts, $q$
+                SELECT
+                    'scenes' AS source_table,
+                    s.id AS source_id,
+                    s.title AS source_name,
+                    c.content AS chunk_content,
+                    (1 - (c.embedding <=> $1))::FLOAT AS vector_score,
+                    (0.7 * (1 - (c.embedding <=> $1)) +
+                     0.3 * ts_rank(to_tsvector('english', c.content),
+                        plainto_tsquery('english', $2)))::FLOAT
+                        AS combined_score
+                FROM scenes_gm_notes_chunks c
+                JOIN scenes s ON c.source_id = s.id
+                WHERE s.campaign_id = $3
+            $q$);
+        END IF;
+
+        -- session_chat_messages_content_chunks
+        IF EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = 'session_chat_messages_content_chunks'
+        ) THEN
+            union_parts := array_append(union_parts, $q$
+                SELECT
+                    'session_chat_messages' AS source_table,
+                    m.id AS source_id,
+                    m.role || ': ' || LEFT(m.content, 50) AS source_name,
+                    c.content AS chunk_content,
+                    (1 - (c.embedding <=> $1))::FLOAT AS vector_score,
+                    (0.7 * (1 - (c.embedding <=> $1)) +
+                     0.3 * ts_rank(to_tsvector('english', c.content),
+                        plainto_tsquery('english', $2)))::FLOAT
+                        AS combined_score
+                FROM session_chat_messages_content_chunks c
+                JOIN session_chat_messages m ON c.source_id = m.id
+                WHERE m.campaign_id = $3
+            $q$);
+        END IF;
+
+        IF array_length(union_parts, 1) IS NULL THEN
+            RETURN;
+        END IF;
+
+        sql_query := array_to_string(union_parts, ' UNION ALL ') ||
+                    ' ORDER BY combined_score DESC LIMIT $4';
+
+        RETURN QUERY EXECUTE sql_query
+            USING query_embedding, p_query, p_campaign_id, p_limit;
+    END;
+    $body$ LANGUAGE plpgsql STABLE;
+    $func$;
+
+    COMMENT ON FUNCTION search_campaign_content(BIGINT, TEXT, INT) IS
+        'Hybrid semantic + text search across all vectorized campaign content. Combines vector similarity (70%) with PostgreSQL text search (30%).';
+
+    RAISE NOTICE 'Hybrid search function search_campaign_content created';
 END $$;
 
 -- ============================================

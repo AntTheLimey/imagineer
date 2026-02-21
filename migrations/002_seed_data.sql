@@ -9,7 +9,7 @@
  */
 
 -- Seed Data Migration
--- Populates game systems and default relationship types
+-- Populates game systems and default relationship type templates
 
 -- ============================================
 -- Game Systems
@@ -157,58 +157,104 @@ INSERT INTO game_systems (name, code, attribute_schema, skill_schema, dice_conve
     }'
 );
 
+-- D&D 5th Edition (2024 Revision)
+INSERT INTO game_systems (name, code, attribute_schema, skill_schema, dice_conventions) VALUES (
+    'D&D 5th Edition (2024 Revision)',
+    'dnd-5e-2024',
+    '{
+        "ability_scores": {
+            "STR": {"name": "Strength", "type": "standard", "range": [1, 30], "default": 10},
+            "DEX": {"name": "Dexterity", "type": "standard", "range": [1, 30], "default": 10},
+            "CON": {"name": "Constitution", "type": "standard", "range": [1, 30], "default": 10},
+            "INT": {"name": "Intelligence", "type": "standard", "range": [1, 30], "default": 10},
+            "WIS": {"name": "Wisdom", "type": "standard", "range": [1, 30], "default": 10},
+            "CHA": {"name": "Charisma", "type": "standard", "range": [1, 30], "default": 10}
+        },
+        "derived_attributes": {
+            "AC": {"name": "Armor Class", "formula": "10 + DEX modifier"},
+            "HP": {"name": "Hit Points", "formula": "hit_die + CON modifier at 1st level"},
+            "Initiative": {"name": "Initiative", "formula": "DEX modifier"},
+            "Proficiency_Bonus": {"name": "Proficiency Bonus", "formula": "2 + floor((level - 1) / 4)"},
+            "Spell_Save_DC": {"name": "Spell Save DC", "formula": "8 + proficiency_bonus + spellcasting_modifier"},
+            "Passive_Perception": {"name": "Passive Perception", "formula": "10 + WIS modifier + proficiency (if proficient)"}
+        },
+        "classes": {
+            "Barbarian": {"hit_die": "d12", "primary_ability": "STR", "saving_throws": ["STR", "CON"]},
+            "Bard": {"hit_die": "d8", "primary_ability": "CHA", "saving_throws": ["DEX", "CHA"]},
+            "Cleric": {"hit_die": "d8", "primary_ability": "WIS", "saving_throws": ["WIS", "CHA"]},
+            "Druid": {"hit_die": "d8", "primary_ability": "WIS", "saving_throws": ["INT", "WIS"]},
+            "Fighter": {"hit_die": "d10", "primary_ability": "STR", "saving_throws": ["STR", "CON"]},
+            "Monk": {"hit_die": "d8", "primary_ability": "DEX", "saving_throws": ["STR", "DEX"]},
+            "Paladin": {"hit_die": "d10", "primary_ability": "STR", "saving_throws": ["WIS", "CHA"]},
+            "Ranger": {"hit_die": "d10", "primary_ability": "DEX", "saving_throws": ["STR", "DEX"]},
+            "Rogue": {"hit_die": "d8", "primary_ability": "DEX", "saving_throws": ["DEX", "INT"]},
+            "Sorcerer": {"hit_die": "d6", "primary_ability": "CHA", "saving_throws": ["CON", "CHA"]},
+            "Warlock": {"hit_die": "d8", "primary_ability": "CHA", "saving_throws": ["WIS", "CHA"]},
+            "Wizard": {"hit_die": "d6", "primary_ability": "INT", "saving_throws": ["INT", "WIS"]}
+        }
+    }',
+    '{
+        "categories": ["STR-based", "DEX-based", "INT-based", "WIS-based", "CHA-based"],
+        "skills": {
+            "Athletics": {"ability": "STR", "base": 0},
+            "Acrobatics": {"ability": "DEX", "base": 0},
+            "Sleight_of_Hand": {"ability": "DEX", "base": 0},
+            "Stealth": {"ability": "DEX", "base": 0},
+            "Arcana": {"ability": "INT", "base": 0},
+            "History": {"ability": "INT", "base": 0},
+            "Investigation": {"ability": "INT", "base": 0},
+            "Nature": {"ability": "INT", "base": 0},
+            "Religion": {"ability": "INT", "base": 0},
+            "Animal_Handling": {"ability": "WIS", "base": 0},
+            "Insight": {"ability": "WIS", "base": 0},
+            "Medicine": {"ability": "WIS", "base": 0},
+            "Perception": {"ability": "WIS", "base": 0},
+            "Survival": {"ability": "WIS", "base": 0},
+            "Deception": {"ability": "CHA", "base": 0},
+            "Intimidation": {"ability": "CHA", "base": 0},
+            "Performance": {"ability": "CHA", "base": 0},
+            "Persuasion": {"ability": "CHA", "base": 0}
+        }
+    }',
+    '{
+        "primary": "d20",
+        "damage": ["d4", "d6", "d8", "d10", "d12"],
+        "advantage_disadvantage": "Roll 2d20, take highest or lowest",
+        "difficulty_classes": {
+            "Very_Easy": 5,
+            "Easy": 10,
+            "Medium": 15,
+            "Hard": 20,
+            "Very_Hard": 25,
+            "Nearly_Impossible": 30
+        }
+    }'
+);
+
 -- ============================================
--- Default Relationship Types
--- System-wide defaults (campaign_id = NULL)
+-- Relationship Type Templates
+-- System-wide defaults copied to each new campaign
 -- ============================================
 
--- Ownership relationships (asymmetric)
-INSERT INTO relationship_types (campaign_id, name, inverse_name, is_symmetric, display_label, inverse_display_label, description) VALUES
-(NULL, 'owns', 'owned_by', false, 'Owns', 'Is owned by', 'Entity possesses or controls another entity'),
-(NULL, 'owned_by', 'owns', false, 'Is owned by', 'Owns', 'Inverse of owns relationship');
+-- Asymmetric relationships (forward direction only)
+INSERT INTO relationship_type_templates (name, inverse_name, is_symmetric, display_label, inverse_display_label, description) VALUES
+('owns', 'owned_by', false, 'Owns', 'Is owned by', 'Entity possesses or controls another entity'),
+('employs', 'employed_by', false, 'Employs', 'Is employed by', 'Entity employs another as worker or servant'),
+('works_for', 'employs', false, 'Works for', 'Employs', 'Alias for employed_by relationship'),
+('reports_to', 'manages', false, 'Reports to', 'Manages', 'Entity reports to another in organizational hierarchy'),
+('parent_of', 'child_of', false, 'Parent of', 'Child of', 'Entity is parent of another'),
+('located_at', 'contains', false, 'Located at', 'Contains', 'Entity is physically located at another location'),
+('member_of', 'has_member', false, 'Member of', 'Has member', 'Entity is member of organization or faction'),
+('created', 'created_by', false, 'Created', 'Created by', 'Entity created or made another entity'),
+('rules', 'ruled_by', false, 'Rules', 'Ruled by', 'Entity has political authority over another'),
+('headquartered_at', 'headquarters_of', false, 'Headquartered at', 'Headquarters of', 'Entity has its primary base of operations at a location');
 
--- Employment relationships (asymmetric)
-INSERT INTO relationship_types (campaign_id, name, inverse_name, is_symmetric, display_label, inverse_display_label, description) VALUES
-(NULL, 'employs', 'employed_by', false, 'Employs', 'Is employed by', 'Entity employs another as worker or servant'),
-(NULL, 'employed_by', 'employs', false, 'Is employed by', 'Employs', 'Inverse of employs relationship'),
-(NULL, 'works_for', 'employs', false, 'Works for', 'Employs', 'Alias for employed_by relationship');
-
--- Management relationships (asymmetric)
-INSERT INTO relationship_types (campaign_id, name, inverse_name, is_symmetric, display_label, inverse_display_label, description) VALUES
-(NULL, 'reports_to', 'manages', false, 'Reports to', 'Manages', 'Entity reports to another in organizational hierarchy'),
-(NULL, 'manages', 'reports_to', false, 'Manages', 'Reports to', 'Entity manages or supervises another');
-
--- Family relationships (asymmetric)
-INSERT INTO relationship_types (campaign_id, name, inverse_name, is_symmetric, display_label, inverse_display_label, description) VALUES
-(NULL, 'parent_of', 'child_of', false, 'Parent of', 'Child of', 'Entity is parent of another'),
-(NULL, 'child_of', 'parent_of', false, 'Child of', 'Parent of', 'Entity is child of another');
-
--- Location relationships (asymmetric)
-INSERT INTO relationship_types (campaign_id, name, inverse_name, is_symmetric, display_label, inverse_display_label, description) VALUES
-(NULL, 'located_at', 'contains', false, 'Located at', 'Contains', 'Entity is physically located at another location'),
-(NULL, 'contains', 'located_at', false, 'Contains', 'Located at', 'Location contains another entity');
-
--- Membership relationships (asymmetric)
-INSERT INTO relationship_types (campaign_id, name, inverse_name, is_symmetric, display_label, inverse_display_label, description) VALUES
-(NULL, 'member_of', 'has_member', false, 'Member of', 'Has member', 'Entity is member of organization or faction'),
-(NULL, 'has_member', 'member_of', false, 'Has member', 'Member of', 'Organization has entity as member');
-
--- Creation relationships (asymmetric)
-INSERT INTO relationship_types (campaign_id, name, inverse_name, is_symmetric, display_label, inverse_display_label, description) VALUES
-(NULL, 'created', 'created_by', false, 'Created', 'Created by', 'Entity created or made another entity'),
-(NULL, 'created_by', 'created', false, 'Created by', 'Created', 'Entity was created by another');
-
--- Political relationships (asymmetric)
-INSERT INTO relationship_types (campaign_id, name, inverse_name, is_symmetric, display_label, inverse_display_label, description) VALUES
-(NULL, 'rules', 'ruled_by', false, 'Rules', 'Ruled by', 'Entity has political authority over another'),
-(NULL, 'ruled_by', 'rules', false, 'Ruled by', 'Rules', 'Entity is under political authority of another');
-
--- Social relationships (symmetric)
-INSERT INTO relationship_types (campaign_id, name, inverse_name, is_symmetric, display_label, inverse_display_label, description) VALUES
-(NULL, 'knows', 'knows', true, 'Knows', 'Knows', 'Entity is acquainted with another'),
-(NULL, 'friend_of', 'friend_of', true, 'Friend of', 'Friend of', 'Entity has friendly relationship with another'),
-(NULL, 'enemy_of', 'enemy_of', true, 'Enemy of', 'Enemy of', 'Entity has hostile relationship with another'),
-(NULL, 'allied_with', 'allied_with', true, 'Allied with', 'Allied with', 'Entity has alliance or partnership with another');
+-- Symmetric relationships
+INSERT INTO relationship_type_templates (name, inverse_name, is_symmetric, display_label, inverse_display_label, description) VALUES
+('knows', 'knows', true, 'Knows', 'Knows', 'Entity is acquainted with another'),
+('friend_of', 'friend_of', true, 'Friend of', 'Friend of', 'Entity has friendly relationship with another'),
+('enemy_of', 'enemy_of', true, 'Enemy of', 'Enemy of', 'Entity has hostile relationship with another'),
+('allied_with', 'allied_with', true, 'Allied with', 'Allied with', 'Entity has alliance or partnership with another');
 
 -- ============================================
 -- Record migration
