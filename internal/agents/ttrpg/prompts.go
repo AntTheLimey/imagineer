@@ -18,15 +18,56 @@ import (
 	"github.com/antonypegg/imagineer/internal/enrichment"
 )
 
+// scopeGuidance maps each SourceScope to a scope-specific analysis
+// section that is injected into the system prompt.
+var scopeGuidance = map[enrichment.SourceScope]string{
+	enrichment.ScopeCampaign: `## Scope: Campaign Overview
+
+You are analysing a campaign-level description. Focus on:
+- World-building coherence and setting establishment
+- Tonal consistency across the described setting
+- Campaign premise clarity and hook strength
+- Genre conventions and atmosphere
+`,
+	enrichment.ScopeChapter: `## Scope: Chapter Overview
+
+You are analysing a chapter-level overview. Focus on:
+- Narrative arc structure and plot progression
+- Pacing across scenes within the chapter
+- Tension buildup and payoff
+- Plot thread management and cliffhanger effectiveness
+`,
+	enrichment.ScopeSession: `## Scope: Session Notes
+
+You are analysing session-level notes. Focus on:
+- Tactical encounter design and balance
+- NPC interaction quality and dialogue
+- Scene-by-scene flow and transitions
+- Player-facing hooks and decision points
+`,
+	enrichment.ScopeEntity: `## Scope: Entity Description
+
+You are analysing an entity description. Focus on:
+- Character consistency and motivation clarity
+- Relationship logic with other campaign elements
+- Description completeness for GM reference
+- Mechanical accuracy of any stats or abilities
+`,
+}
+
 // maxContentLength is the maximum number of characters from the source
 // content that will be included in the user prompt. Content exceeding
 // this length is truncated with a notice.
 const maxContentLength = 6000
 
 // buildSystemPrompt returns the system prompt instructing the LLM to
-// act as a TTRPG campaign quality analyst.
-func buildSystemPrompt() string {
-	return `You are a TTRPG campaign content quality analyst. Your role is to review
+// act as a TTRPG campaign quality analyst. When a non-empty scope is
+// provided, scope-specific analysis guidance is injected before the
+// rules section.
+func buildSystemPrompt(scope enrichment.SourceScope) string {
+	var b strings.Builder
+
+	b.WriteString(`You are a TTRPG campaign content quality analyst. Your role is to review
 campaign content (session notes, chapter overviews, scene descriptions) and
 provide constructive analysis to help Game Masters improve their campaigns.
 
@@ -63,7 +104,15 @@ Evaluate the content across these dimensions:
   scenes lacking environmental description or missed opportunities for
   immersion.
 
-## Rules
+`)
+
+	// Inject scope-specific guidance when available.
+	if guidance, ok := scopeGuidance[scope]; ok {
+		b.WriteString(guidance)
+		b.WriteString("\n")
+	}
+
+	b.WriteString(`## Rules
 
 1. Only analyse what is present in the provided content. Do not infer
    events or details not explicitly stated.
@@ -96,7 +145,9 @@ Respond with ONLY valid JSON in the following structure:
   ]
 }
 
-Do not include any text outside the JSON object.`
+Do not include any text outside the JSON object.`)
+
+	return b.String()
 }
 
 // buildUserPrompt constructs the user prompt from the pipeline input,
@@ -185,6 +236,9 @@ func buildUserPrompt(input enrichment.PipelineInput) string {
 	b.WriteString(fmt.Sprintf("- Source: %s (ID: %d)\n", input.SourceTable, input.SourceID))
 	if input.SourceField != "" {
 		b.WriteString(fmt.Sprintf("- Field: %s\n", input.SourceField))
+	}
+	if input.SourceScope != "" {
+		b.WriteString(fmt.Sprintf("- Scope: %s\n", input.SourceScope))
 	}
 
 	return b.String()

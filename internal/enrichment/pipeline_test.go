@@ -517,6 +517,29 @@ func TestPipelineString(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// ScopeFromSourceTable tests
+// ---------------------------------------------------------------------------
+
+func TestScopeFromSourceTable(t *testing.T) {
+	tests := []struct {
+		table    string
+		expected SourceScope
+	}{
+		{"campaigns", ScopeCampaign},
+		{"chapters", ScopeChapter},
+		{"sessions", ScopeSession},
+		{"entities", ScopeEntity},
+		{"unknown", ScopeCampaign},
+		{"", ScopeCampaign},
+	}
+	for _, tc := range tests {
+		t.Run(tc.table, func(t *testing.T) {
+			assert.Equal(t, tc.expected, ScopeFromSourceTable(tc.table))
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
