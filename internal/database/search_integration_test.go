@@ -15,6 +15,8 @@ package database
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -28,6 +30,26 @@ func setupIntegrationDB(t *testing.T) *DB {
 	config, err := LoadConfig("../../config/db/db.json")
 	if err != nil {
 		t.Fatalf("failed to load database config: %v", err)
+	}
+
+	if v := os.Getenv("TEST_DB_HOST"); v != "" {
+		config.Nodes[0].Hostname = v
+	}
+	if v := os.Getenv("TEST_DB_PORT"); v != "" {
+		p, err := strconv.Atoi(v)
+		if err != nil {
+			t.Fatalf("TEST_DB_PORT is not a valid integer: %v", err)
+		}
+		config.Nodes[0].Port = p
+	}
+	if v := os.Getenv("TEST_DB_USER"); v != "" {
+		config.Users[0].Username = v
+	}
+	if v := os.Getenv("TEST_DB_PASSWORD"); v != "" {
+		config.Users[0].Password = v
+	}
+	if v := os.Getenv("TEST_DB_NAME"); v != "" {
+		config.Database = v
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

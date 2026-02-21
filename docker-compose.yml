@@ -34,7 +34,7 @@ services:
       - ./data/postgres:/var/lib/postgresql/data
       - ./scripts/db-init:/docker-entrypoint-initdb.d:ro
     ports:
-      - "5432:5432"
+      - "5433:5432"
     command: >
       postgres
       -c shared_preload_libraries=pg_cron,pg_tokenizer,pgedge_vectorizer
@@ -43,6 +43,7 @@ services:
       -c pgedge_vectorizer.provider='ollama'
       -c pgedge_vectorizer.api_url='http://ollama:11434'
       -c pgedge_vectorizer.model='mxbai-embed-large'
+      -c pgedge_vectorizer.databases='imagineer'
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U imagineer -d imagineer"]
       interval: 10s
