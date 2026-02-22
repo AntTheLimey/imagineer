@@ -18,6 +18,7 @@ import {
     CreateCampaignInput,
     UpdateCampaignInput,
 } from '../api';
+import type { AnalysisOptions } from '../api';
 import type { Campaign } from '../types';
 
 /**
@@ -81,7 +82,7 @@ export function useUpdateCampaign() {
         }: {
             id: number;
             input: UpdateCampaignInput;
-            options?: { analyze?: boolean; enrich?: boolean; phases?: string[] };
+            options?: AnalysisOptions;
         }) => campaignsApi.update(id, input, options),
         onSuccess: (data: Campaign) => {
             // Update the specific campaign in cache

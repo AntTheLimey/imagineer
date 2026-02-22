@@ -17,6 +17,7 @@ import {
     CreateChapterInput,
     UpdateChapterInput,
 } from '../api/chapters';
+import type { AnalysisOptions } from '../api/types';
 import type { Chapter } from '../types';
 
 /**
@@ -110,7 +111,7 @@ export function useUpdateChapter() {
             campaignId: number;
             chapterId: number;
             input: UpdateChapterInput;
-            options?: { analyze?: boolean; enrich?: boolean; phases?: string[] };
+            options?: AnalysisOptions;
         }) => chaptersApi.update(campaignId, chapterId, input, options),
         onSuccess: (data: Chapter) => {
             // Update the specific chapter in cache

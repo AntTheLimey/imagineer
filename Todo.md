@@ -206,7 +206,7 @@ data flows through to entity creation.
   in the LLM prompt. The system prompt in
   `internal/enrichment/prompts.go:213` provides a terse
   example description ("A Scotland Yard detective mentioned
-  in the chapter") and gives no guidance on desired length
+  in the chapter") and provides no guidance on desired length
   or detail. Update the prompt to request two to three
   sentences summarising everything known from the source
   content: role, relationships, characteristics, and

@@ -107,6 +107,18 @@ func (a *Analyzer) AnalyzeContent(
 		return nil, nil, fmt.Errorf("failed to delete old analysis jobs: %w", err)
 	}
 
+	// Validate phases against allowed set.
+	var validatedPhases []string
+	allowedPhases := map[string]bool{
+		"identify": true, "revise": true, "enrich": true,
+	}
+	for _, p := range phases {
+		if allowedPhases[p] {
+			validatedPhases = append(validatedPhases, p)
+		}
+	}
+	phases = validatedPhases
+
 	if len(phases) == 0 {
 		phases = []string{"identify"}
 	}

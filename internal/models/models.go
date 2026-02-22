@@ -665,7 +665,7 @@ type ContentAnalysisJob struct {
 	EnrichmentTotal    int       `json:"enrichmentTotal"`
 	EnrichmentResolved int       `json:"enrichmentResolved"`
 	CurrentPhase       *string   `json:"currentPhase"`
-	Phases             []string  `json:"phases"`
+	Phases             []string  `json:"phases,omitempty"`
 	CreatedAt          time.Time `json:"createdAt"`
 	UpdatedAt          time.Time `json:"updatedAt"`
 }
@@ -773,6 +773,15 @@ type RelationshipSuggestion struct {
 	Description      string `json:"description"`
 }
 
+// DraftStatus represents the lifecycle status of a draft.
+type DraftStatus string
+
+const (
+	DraftStatusActive    DraftStatus = "active"
+	DraftStatusMerged    DraftStatus = "merged"
+	DraftStatusDiscarded DraftStatus = "discarded"
+)
+
 // Draft represents a server-side auto-saved draft for an editor page.
 type Draft struct {
 	ID            int64           `json:"id"`
@@ -786,7 +795,7 @@ type Draft struct {
 	CreatedAt     time.Time       `json:"createdAt"`
 	UpdatedAt     time.Time       `json:"updatedAt"`
 	RevisionCount int             `json:"revisionCount"`
-	Status        string          `json:"status"`
+	Status        DraftStatus     `json:"status"`
 }
 
 // DraftIndicator is a lightweight representation of a draft used in

@@ -267,7 +267,8 @@ INSERT INTO game_systems (name, code, attribute_schema, skill_schema, dice_conve
     '{}',
     '{}',
     '{}'
-);
+)
+ON CONFLICT (code) DO NOTHING;
 
 -- ============================================
 -- Record migration

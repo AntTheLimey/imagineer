@@ -18,6 +18,7 @@ import {
     CreateSessionInput,
     UpdateSessionInput,
 } from '../api/sessions';
+import type { AnalysisOptions } from '../api/types';
 import type { Session } from '../types';
 
 /**
@@ -133,8 +134,9 @@ export function useCreateSession() {
  * invalidates session list queries for the affected campaign, and if the updated session has a `chapterId`
  * also invalidates that chapter's session list.
  *
- * @returns A mutation hook that accepts an object `{ campaignId, sessionId, input }` to perform the update;
- *          on success the hook updates the session detail cache and invalidates relevant list queries.
+ * @returns A mutation hook that accepts an object `{ campaignId, sessionId, input, options }` to perform the update;
+ *          `options` controls content analysis triggers (analyze, enrich, phases).
+ *          On success the hook updates the session detail cache and invalidates relevant list queries.
  */
 export function useUpdateSession() {
     const queryClient = useQueryClient();
@@ -149,7 +151,7 @@ export function useUpdateSession() {
             campaignId: number;
             sessionId: number;
             input: UpdateSessionInput;
-            options?: { analyze?: boolean; enrich?: boolean; phases?: string[] };
+            options?: AnalysisOptions;
         }) => sessionsApi.update(campaignId, sessionId, input, options),
         onSuccess: (data: Session) => {
             // Update the specific session in cache

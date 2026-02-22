@@ -422,11 +422,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   existing jobs that already have enrichment or analysis
   items, preventing those items from being hidden on the
   triage page.
-- Markdown paste in TipTap editor rendering raw markdown
+- Markdown paste in TipTap editor rendering raw Markdown
   syntax (headings, lists, blockquotes, horizontal rules) as
   plain text instead of formatted content. A new
   `MarkdownPasteHandler` extension intercepts plain-text
-  paste events containing block-level markdown patterns and
+  paste events containing block-level Markdown patterns and
   converts them to rich content.
 - Cross-campaign IDOR in `fetchSourceContent` queries; all
   content retrieval now scopes by `campaign_id` to prevent

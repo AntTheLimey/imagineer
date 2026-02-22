@@ -69,6 +69,12 @@ const MarkdownPasteHandler = Extension.create({
                 key: new PluginKey('markdownPasteHandler'),
                 props: {
                     handlePaste: (view, event) => {
+                        // If HTML is on the clipboard, let ProseMirror's
+                        // default HTML paste handler run instead.
+                        if (event.clipboardData?.types?.includes('text/html')) {
+                            return false;
+                        }
+
                         const text =
                             event.clipboardData?.getData('text/plain');
                         if (!text) return false;
@@ -90,13 +96,12 @@ const MarkdownPasteHandler = Extension.create({
 
                         // Convert the HTML string to a DOM element,
                         // then parse it into a ProseMirror Slice.
-                        const wrapper =
-                            document.createElement('div');
-                        wrapper.innerHTML = parsedHtml;
+                        const doc = new DOMParser()
+                            .parseFromString(parsedHtml, 'text/html');
                         const slice =
                             ProseMirrorDOMParser.fromSchema(
                                 view.state.schema,
-                            ).parseSlice(wrapper, {
+                            ).parseSlice(doc.body, {
                                 preserveWhitespace: true,
                             });
 

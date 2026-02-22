@@ -12,6 +12,7 @@
  */
 
 import { apiClient } from './client';
+import type { AnalysisOptions } from './types';
 import type { Session, SessionStage, SessionStatus } from '../types';
 
 /**
@@ -99,7 +100,7 @@ export const sessionsApi = {
         campaignId: number,
         sessionId: number,
         input: UpdateSessionInput,
-        options?: { analyze?: boolean; enrich?: boolean; phases?: string[] },
+        options?: AnalysisOptions,
     ): Promise<Session> {
         const params: Record<string, string> = {};
         if (options?.analyze) params.analyze = 'true';

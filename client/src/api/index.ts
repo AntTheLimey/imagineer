@@ -14,6 +14,8 @@
 export { apiClient, ApiError } from './client';
 export type { PaginatedResponse } from './client';
 
+export type { AnalysisOptions } from './types';
+
 export { campaignsApi } from './campaigns';
 export type {
     ListCampaignsParams,

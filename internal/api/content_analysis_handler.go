@@ -486,10 +486,12 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 		}
 
 		// Auto-trigger enrichment if all Phase 1 items are resolved
+		// and the "enrich" phase was selected for this job.
 		updatedJob, jobErr := h.db.GetAnalysisJob(r.Context(), jobID)
 		if jobErr == nil &&
 			updatedJob.ResolvedItems == updatedJob.TotalItems &&
-			updatedJob.EnrichmentTotal == 0 {
+			updatedJob.EnrichmentTotal == 0 &&
+			jobHasPhase(updatedJob.Phases, "enrich") {
 			h.TryAutoEnrich(r.Context(), jobID, userID)
 		}
 	}
@@ -664,10 +666,12 @@ func (h *ContentAnalysisHandler) BatchResolve(w http.ResponseWriter, r *http.Req
 	}
 
 	// Auto-trigger enrichment if all Phase 1 items are resolved
+	// and the "enrich" phase was selected for this job.
 	updatedJob, jobErr := h.db.GetAnalysisJob(r.Context(), jobID)
 	if jobErr == nil &&
 		updatedJob.ResolvedItems == updatedJob.TotalItems &&
-		updatedJob.EnrichmentTotal == 0 {
+		updatedJob.EnrichmentTotal == 0 &&
+		jobHasPhase(updatedJob.Phases, "enrich") {
 		h.TryAutoEnrich(r.Context(), jobID, userID)
 	}
 
@@ -1976,4 +1980,14 @@ func (h *ContentAnalysisHandler) ApplyRevision(w http.ResponseWriter, r *http.Re
 	respondJSON(w, http.StatusOK, map[string]string{
 		"status": "applied",
 	})
+}
+
+// jobHasPhase checks whether a phase key is present in the job's phases slice.
+func jobHasPhase(phases []string, key string) bool {
+	for _, p := range phases {
+		if p == key {
+			return true
+		}
+	}
+	return false
 }

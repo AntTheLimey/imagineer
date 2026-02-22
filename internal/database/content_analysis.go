@@ -418,7 +418,7 @@ func (db *DB) loadJobPhases(ctx context.Context, jobID int64) ([]string, error) 
 		return nil, fmt.Errorf("failed to get job phases: %w", err)
 	}
 	defer rows.Close()
-	var phases []string
+	phases := make([]string, 0)
 	for rows.Next() {
 		var pk string
 		if err := rows.Scan(&pk); err != nil {

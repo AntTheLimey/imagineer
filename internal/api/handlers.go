@@ -56,11 +56,13 @@ var validPhaseKeys = map[string]bool{
 // silently dropped.
 func parsePhases(r *http.Request) []string {
 	raw := r.URL.Query()["phases"]
+	seen := make(map[string]bool)
 	var phases []string
 	for _, v := range raw {
 		for _, p := range strings.Split(v, ",") {
 			p = strings.TrimSpace(p)
-			if p != "" && validPhaseKeys[p] {
+			if p != "" && validPhaseKeys[p] && !seen[p] {
+				seen[p] = true
 				phases = append(phases, p)
 			}
 		}
@@ -389,6 +391,8 @@ func (h *Handler) UpdateCampaign(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		} else if shouldEnrich && h.caHandler != nil {
+			// Enrich-only jobs always use a single "enrich" phase
+			// regardless of the phases query parameter.
 			job := h.createEnrichmentJob(
 				r.Context(), campaign.ID, "campaigns", "description", campaign.ID)
 			if job != nil {
@@ -605,6 +609,8 @@ func (h *Handler) UpdateEntity(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		} else if shouldEnrich && h.caHandler != nil {
+			// Enrich-only jobs always use a single "enrich" phase
+			// regardless of the phases query parameter.
 			job := h.createEnrichmentJob(
 				r.Context(), entity.CampaignID, "entities", "description", entity.ID)
 			if job != nil {
@@ -640,6 +646,8 @@ func (h *Handler) UpdateEntity(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		} else if shouldEnrich && h.caHandler != nil && response.Analysis == nil {
+			// Enrich-only jobs always use a single "enrich" phase
+			// regardless of the phases query parameter.
 			job := h.createEnrichmentJob(
 				r.Context(), entity.CampaignID, "entities", "gm_notes", entity.ID)
 			if job != nil {
@@ -1858,6 +1866,8 @@ func (h *Handler) UpdateChapter(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		} else if shouldEnrich && h.caHandler != nil {
+			// Enrich-only jobs always use a single "enrich" phase
+			// regardless of the phases query parameter.
 			userID, _ := auth.GetUserIDFromContext(r.Context())
 			job := h.createEnrichmentJob(
 				r.Context(), chapter.CampaignID, "chapters", "overview", chapter.ID)
@@ -2159,6 +2169,8 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		} else if shouldEnrich && h.caHandler != nil {
+			// Enrich-only jobs always use a single "enrich" phase
+			// regardless of the phases query parameter.
 			job := h.createEnrichmentJob(
 				r.Context(), session.CampaignID, "sessions", "prep_notes", session.ID)
 			if job != nil {
@@ -2193,6 +2205,8 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		} else if shouldEnrich && h.caHandler != nil && response.Analysis == nil {
+			// Enrich-only jobs always use a single "enrich" phase
+			// regardless of the phases query parameter.
 			job := h.createEnrichmentJob(
 				r.Context(), session.CampaignID, "sessions", "actual_notes", session.ID)
 			if job != nil {

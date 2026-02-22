@@ -12,6 +12,7 @@
  */
 
 import { apiClient } from './client';
+import type { AnalysisOptions } from './types';
 import type { Chapter } from '../types';
 
 /**
@@ -69,7 +70,7 @@ export const chaptersApi = {
         campaignId: number,
         chapterId: number,
         input: UpdateChapterInput,
-        options?: { analyze?: boolean; enrich?: boolean; phases?: string[] },
+        options?: AnalysisOptions,
     ): Promise<Chapter> {
         const params: Record<string, string> = {};
         if (options?.analyze) params.analyze = 'true';

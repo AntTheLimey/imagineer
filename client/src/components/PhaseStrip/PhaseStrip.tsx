@@ -127,12 +127,14 @@ export default function PhaseStrip({
         if (disabledPhases) {
             setPhases((prev) => {
                 const next = { ...prev };
+                let changed = false;
                 for (const key of Object.keys(disabledPhases) as (keyof PhaseSelection)[]) {
-                    if (disabledPhases[key]) {
+                    if (disabledPhases[key] && prev[key]) {
                         next[key] = false;
+                        changed = true;
                     }
                 }
-                return next;
+                return changed ? next : prev;
             });
         }
     }, [disabledPhases]);

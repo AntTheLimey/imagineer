@@ -241,6 +241,7 @@ export default function CampaignSettings({
      * Close the delete confirmation dialog.
      */
     const handleCloseDeleteDialog = () => {
+        if (deleteCampaign.isPending) return;
         setDeleteDialogOpen(false);
         setDeleteConfirmName('');
         setDeleteError(null);
@@ -437,7 +438,11 @@ export default function CampaignSettings({
             {/* Delete Confirmation Dialog */}
             <Dialog
                 open={deleteDialogOpen}
-                onClose={handleCloseDeleteDialog}
+                onClose={() => {
+                    if (deleteCampaign.isPending) return;
+                    handleCloseDeleteDialog();
+                }}
+                disableEscapeKeyDown={deleteCampaign.isPending}
                 maxWidth="sm"
                 fullWidth
             >

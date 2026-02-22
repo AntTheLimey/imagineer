@@ -13,11 +13,14 @@
  * data and renders the CampaignSettings component.
  */
 
-import { useCallback, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Box, Typography } from '@mui/material';
 import CampaignSettings from '../components/CampaignSettings';
 import { useCampaign } from '../hooks';
+
+// CampaignSettings manages its own save state internally.
+const handleChange = () => {};
 
 export default function CampaignSettingsPage() {
     const { id } = useParams<{ id: string }>();
@@ -39,10 +42,6 @@ export default function CampaignSettingsPage() {
             navigate('/campaigns', { replace: true });
         }
     }, [error, navigate]);
-
-    const handleChange = useCallback(() => {
-        // CampaignSettings manages its own save state internally.
-    }, []);
 
     return (
         <Box>
