@@ -13,6 +13,8 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -258,5 +260,63 @@ func TestRetryOn429(t *testing.T) {
 	}
 	if attempts != 3 {
 		t.Errorf("expected 3 attempts, got %d", attempts)
+	}
+}
+
+func TestIsQuotaError_402(t *testing.T) {
+	if !isQuotaError(402, fmt.Errorf("payment required")) {
+		t.Error("expected isQuotaError to return true for status 402")
+	}
+}
+
+func TestIsQuotaError_429WithQuotaMessage(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+	}{
+		{"quota keyword", fmt.Errorf("you have exceeded your current quota")},
+		{"exceeded keyword", fmt.Errorf("rate limit exceeded for this billing period")},
+		{"mixed case quota", fmt.Errorf("Quota limit reached")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if !isQuotaError(429, tt.err) {
+				t.Errorf("expected isQuotaError to return true for 429 with message: %s", tt.err)
+			}
+		})
+	}
+}
+
+func TestIsQuotaError_429RateLimit(t *testing.T) {
+	err := fmt.Errorf("rate limited, please slow down")
+	if isQuotaError(429, err) {
+		t.Error("expected isQuotaError to return false for normal 429 rate limit")
+	}
+}
+
+func TestIsQuotaError_500(t *testing.T) {
+	err := fmt.Errorf("internal server error")
+	if isQuotaError(500, err) {
+		t.Error("expected isQuotaError to return false for status 500")
+	}
+}
+
+func TestDoWithRetry_QuotaError_NoRetry(t *testing.T) {
+	attempts := 0
+	_, err := doWithRetry(context.Background(), func(ctx context.Context) (CompletionResponse, int, error) {
+		attempts++
+		return CompletionResponse{}, 402, fmt.Errorf("payment required: quota exhausted")
+	})
+
+	if attempts != 1 {
+		t.Errorf("expected exactly 1 attempt, got %d", attempts)
+	}
+
+	var quotaErr *QuotaExceededError
+	if !errors.As(err, &quotaErr) {
+		t.Fatalf("expected QuotaExceededError, got %T: %v", err, err)
+	}
+	if quotaErr.Provider != "llm" {
+		t.Errorf("expected provider 'llm', got %q", quotaErr.Provider)
 	}
 }

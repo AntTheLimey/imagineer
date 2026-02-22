@@ -38,6 +38,21 @@ type CompletionResponse struct {
 	TokensUsed int
 }
 
+// QuotaExceededError indicates the LLM provider has
+// rejected the request due to an exhausted API quota
+// (as opposed to a temporary rate limit).
+type QuotaExceededError struct {
+	Provider string
+	Message  string
+}
+
+func (e *QuotaExceededError) Error() string {
+	return fmt.Sprintf(
+		"%s quota exceeded: %s",
+		e.Provider, e.Message,
+	)
+}
+
 // NewProvider creates an LLM provider based on the service type and API key.
 func NewProvider(service models.LLMService, apiKey string) (Provider, error) {
 	switch service {
