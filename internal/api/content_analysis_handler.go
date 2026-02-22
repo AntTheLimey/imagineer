@@ -1587,12 +1587,20 @@ func (h *ContentAnalysisHandler) RunContentEnrichment(
 
 		enrichItems, err := pipeline.Run(bgCtx, provider, input)
 		if err != nil {
-			log.Printf("Content-enrich: pipeline run failed for job %d: %v",
+			log.Printf(
+				"Content-enrich: pipeline run failed for job %d: %v",
 				jobID, err)
-			_ = h.db.Exec(context.Background(),
-				"UPDATE content_analysis_jobs SET status = 'failed' WHERE id = $1",
-				jobID,
-			)
+
+			reason := "Enrichment encountered an error"
+			var qe *llm.QuotaExceededError
+			if errors.As(err, &qe) {
+				reason = "API quota exceeded"
+			} else if strings.Contains(err.Error(), "rate limit") {
+				reason = "Rate limited after retries"
+			}
+
+			_ = h.db.SetJobFailureReason(
+				context.Background(), jobID, reason)
 			return
 		}
 
@@ -1776,12 +1784,20 @@ func (h *ContentAnalysisHandler) TryAutoEnrich(
 
 		enrichItems, err := pipeline.Run(bgCtx, provider, input)
 		if err != nil {
-			log.Printf("Auto-enrich: pipeline run failed for job %d: %v",
+			log.Printf(
+				"Auto-enrich: pipeline run failed for job %d: %v",
 				jobID, err)
-			_ = h.db.Exec(context.Background(),
-				"UPDATE content_analysis_jobs SET status = 'failed' WHERE id = $1",
-				jobID,
-			)
+
+			reason := "Enrichment encountered an error"
+			var qe *llm.QuotaExceededError
+			if errors.As(err, &qe) {
+				reason = "API quota exceeded"
+			} else if strings.Contains(err.Error(), "rate limit") {
+				reason = "Rate limited after retries"
+			}
+
+			_ = h.db.SetJobFailureReason(
+				context.Background(), jobID, reason)
 			return
 		}
 
