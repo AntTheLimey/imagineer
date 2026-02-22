@@ -1569,20 +1569,33 @@ func (h *ContentAnalysisHandler) RunContentEnrichment(
 				jobID, ragErr)
 		}
 
+		// Load relationships for the enrichment pipeline so
+		// the graph expert receives complete data.
+		relationships, relErr := h.db.ListRelationshipsByCampaign(
+			bgCtx, campaignID)
+		if relErr != nil {
+			log.Printf(
+				"Content-enrich: failed to load relationships for job %d: %v",
+				jobID, relErr)
+			// Continue without relationships rather than
+			// blocking enrichment.
+		}
+
 		var gameSystemID *int64
 		if campaign != nil {
 			gameSystemID = campaign.SystemID
 		}
 
 		input := enrichment.PipelineInput{
-			CampaignID:   campaignID,
-			JobID:        jobID,
-			SourceTable:  job.SourceTable,
-			SourceID:     job.SourceID,
-			SourceScope:  enrichment.ScopeFromSourceTable(job.SourceTable),
-			Content:      content,
-			GameSystemID: gameSystemID,
-			Context:      ragCtx,
+			CampaignID:    campaignID,
+			JobID:         jobID,
+			SourceTable:   job.SourceTable,
+			SourceID:      job.SourceID,
+			SourceScope:   enrichment.ScopeFromSourceTable(job.SourceTable),
+			Content:       content,
+			Relationships: relationships,
+			GameSystemID:  gameSystemID,
+			Context:       ragCtx,
 		}
 
 		enrichItems, err := pipeline.Run(bgCtx, provider, input)
@@ -1765,21 +1778,34 @@ func (h *ContentAnalysisHandler) TryAutoEnrich(
 				jobID, ragErr)
 		}
 
+		// Load relationships for the enrichment pipeline so
+		// the graph expert receives complete data.
+		relationships, relErr := h.db.ListRelationshipsByCampaign(
+			bgCtx, job.CampaignID)
+		if relErr != nil {
+			log.Printf(
+				"Auto-enrich: failed to load relationships for job %d: %v",
+				jobID, relErr)
+			// Continue without relationships rather than
+			// blocking enrichment.
+		}
+
 		var gameSystemID *int64
 		if campaign != nil {
 			gameSystemID = campaign.SystemID
 		}
 
 		input := enrichment.PipelineInput{
-			CampaignID:   job.CampaignID,
-			JobID:        jobID,
-			SourceTable:  job.SourceTable,
-			SourceID:     job.SourceID,
-			SourceScope:  enrichment.ScopeFromSourceTable(job.SourceTable),
-			Content:      content,
-			Entities:     entities,
-			GameSystemID: gameSystemID,
-			Context:      ragCtx,
+			CampaignID:    job.CampaignID,
+			JobID:         jobID,
+			SourceTable:   job.SourceTable,
+			SourceID:      job.SourceID,
+			SourceScope:   enrichment.ScopeFromSourceTable(job.SourceTable),
+			Content:       content,
+			Entities:      entities,
+			Relationships: relationships,
+			GameSystemID:  gameSystemID,
+			Context:       ragCtx,
 		}
 
 		enrichItems, err := pipeline.Run(bgCtx, provider, input)
