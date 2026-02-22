@@ -104,38 +104,20 @@ analysis and triage workflow.
   014) defines which relationship types are valid between
   which entity type pairs, and the Graph Expert enforces
   these constraints during analysis.
-- [ ] `[MVP-1]` LLM quota and rate limit error handling:
-  when the enrichment pipeline hits an LLM API token or
-  rate limit during background enrichment, the job is
-  silently marked as "failed" with no explanation to the
-  GM. The frontend `useResolveItem` hook has no `onError`
-  callback and never displays errors. Add quota-specific
-  error detection (distinguish HTTP 402 quota exceeded
-  from 429 rate limiting), surface the failure reason on
-  the job record, and display a clear message to the GM
-  on the triage page explaining that the API limit was
-  reached and to return later. Also add `onError`
-  handling to `useResolveItem` so resolve failures are
-  visible.
-- [ ] `[MVP-2]` Fix graph expert receiving incomplete data:
-  `PipelineInput.Relationships` is never populated by any
-  of the three API callers (`enrichment_handler.go`,
-  `content_analysis_handler.go` TryAutoEnrich,
-  `content_analysis_handler.go` RunContentEnrichment).
-  This causes orphan detection to flag every entity as
-  orphaned (false positives) and the LLM semantic checks
-  to only see proposed relationships, never existing
-  ones. Populate the relationships field from the
-  database before invoking the pipeline.
-- [ ] `[MVP-2]` Entity description auto-tagging and
-  pre-acceptance editing: when creating or updating an
-  entity from an accepted enrichment suggestion, the
-  description should be auto-tagged with wiki links for
-  all exact entity name matches. Additionally, the GM
-  needs the ability to edit entity text (description,
-  suggested content) before accepting, so the GM can
-  correct inaccuracies such as fixing a location
-  reference from Vienna to London.
+- [x] `[MVP-1]` LLM quota and rate limit error handling:
+  `QuotaExceededError` distinguishes HTTP 402 from 429,
+  `doWithRetry` fails immediately on quota errors,
+  `failure_reason` column stores the cause, and the
+  wizard error banner displays quota/rate-limit messages.
+- [x] `[MVP-2]` Fix graph expert receiving incomplete
+  data: `PipelineInput.Relationships` now populates from
+  the database before pipeline invocation, eliminating
+  false-positive orphan warnings.
+- [x] `[MVP-2]` Entity description auto-tagging and
+  pre-acceptance editing: `autoTagWikiLinks` utility
+  wraps entity names in `[[wiki-link]]` syntax, and the
+  EnrichPhasePage supports edit-before-accept with
+  `suggestedContentOverride` on resolve.
 
 ### Graph Maintenance
 
@@ -229,10 +211,10 @@ Expert agents, and RAG context assembly with token budgets.
 - [ ] `[MVP-2]` Scope-aware RAG filtering: filter and weight
   RAG context results by scope level (currently the pipeline
   only adds scope metadata to prompts).
-- [ ] `[MVP-2]` Phase-specific triage screens: the triage
-  page now conditionally shows sections based on job phases,
-  but a full UX redesign with separate screens per phase
-  remains a future improvement.
+- [x] `[MVP-2]` Phase-specific triage screens: the
+  AnalysisWizard replaces the monolithic triage page with
+  dedicated screens for each phase (Identify, Revise,
+  Enrich) connected via an MUI Stepper.
 
 ### Entity Suggestion Quality
 
@@ -278,19 +260,17 @@ items on a single screen. As the Revise phase gains richer
 functionality, the Revise workflow needs its own dedicated
 screen and more actionable GM tools.
 
-- [ ] `[MVP-2]` Separate the Revise phase onto its own
-  screen. The AnalysisTriagePage currently combines Revise
-  (content analysis) and Enrich items in one view, which
-  will become too crowded as Revise features grow.
-- [ ] `[MVP-2]` Make Revise items actionable for the GM.
-  The current acknowledge/dismiss actions are passive.
-  Revise items should offer suggested fixes, allow the GM
-  to apply corrections, and provide meaningful actions
-  beyond noting and moving on.
-- [ ] `[MVP-2]` Offer suggested fixes on demand. When
-  reviewing Revise items, the GM should be able to request
-  suggested fixes (such as rewritten text or corrected
-  mechanics) rather than only seeing advisory notes.
+- [x] `[MVP-2]` Separate the Revise phase onto its own
+  screen. The RevisePhasePage replaces the combined triage
+  view with a dedicated Revise screen in the wizard.
+- [x] `[MVP-2]` Make Revise items actionable for the GM.
+  The RevisePhasePage offers a Generate, diff view, edit,
+  and Apply workflow with an iteration counter, replacing
+  the passive acknowledge/dismiss actions.
+- [x] `[MVP-2]` Offer suggested fixes on demand. The GM
+  can request a revision (Generate), review the diff,
+  edit inline, and apply the fix directly from the Revise
+  screen.
 - [ ] `[MVP-2]` Add "update upwards" propagation for
   revised content. When revising granular content (such as
   a scene), offer the option to propagate changes upward
@@ -824,3 +804,40 @@ Features planned for after the initial release.
   generic terminology).
 - [x] Add RPG terminology knowledge base for TTRPG expert
   agent.
+
+### Phase Screens (Analysis Wizard)
+
+- [x] Replaced the monolithic AnalysisTriagePage with a
+  step-by-step AnalysisWizard using nested routes for
+  Identify, Revise, and Enrich phases.
+- [x] `useAnalysisWizard` hook with phase filtering,
+  navigation, and auto-advance.
+- [x] `AnalysisWizard` shell with MUI Stepper, error
+  banner, loading spinner, and navigation buttons.
+- [x] `IdentifyPhasePage` with two-column layout, grouped
+  detection types, detail panel, entity chip, create
+  entity form, and Accept All batch action.
+- [x] `EntityAutocomplete` with debounced entity search.
+- [x] `RevisePhasePage` with severity indicators, revision
+  workflow (Generate, diff, edit, Apply), and new mentions
+  section.
+- [x] `DiffView` component with side-by-side comparison
+  and optional inline editing.
+- [x] `EnrichPhasePage` with two-pass enrichment UI,
+  type-specific detail views, cancel support, and
+  edit-before-accept for description updates.
+- [x] `autoTagWikiLinks` utility for case-insensitive
+  wiki-link insertion.
+- [x] Graph Health summary section for graph advisory
+  items.
+- [x] Migration 005 adds `failure_reason` column to
+  `content_analysis_jobs`.
+- [x] `QuotaExceededError` type distinguishes HTTP 402
+  from 429; `doWithRetry` fails immediately on quota
+  errors.
+- [x] `SetJobFailureReason` helper stores failure reason
+  atomically with `status='failed'`.
+- [x] `PipelineInput.Relationships` populated from the
+  database before pipeline invocation.
+- [x] 276 tests across 26 test files covering all wizard
+  components.
