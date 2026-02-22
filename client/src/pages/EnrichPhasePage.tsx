@@ -47,8 +47,9 @@ import {
     Tooltip,
     CircularProgress,
     LinearProgress,
+    TextField,
 } from '@mui/material';
-import { Check, Close, PlayArrow, Cancel } from '@mui/icons-material';
+import { Check, Close, PlayArrow, Cancel, Edit } from '@mui/icons-material';
 import { useWizardContext } from '../contexts/AnalysisWizardContext';
 import {
     useResolveItem,
@@ -134,6 +135,11 @@ export default function EnrichPhasePage() {
     const [selectedItemId, setSelectedItemId] = useState<
         number | null
     >(null);
+
+    /** Tracks in-progress description edits keyed by item ID. */
+    const [editingContent, setEditingContent] = useState<
+        Record<number, string>
+    >({});
 
     // -- Derived data ------------------------------------------------------
 
@@ -244,6 +250,62 @@ export default function EnrichPhasePage() {
                 },
             },
         );
+    };
+
+    /**
+     * Accept handler for description_update items that may have been
+     * edited by the GM. When an edited description exists in
+     * editingContent for the given item, we include it as a
+     * suggestedContentOverride. Otherwise we fall through to the
+     * standard handleResolve path.
+     */
+    const handleAcceptDescription = (item: ContentAnalysisItem) => {
+        if (
+            item.detectionType === 'description_update' &&
+            editingContent[item.id] !== undefined
+        ) {
+            resolveItem.mutate(
+                {
+                    itemId: item.id,
+                    req: {
+                        resolution: 'accepted',
+                        suggestedContentOverride: {
+                            suggestedDescription:
+                                editingContent[item.id],
+                        },
+                    },
+                },
+                {
+                    onSuccess: () => {
+                        // Clear editing state for this item.
+                        setEditingContent((prev) => {
+                            const next = { ...prev };
+                            delete next[item.id];
+                            return next;
+                        });
+                        // Advance to next pending item.
+                        const pendingItems = phaseItems.filter(
+                            (i) =>
+                                i.resolution === 'pending' &&
+                                i.id !== item.id,
+                        );
+                        if (pendingItems.length > 0) {
+                            setSelectedItemId(pendingItems[0].id);
+                        } else {
+                            setSelectedItemId(null);
+                        }
+                    },
+                    onError: (err: Error) => {
+                        console.error(
+                            'Failed to resolve item:',
+                            err.message,
+                        );
+                    },
+                },
+            );
+        } else {
+            handleResolve(item.id, 'accepted');
+        }
     };
 
     const handleSelectItem = (item: ContentAnalysisItem) => {
@@ -541,6 +603,13 @@ export default function EnrichPhasePage() {
                                 item={selectedItem}
                                 isResolving={resolveItem.isPending}
                                 onResolve={handleResolve}
+                                editingContent={editingContent}
+                                setEditingContent={
+                                    setEditingContent
+                                }
+                                onAcceptDescription={
+                                    handleAcceptDescription
+                                }
                             />
                         ) : (
                             <Box
@@ -578,9 +647,21 @@ interface DetailPanelProps {
         itemId: number,
         resolution: 'accepted' | 'dismissed',
     ) => void;
+    editingContent: Record<number, string>;
+    setEditingContent: React.Dispatch<
+        React.SetStateAction<Record<number, string>>
+    >;
+    onAcceptDescription: (item: ContentAnalysisItem) => void;
 }
 
-function DetailPanel({ item, isResolving, onResolve }: DetailPanelProps) {
+function DetailPanel({
+    item,
+    isResolving,
+    onResolve,
+    editingContent,
+    setEditingContent,
+    onAcceptDescription,
+}: DetailPanelProps) {
     const isPending = item.resolution === 'pending';
 
     /** Look up group metadata for the detection type. */
@@ -649,7 +730,13 @@ function DetailPanel({ item, isResolving, onResolve }: DetailPanelProps) {
             )}
 
             {/* Type-specific suggested content */}
-            {renderSuggestedContent(item.detectionType, suggested)}
+            {renderSuggestedContent(
+                item.detectionType,
+                suggested,
+                item.id,
+                editingContent,
+                setEditingContent,
+            )}
 
             {/* Entity info */}
             {item.entityName && (
@@ -702,10 +789,20 @@ function DetailPanel({ item, isResolving, onResolve }: DetailPanelProps) {
                             disabled={isResolving}
                             startIcon={<Check />}
                             onClick={() =>
-                                onResolve(item.id, 'accepted')
+                                item.detectionType ===
+                                'description_update'
+                                    ? onAcceptDescription(item)
+                                    : onResolve(
+                                          item.id,
+                                          'accepted',
+                                      )
                             }
                         >
-                            Accept
+                            {item.detectionType ===
+                                'description_update' &&
+                            editingContent[item.id] !== undefined
+                                ? 'Accept Edited'
+                                : 'Accept'}
                         </Button>
                         <Button
                             variant="outlined"
@@ -731,17 +828,27 @@ function DetailPanel({ item, isResolving, onResolve }: DetailPanelProps) {
 
 /**
  * Render type-specific suggested content based on the detection type.
+ *
+ * For description_update items the renderer also displays inline
+ * editing controls so the GM can modify the suggested description
+ * before accepting.
  */
 function renderSuggestedContent(
     detectionType: string,
     suggested: Record<string, unknown>,
+    itemId: number,
+    editingContent: Record<number, string>,
+    setEditingContent: React.Dispatch<
+        React.SetStateAction<Record<number, string>>
+    >,
 ): React.ReactNode {
     if (!suggested || Object.keys(suggested).length === 0) {
         return null;
     }
 
     switch (detectionType) {
-        case 'description_update':
+        case 'description_update': {
+            const isEditing = editingContent[itemId] !== undefined;
             return (
                 <Box>
                     <Typography variant="subtitle2" gutterBottom>
@@ -771,28 +878,103 @@ function renderSuggestedContent(
                     {'suggestedDescription' in suggested && (
                         <Paper
                             variant="outlined"
-                            sx={{ p: 2, bgcolor: 'success.50' }}
+                            sx={{
+                                p: 2,
+                                bgcolor: isEditing
+                                    ? 'background.paper'
+                                    : 'success.50',
+                            }}
                         >
-                            <Typography
-                                variant="caption"
-                                color="text.secondary"
-                                gutterBottom
-                                component="div"
+                            <Stack
+                                direction="row"
+                                alignItems="center"
+                                justifyContent="space-between"
+                                sx={{ mb: 1 }}
                             >
-                                Suggested
-                            </Typography>
-                            <Typography
-                                variant="body2"
-                                sx={{ whiteSpace: 'pre-wrap' }}
-                            >
-                                {String(
-                                    suggested.suggestedDescription,
+                                <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    component="div"
+                                >
+                                    {isEditing
+                                        ? 'Editing Suggestion'
+                                        : 'Suggested'}
+                                </Typography>
+                                {!isEditing ? (
+                                    <Button
+                                        size="small"
+                                        startIcon={<Edit />}
+                                        onClick={() =>
+                                            setEditingContent(
+                                                (prev) => ({
+                                                    ...prev,
+                                                    [itemId]: String(
+                                                        suggested.suggestedDescription,
+                                                    ),
+                                                }),
+                                            )
+                                        }
+                                    >
+                                        Edit
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        size="small"
+                                        color="inherit"
+                                        startIcon={<Close />}
+                                        onClick={() =>
+                                            setEditingContent(
+                                                (prev) => {
+                                                    const next = {
+                                                        ...prev,
+                                                    };
+                                                    delete next[
+                                                        itemId
+                                                    ];
+                                                    return next;
+                                                },
+                                            )
+                                        }
+                                    >
+                                        Cancel Edit
+                                    </Button>
                                 )}
-                            </Typography>
+                            </Stack>
+                            {isEditing ? (
+                                <TextField
+                                    fullWidth
+                                    multiline
+                                    minRows={3}
+                                    value={editingContent[itemId]}
+                                    onChange={(e) =>
+                                        setEditingContent(
+                                            (prev) => ({
+                                                ...prev,
+                                                [itemId]:
+                                                    e.target.value,
+                                            }),
+                                        )
+                                    }
+                                    inputProps={{
+                                        'aria-label':
+                                            'Edit suggested description',
+                                    }}
+                                />
+                            ) : (
+                                <Typography
+                                    variant="body2"
+                                    sx={{ whiteSpace: 'pre-wrap' }}
+                                >
+                                    {String(
+                                        suggested.suggestedDescription,
+                                    )}
+                                </Typography>
+                            )}
                         </Paper>
                     )}
                 </Box>
             );
+        }
 
         case 'relationship_suggestion':
             return (
