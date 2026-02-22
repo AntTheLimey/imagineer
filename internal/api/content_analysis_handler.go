@@ -465,6 +465,19 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 				}
 			}
 		}
+
+		// For new_entity_suggestion items without position offsets,
+		// do a global find-and-replace across the source content.
+		if req.Resolution == "new_entity" && posStart == nil && posEnd == nil && req.EntityName != nil {
+			if linkErr := h.applyGlobalWikiLinks(
+				r.Context(), campaignID,
+				srcTable, srcID, srcField,
+				*req.EntityName,
+			); linkErr != nil {
+				log.Printf("Global wiki-link insertion failed for item %d: %v",
+					itemID, linkErr)
+			}
+		}
 	}
 
 	// Handle relationship_suggestion acceptance: create the actual
@@ -906,6 +919,114 @@ func (h *ContentAnalysisHandler) applyContentFix(
 	}
 
 	return nil
+}
+
+// applyGlobalWikiLinks replaces all occurrences of entityName in the
+// source content with [[entityName]], skipping text already inside
+// [[...]] brackets. Uses word-boundary matching to avoid partial
+// replacements within longer words.
+func (h *ContentAnalysisHandler) applyGlobalWikiLinks(
+	ctx context.Context,
+	campaignID int64,
+	sourceTable string,
+	sourceID int64,
+	sourceField string,
+	entityName string,
+) error {
+	content, err := fetchSourceContent(
+		ctx, h.db, campaignID, sourceTable, sourceID, sourceField)
+	if err != nil {
+		return fmt.Errorf("failed to fetch source content: %w", err)
+	}
+
+	// Build a regex that matches the entity name on word boundaries.
+	escaped := regexp.QuoteMeta(entityName)
+	namePattern := regexp.MustCompile(`\b` + escaped + `\b`)
+
+	// Find all wiki-link spans so we can skip matches inside them.
+	linkSpans := wikiLinkPattern.FindAllStringIndex(content, -1)
+
+	// Process matches in reverse order so earlier byte offsets
+	// remain valid after each replacement.
+	matches := namePattern.FindAllStringIndex(content, -1)
+	replacement := "[[" + entityName + "]]"
+	changed := false
+	for i := len(matches) - 1; i >= 0; i-- {
+		m := matches[i]
+		if insideWikiLink(m[0], m[1], linkSpans) {
+			continue
+		}
+		content = content[:m[0]] + replacement + content[m[1]:]
+		changed = true
+	}
+
+	if !changed {
+		return nil
+	}
+
+	return h.updateSourceContent(
+		ctx, sourceTable, sourceID, sourceField, content)
+}
+
+// insideWikiLink checks whether the range [start, end) falls within
+// any of the given wiki-link spans.
+func insideWikiLink(start, end int, spans [][]int) bool {
+	for _, span := range spans {
+		if start >= span[0] && end <= span[1] {
+			return true
+		}
+	}
+	return false
+}
+
+// updateSourceContent writes content back to the specified source
+// table and field.
+func (h *ContentAnalysisHandler) updateSourceContent(
+	ctx context.Context,
+	sourceTable string,
+	sourceID int64,
+	sourceField string,
+	content string,
+) error {
+	var updateSQL string
+	switch sourceTable {
+	case "entities":
+		switch sourceField {
+		case "description":
+			updateSQL = "UPDATE entities SET description = $2, updated_at = NOW() WHERE id = $1"
+		case "gm_notes":
+			updateSQL = "UPDATE entities SET gm_notes = $2, updated_at = NOW() WHERE id = $1"
+		default:
+			return fmt.Errorf("unsupported field %q for table %q", sourceField, sourceTable)
+		}
+	case "chapters":
+		switch sourceField {
+		case "overview":
+			updateSQL = "UPDATE chapters SET overview = $2, updated_at = NOW() WHERE id = $1"
+		default:
+			return fmt.Errorf("unsupported field %q for table %q", sourceField, sourceTable)
+		}
+	case "sessions":
+		switch sourceField {
+		case "prep_notes":
+			updateSQL = "UPDATE sessions SET prep_notes = $2, updated_at = NOW() WHERE id = $1"
+		case "actual_notes":
+			updateSQL = "UPDATE sessions SET actual_notes = $2, updated_at = NOW() WHERE id = $1"
+		default:
+			return fmt.Errorf("unsupported field %q for table %q", sourceField, sourceTable)
+		}
+	case "campaigns":
+		switch sourceField {
+		case "description":
+			updateSQL = "UPDATE campaigns SET description = $2, updated_at = NOW() WHERE id = $1"
+		default:
+			return fmt.Errorf("unsupported field %q for table %q", sourceField, sourceTable)
+		}
+	default:
+		return fmt.Errorf("unsupported source table: %s", sourceTable)
+	}
+
+	return h.db.Exec(ctx, updateSQL, sourceID, content)
 }
 
 // wikiLinkPattern matches wiki links of the form [[text]] or
