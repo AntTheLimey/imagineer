@@ -931,7 +931,11 @@ func (h *ContentAnalysisHandler) applyGlobalWikiLinks(
 
 	// Build a regex that matches the entity name on word boundaries.
 	escaped := regexp.QuoteMeta(entityName)
-	namePattern := regexp.MustCompile(`\b` + escaped + `\b`)
+	namePattern, err := regexp.Compile(`\b` + escaped + `\b`)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to compile entity name pattern: %w", err)
+	}
 
 	// Find all wiki-link spans so we can skip matches inside them.
 	linkSpans := wikiLinkPattern.FindAllStringIndex(content, -1)

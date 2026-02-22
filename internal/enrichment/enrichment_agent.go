@@ -121,11 +121,10 @@ func (a *EnrichmentAgent) Run(
 	// from pipeline context and check vectorization
 	// availability for per-entity search.
 	var gameSystemYAML string
-	var vectorAvailable bool
 	if input.Context != nil {
 		gameSystemYAML = input.Context.GameSystemYAML
-		vectorAvailable = a.db.IsVectorizationAvailable(ctx)
 	}
+	vectorAvailable := a.db.IsVectorizationAvailable(ctx)
 
 	// Enrich each entity individually.
 	for i, entity := range entities {
