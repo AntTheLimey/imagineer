@@ -144,6 +144,27 @@ func buildUserPrompt(input EnrichmentInput) string {
 		b.WriteString("\n")
 	}
 
+	// Campaign context from RAG (vector search results).
+	if len(input.CampaignResults) > 0 {
+		fmt.Fprintf(&b, "## Campaign Context\n\n")
+		fmt.Fprintf(&b, "Related content from the campaign (for continuity and context):\n\n")
+		for _, r := range input.CampaignResults {
+			chunk := r.ChunkContent
+			if len([]rune(chunk)) > 300 {
+				chunk = string([]rune(chunk)[:300]) + "..."
+			}
+			fmt.Fprintf(&b, "- **%s** (%s): %s\n",
+				r.SourceName, r.SourceTable, chunk)
+		}
+		b.WriteString("\n")
+	}
+
+	// Game system schema from RAG.
+	if input.GameSystemYAML != "" {
+		fmt.Fprintf(&b, "## Game System Schema\n\n")
+		fmt.Fprintf(&b, "```yaml\n%s\n```\n\n", input.GameSystemYAML)
+	}
+
 	b.WriteString("Analyse the source content and produce enrichment ")
 	b.WriteString("suggestions for the entity above. Respond with JSON only.")
 

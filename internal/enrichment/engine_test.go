@@ -1159,3 +1159,54 @@ func TestDetectNewEntities_NoNewEntitiesFound(t *testing.T) {
 	require.NotNil(t, items)
 	assert.Empty(t, items)
 }
+
+func TestBuildUserPrompt_WithRAGContext(t *testing.T) {
+	desc := "A grizzled veteran."
+	input := EnrichmentInput{
+		CampaignID:  1,
+		JobID:       10,
+		SourceTable: "chapters",
+		SourceID:    5,
+		Content:     "Viktor entered the tavern.",
+		Entity: models.Entity{
+			ID:         100,
+			CampaignID: 1,
+			EntityType: models.EntityTypeNPC,
+			Name:       "Viktor",
+			Description: &desc,
+		},
+		CampaignResults: []models.SearchResult{
+			{
+				SourceTable:  "chapters",
+				SourceID:     2,
+				SourceName:   "Chapter 2",
+				ChunkContent: "Viktor was first seen arriving at the docks.",
+			},
+		},
+		GameSystemYAML: "name: Call of Cthulhu 7e\nskills:\n  - Spot Hidden",
+	}
+
+	prompt := buildUserPrompt(input)
+
+	assert.Contains(t, prompt, "## Campaign Context")
+	assert.Contains(t, prompt, "Chapter 2")
+	assert.Contains(t, prompt, "arriving at the docks")
+	assert.Contains(t, prompt, "## Game System Schema")
+	assert.Contains(t, prompt, "Call of Cthulhu 7e")
+}
+
+func TestBuildUserPrompt_NoRAGContext(t *testing.T) {
+	input := EnrichmentInput{
+		Content: "Some content.",
+		Entity: models.Entity{
+			ID:         1,
+			EntityType: models.EntityTypeNPC,
+			Name:       "Test",
+		},
+	}
+
+	prompt := buildUserPrompt(input)
+
+	assert.NotContains(t, prompt, "## Campaign Context")
+	assert.NotContains(t, prompt, "## Game System Schema")
+}
