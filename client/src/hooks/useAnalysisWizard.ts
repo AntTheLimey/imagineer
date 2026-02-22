@@ -141,8 +141,14 @@ export function useAnalysisWizard(
     const [autoAdvanced, setAutoAdvanced] = useState(false);
 
     const job = jobQuery.data;
-    const items = itemsQuery.data ?? [];
-    const phases = job?.phases ?? [];
+    const items = useMemo(
+        () => itemsQuery.data ?? [],
+        [itemsQuery.data],
+    );
+    const phases = useMemo(
+        () => job?.phases ?? [],
+        [job?.phases],
+    );
 
     const currentPhase = currentRoutePhase
         ? ROUTE_TO_PHASE[currentRoutePhase] ?? currentRoutePhase
