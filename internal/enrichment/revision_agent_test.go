@@ -410,3 +410,49 @@ func TestRevisionAgent_CodeFencedResponse(t *testing.T) {
 	assert.Equal(t, "The investigators arrived at the dark manor.", result.RevisedContent)
 	assert.Equal(t, "Added atmosphere descriptor.", result.Summary)
 }
+
+func TestRevisionAgent_CampaignContext(t *testing.T) {
+	var captured llm.CompletionRequest
+	innerProvider := &mockProvider{
+		response: `{"revisedContent": "revised", "summary": "updated"}`,
+	}
+	captureProvider := &capturingProvider{
+		inner:    innerProvider,
+		captured: &captured,
+	}
+
+	ra := NewRevisionAgent()
+
+	suggestedContent, _ := json.Marshal(
+		map[string]string{
+			"description": "A finding",
+		})
+
+	_, err := ra.GenerateRevision(
+		context.Background(),
+		captureProvider,
+		RevisionInput{
+			OriginalContent: "The investigators entered the manor.",
+			AcceptedItems: []models.ContentAnalysisItem{
+				{
+					DetectionType:    "spelling",
+					MatchedText:      "manor",
+					SuggestedContent: suggestedContent,
+				},
+			},
+			CampaignResults: []models.SearchResult{
+				{
+					SourceTable:  "chapters",
+					SourceID:     2,
+					SourceName:   "Chapter 2",
+					ChunkContent: "The manor was built in 1823 by Lord Ashton.",
+				},
+			},
+		},
+	)
+
+	require.NoError(t, err)
+	assert.Contains(t, captured.UserPrompt, "## Campaign Context")
+	assert.Contains(t, captured.UserPrompt, "Chapter 2")
+	assert.Contains(t, captured.UserPrompt, "Lord Ashton")
+}
