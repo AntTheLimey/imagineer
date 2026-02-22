@@ -181,6 +181,12 @@ enrichment pipeline. The implementation covers the pipeline
 orchestrator, TTRPG Expert, Canon Expert, Revision, Graph
 Expert agents, and RAG context assembly with token budgets.
 
+- [x] `[MVP-2]` RAG context for enrichment and revision
+  agents: the enrichment agent now performs per-entity
+  hybrid vector search and includes campaign context and
+  game system schema in its LLM prompt. The revision agent
+  now receives campaign search results and game system YAML
+  from the handler via ContextBuilder.
 - [ ] `[MVP-2]` Rewrite/style-choice capability: add a
   Revision Agent mode to the Revise phase that can rewrite
   content in different styles (prose, bullet notes, narrative

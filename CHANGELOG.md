@@ -23,6 +23,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     performs a global find-and-replace to insert
     [[wiki link]] tags for all occurrences of the
     entity name in the source content.
+- RAG Context for Enrichment and Revision Agents
+  - The enrichment agent now performs a
+    per-entity hybrid vector search and
+    includes campaign context and game system
+    schema in its LLM prompt for richer entity
+    descriptions and relationship suggestions.
+  - The revision agent now receives campaign
+    search results and game system schema from
+    the handler, enabling context-aware content
+    revisions.
 - Job Phases Persistence
   - The `job_phases` junction table persists which pipeline
     phases (Identify, Revise, Enrich) the GM selected when
