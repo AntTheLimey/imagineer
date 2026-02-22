@@ -191,9 +191,10 @@ Expert agents, and RAG context assembly with token budgets.
 - [ ] `[MVP-2]` Scope-aware RAG filtering: filter and weight
   RAG context results by scope level (currently the pipeline
   only adds scope metadata to prompts).
-- [ ] `[MVP-2]` Phase-specific triage screens: break the
-  `AnalysisTriagePage` into separate screens for each phase
-  (Identify, Revise, Enrich) to improve UX flow.
+- [ ] `[MVP-2]` Phase-specific triage screens: the triage
+  page now conditionally shows sections based on job phases,
+  but a full UX redesign with separate screens per phase
+  remains a future improvement.
 
 ---
 
@@ -612,6 +613,28 @@ Features planned for after the initial release.
   `agents.TruncateString`, shared `fetchSourceContent`,
   and `buildDefaultPipeline` factory (minus 198 net
   lines).
+
+### Job Phases & Draft Lifecycle
+
+- [x] `job_phases` junction table persisting pipeline phase
+  selections (identify, revise, enrich) per analysis job.
+- [x] `current_phase` tracking on `content_analysis_jobs`.
+- [x] Phase-aware triage page conditionally showing sections
+  based on selected phases with backward compatibility.
+- [x] Server-side phase allowlist validation in
+  `parsePhases`.
+- [x] CHECK constraints on `phase_key`, `current_phase`,
+  and `drafts.status`.
+- [x] `revision_count` and `status` columns on drafts for
+  lifecycle tracking.
+- [x] `CreateAnalysisJob` wrapped in a transaction for
+  atomicity.
+- [x] Shared `loadJobPhases` helper with proper
+  `rows.Err()` checking.
+- [x] Migration backfill for existing jobs with enrichment
+  and analysis items.
+- [x] Client phases integration across all update hooks
+  and API endpoints.
 
 ### Entity & Campaign Features
 
