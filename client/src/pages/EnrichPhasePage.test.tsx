@@ -139,6 +139,20 @@ const mockEnrichmentItems: ContentAnalysisItem[] = [
         phase: 'enrichment',
         createdAt: '2025-06-01T00:00:00Z',
     },
+    {
+        id: 206,
+        jobId: 1,
+        detectionType: 'redundant_edge',
+        matchedText: 'Duplicate ally relationship',
+        suggestedContent: {
+            description:
+                'Armitage-Wilbur has both "knows" and "ally" edges.',
+            recommendation: 'Remove one of the redundant relationships.',
+        },
+        resolution: 'pending',
+        phase: 'enrichment',
+        createdAt: '2025-06-01T00:00:00Z',
+    },
 ];
 
 function makeJob(
@@ -241,7 +255,7 @@ describe('EnrichPhasePage', () => {
         mockUseWizardContext.mockReturnValue(
             makeWizardState({
                 phaseItems: mockEnrichmentItems,
-                pendingCount: 5,
+                pendingCount: 6,
             }),
         );
 
@@ -260,8 +274,13 @@ describe('EnrichPhasePage', () => {
         expect(
             screen.getByText('Graph Warnings'),
         ).toBeInTheDocument();
+        expect(
+            screen.getByText('Redundant Edges'),
+        ).toBeInTheDocument();
 
-        // Matched text values should be present
+        // Matched text values should be present. Non-graph items
+        // appear once; graph items appear twice (in the grouped list
+        // and in the Graph Health summary section).
         expect(
             screen.getByText('Professor Armitage'),
         ).toBeInTheDocument();
@@ -272,8 +291,11 @@ describe('EnrichPhasePage', () => {
             screen.getByText('Armitage knows Wilbur'),
         ).toBeInTheDocument();
         expect(
-            screen.getByText('Orphaned faction node'),
-        ).toBeInTheDocument();
+            screen.getAllByText('Orphaned faction node'),
+        ).toHaveLength(2);
+        expect(
+            screen.getAllByText('Duplicate ally relationship'),
+        ).toHaveLength(2);
     });
 
     // -- Placeholder when nothing selected ---------------------------------
@@ -282,7 +304,7 @@ describe('EnrichPhasePage', () => {
         mockUseWizardContext.mockReturnValue(
             makeWizardState({
                 phaseItems: mockEnrichmentItems,
-                pendingCount: 5,
+                pendingCount: 6,
             }),
         );
 
@@ -348,18 +370,91 @@ describe('EnrichPhasePage', () => {
         mockUseWizardContext.mockReturnValue(
             makeWizardState({
                 phaseItems: mockEnrichmentItems,
-                pendingCount: 5,
+                pendingCount: 6,
             }),
         );
 
         renderPage();
 
-        // Description Updates has 2 items, Log Entries has 1,
-        // Relationship Suggestions has 1, Graph Warnings has 1.
-        // The count chips render as text content.
-        const chips = screen.getAllByText('2');
-        expect(chips.length).toBeGreaterThanOrEqual(1);
+        // Description Updates has 2 items; Graph Health summary also
+        // has 2 graph items. Log Entries, Relationship Suggestions,
+        // Graph Warnings, and Redundant Edges each have 1.
+        const twoChips = screen.getAllByText('2');
+        expect(twoChips.length).toBeGreaterThanOrEqual(2);
         const oneChips = screen.getAllByText('1');
-        expect(oneChips.length).toBeGreaterThanOrEqual(3);
+        expect(oneChips.length).toBeGreaterThanOrEqual(4);
+    });
+
+    // -- Graph Health section ----------------------------------------------
+
+    it('renders the Graph Health section when graph items exist', () => {
+        mockUseWizardContext.mockReturnValue(
+            makeWizardState({
+                phaseItems: mockEnrichmentItems,
+                pendingCount: 6,
+            }),
+        );
+
+        renderPage();
+
+        // The "Graph Health" header should appear.
+        expect(
+            screen.getByText('Graph Health'),
+        ).toBeInTheDocument();
+
+        // Graph items should show their detection type labels as
+        // secondary text in the Graph Health section.
+        expect(
+            screen.getByText('Graph Warning'),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByText('Redundant Edge'),
+        ).toBeInTheDocument();
+    });
+
+    it('does not render Graph Health section when no graph items exist', () => {
+        const nonGraphItems = mockEnrichmentItems.filter(
+            (item) =>
+                !['graph_warning', 'redundant_edge', 'invalid_type_pair', 'orphan_warning'].includes(
+                    item.detectionType,
+                ),
+        );
+        mockUseWizardContext.mockReturnValue(
+            makeWizardState({
+                phaseItems: nonGraphItems,
+                pendingCount: nonGraphItems.length,
+            }),
+        );
+
+        renderPage();
+
+        expect(
+            screen.queryByText('Graph Health'),
+        ).not.toBeInTheDocument();
+    });
+
+    it('shows Acknowledge and Dismiss buttons on graph health items', () => {
+        mockUseWizardContext.mockReturnValue(
+            makeWizardState({
+                phaseItems: mockEnrichmentItems,
+                pendingCount: 6,
+            }),
+        );
+
+        renderPage();
+
+        // There should be Acknowledge tooltips for graph items.
+        // Each graph item in the health section has its own pair.
+        const acknowledgeButtons = screen.getAllByRole('button', {
+            name: /acknowledge/i,
+        });
+        expect(acknowledgeButtons.length).toBe(2);
+
+        // Dismiss buttons exist in both the main grouped list and
+        // the graph health section. We just verify some exist.
+        const dismissButtons = screen.getAllByRole('button', {
+            name: /dismiss/i,
+        });
+        expect(dismissButtons.length).toBeGreaterThanOrEqual(2);
     });
 });

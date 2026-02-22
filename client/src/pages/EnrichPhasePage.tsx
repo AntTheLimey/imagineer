@@ -49,7 +49,14 @@ import {
     LinearProgress,
     TextField,
 } from '@mui/material';
-import { Check, Close, PlayArrow, Cancel, Edit } from '@mui/icons-material';
+import {
+    Check,
+    Close,
+    PlayArrow,
+    Cancel,
+    Edit,
+    Warning,
+} from '@mui/icons-material';
 import { useWizardContext } from '../contexts/AnalysisWizardContext';
 import {
     useResolveItem,
@@ -78,6 +85,22 @@ const ENRICH_GROUPS = [
     { key: 'invalid_type_pair', label: 'Invalid Type Pairs', color: '#ad1457' },
     { key: 'orphan_warning', label: 'Orphan Warnings', color: '#00838f' },
 ] as const;
+
+/** Detection types that belong to the graph health summary section. */
+const GRAPH_TYPES = [
+    'graph_warning',
+    'redundant_edge',
+    'invalid_type_pair',
+    'orphan_warning',
+] as const;
+
+/** Map graph detection types to human-readable labels. */
+const GRAPH_TYPE_LABELS: Record<string, string> = {
+    graph_warning: 'Graph Warning',
+    redundant_edge: 'Redundant Edge',
+    invalid_type_pair: 'Invalid Type Pair',
+    orphan_warning: 'Orphan Warning',
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -175,6 +198,17 @@ export default function EnrichPhasePage() {
             items: grouped[g.key],
         }));
     }, [phaseItems]);
+
+    /** Graph health items filtered from the full phase items list. */
+    const graphItems = useMemo(
+        () =>
+            phaseItems.filter((item) =>
+                (GRAPH_TYPES as readonly string[]).includes(
+                    item.detectionType,
+                ),
+            ),
+        [phaseItems],
+    );
 
     const selectedItem = useMemo(
         () =>
@@ -585,6 +619,147 @@ export default function EnrichPhasePage() {
                                 </Box>
                             )}
                         </List>
+
+                        {/* Graph Health summary section */}
+                        {graphItems.length > 0 && (
+                            <>
+                                <Divider />
+                                <Box
+                                    sx={{
+                                        bgcolor: 'warning.50',
+                                        borderLeft: 4,
+                                        borderColor: 'warning.main',
+                                    }}
+                                >
+                                    <Box
+                                        sx={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 1,
+                                            px: 2,
+                                            py: 1.5,
+                                        }}
+                                    >
+                                        <Warning
+                                            fontSize="small"
+                                            color="warning"
+                                        />
+                                        <Typography
+                                            variant="subtitle2"
+                                            sx={{ flexGrow: 1 }}
+                                        >
+                                            Graph Health
+                                        </Typography>
+                                        <Chip
+                                            label={graphItems.length}
+                                            size="small"
+                                            color="warning"
+                                        />
+                                    </Box>
+                                    <List disablePadding>
+                                        {graphItems.map((item) => (
+                                            <ListItemButton
+                                                key={item.id}
+                                                selected={
+                                                    selectedItemId ===
+                                                    item.id
+                                                }
+                                                onClick={() =>
+                                                    handleSelectItem(
+                                                        item,
+                                                    )
+                                                }
+                                                sx={{ pl: 4 }}
+                                            >
+                                                <ListItemText
+                                                    primary={
+                                                        <Stack
+                                                            direction="row"
+                                                            spacing={1}
+                                                            alignItems="center"
+                                                        >
+                                                            <Warning
+                                                                fontSize="small"
+                                                                color="warning"
+                                                                sx={{
+                                                                    flexShrink: 0,
+                                                                }}
+                                                            />
+                                                            <Typography
+                                                                variant="body2"
+                                                                fontWeight="bold"
+                                                                noWrap
+                                                            >
+                                                                {
+                                                                    item.matchedText
+                                                                }
+                                                            </Typography>
+                                                        </Stack>
+                                                    }
+                                                    secondary={
+                                                        GRAPH_TYPE_LABELS[
+                                                            item
+                                                                .detectionType
+                                                        ] ??
+                                                        item.detectionType
+                                                    }
+                                                />
+                                                {/* Quick action buttons */}
+                                                {item.resolution ===
+                                                    'pending' && (
+                                                    <Stack
+                                                        direction="row"
+                                                        spacing={0.5}
+                                                        sx={{ ml: 1 }}
+                                                    >
+                                                        <Tooltip title="Acknowledge">
+                                                            <IconButton
+                                                                size="small"
+                                                                color="success"
+                                                                disabled={
+                                                                    resolveItem.isPending
+                                                                }
+                                                                onClick={(
+                                                                    e,
+                                                                ) => {
+                                                                    e.stopPropagation();
+                                                                    handleResolve(
+                                                                        item.id,
+                                                                        'accepted',
+                                                                    );
+                                                                }}
+                                                            >
+                                                                <Check fontSize="small" />
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                        <Tooltip title="Dismiss">
+                                                            <IconButton
+                                                                size="small"
+                                                                color="error"
+                                                                disabled={
+                                                                    resolveItem.isPending
+                                                                }
+                                                                onClick={(
+                                                                    e,
+                                                                ) => {
+                                                                    e.stopPropagation();
+                                                                    handleResolve(
+                                                                        item.id,
+                                                                        'dismissed',
+                                                                    );
+                                                                }}
+                                                            >
+                                                                <Close fontSize="small" />
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                    </Stack>
+                                                )}
+                                            </ListItemButton>
+                                        ))}
+                                    </List>
+                                </Box>
+                            </>
+                        )}
                     </Paper>
                 </Grid>
 
