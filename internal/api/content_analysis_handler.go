@@ -812,16 +812,6 @@ func (h *ContentAnalysisHandler) GetPendingCount(w http.ResponseWriter, r *http.
 	respondJSON(w, http.StatusOK, PendingCountResponse{Count: count})
 }
 
-// getItemJobID retrieves the job_id for a content analysis item.
-func (h *ContentAnalysisHandler) getItemJobID(ctx context.Context, itemID int64) (int64, error) {
-	var jobID int64
-	err := h.db.QueryRow(ctx,
-		"SELECT job_id FROM content_analysis_items WHERE id = $1",
-		itemID,
-	).Scan(&jobID)
-	return jobID, err
-}
-
 // applyContentFix modifies the source content at the specified position,
 // replacing the matched text with the given replacement string. It verifies
 // that the content has not changed since analysis before applying the fix.

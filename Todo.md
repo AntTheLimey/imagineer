@@ -202,7 +202,7 @@ These fixes improve the quality of new entity suggestions
 from the enrichment pipeline and ensure the description
 data flows through to entity creation.
 
-- [ ] `[MVP-2]` Improve new entity suggestion descriptions
+- [x] `[MVP-2]` Improve new entity suggestion descriptions
   in the LLM prompt. The system prompt in
   `internal/enrichment/prompts.go:213` provides a terse
   example description ("A Scotland Yard detective mentioned
@@ -211,7 +211,7 @@ data flows through to entity creation.
   sentences summarising everything known from the source
   content: role, relationships, characteristics, and
   actions. Update the example to match.
-- [ ] `[MVP-2]` Pass the suggested description through when
+- [x] `[MVP-2]` Pass the suggested description through when
   creating entities. In
   `content_analysis_handler.go:321-326`, when the user
   clicks "Create Entity" on a `new_entity_suggestion`, only
@@ -220,7 +220,7 @@ data flows through to entity creation.
   `suggestedContent` JSONB is never extracted or included,
   even though the model supports the field. Fix the handler
   to extract and pass the description through.
-- [ ] `[MVP-2]` Insert wiki link tags when creating entities
+- [x] `[MVP-2]` Insert wiki link tags when creating entities
   from `new_entity_suggestion`. When the user resolves a
   `new_entity_suggestion` item as `new_entity`, the handler
   creates the entity but never inserts `[[wiki link]]` tags

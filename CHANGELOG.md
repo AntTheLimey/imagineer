@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Entity Suggestion Quality
+  - The LLM prompt for new entity detection now
+    requests two to three sentence descriptions
+    covering the entity's role, relationships,
+    characteristics, and actions from the source
+    content.
+  - When creating an entity from a
+    new_entity_suggestion, the handler now extracts
+    and passes the description from suggestedContent
+    to the entity record.
+  - When creating an entity from an enrichment-phase
+    suggestion without position offsets, the handler
+    performs a global find-and-replace to insert
+    [[wiki link]] tags for all occurrences of the
+    entity name in the source content.
 - Job Phases Persistence
   - The `job_phases` junction table persists which pipeline
     phases (Identify, Revise, Enrich) the GM selected when
