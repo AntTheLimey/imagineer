@@ -257,6 +257,20 @@ INSERT INTO relationship_type_templates (name, inverse_name, is_symmetric, displ
 ('allied_with', 'allied_with', true, 'Allied with', 'Allied with', 'Entity has alliance or partnership with another');
 
 -- ============================================
+-- Generic / Other Game System
+-- ============================================
+
+-- Generic game system for unsupported or homebrew systems
+INSERT INTO game_systems (name, code, attribute_schema, skill_schema, dice_conventions) VALUES (
+    'Other / Homebrew',
+    'other',
+    '{}',
+    '{}',
+    '{}'
+)
+ON CONFLICT (code) DO NOTHING;
+
+-- ============================================
 -- Record migration
 -- ============================================
 INSERT INTO schema_migrations (version) VALUES ('002_seed_data');

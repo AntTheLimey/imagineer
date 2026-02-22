@@ -74,6 +74,7 @@ func (a *Analyzer) AnalyzeContent(
 	sourceTable, sourceField string,
 	sourceID int64,
 	content string,
+	phases []string,
 ) (*models.ContentAnalysisJob, []models.ContentAnalysisItem, error) {
 	var items []models.ContentAnalysisItem
 
@@ -106,6 +107,22 @@ func (a *Analyzer) AnalyzeContent(
 		return nil, nil, fmt.Errorf("failed to delete old analysis jobs: %w", err)
 	}
 
+	// Validate phases against allowed set.
+	var validatedPhases []string
+	allowedPhases := map[string]bool{
+		"identify": true, "revise": true, "enrich": true,
+	}
+	for _, p := range phases {
+		if allowedPhases[p] {
+			validatedPhases = append(validatedPhases, p)
+		}
+	}
+	phases = validatedPhases
+
+	if len(phases) == 0 {
+		phases = []string{"identify"}
+	}
+
 	job := &models.ContentAnalysisJob{
 		CampaignID:    campaignID,
 		SourceTable:   sourceTable,
@@ -114,6 +131,7 @@ func (a *Analyzer) AnalyzeContent(
 		Status:        "completed",
 		TotalItems:    len(items),
 		ResolvedItems: 0,
+		Phases:        phases,
 	}
 
 	createdJob, err := a.db.CreateAnalysisJob(ctx, job)

@@ -571,3 +571,96 @@ func TestBuildUserPrompt_WithEntities(t *testing.T) {
 	assert.Contains(t, prompt, "Irena")
 	assert.Contains(t, prompt, "librarian")
 }
+
+func TestBuildUserPrompt_WithScope(t *testing.T) {
+	input := enrichment.PipelineInput{
+		CampaignID:  1,
+		JobID:       10,
+		SourceTable: "sessions",
+		SourceID:    5,
+		SourceScope: enrichment.ScopeSession,
+		Content:     "The investigators question the barkeep.",
+		Context: &enrichment.RAGContext{
+			CampaignResults: []models.SearchResult{
+				{
+					SourceTable:  "chapters",
+					SourceID:     1,
+					SourceName:   "Chapter 1",
+					ChunkContent: "Background context.",
+				},
+			},
+		},
+	}
+
+	prompt := buildUserPrompt(input)
+
+	assert.Contains(t, prompt, "- Scope: session")
+}
+
+func TestBuildUserPrompt_WithoutScope(t *testing.T) {
+	input := enrichment.PipelineInput{
+		CampaignID:  1,
+		JobID:       10,
+		SourceTable: "chapters",
+		SourceID:    5,
+		Content:     "A brief chapter overview.",
+		Context: &enrichment.RAGContext{
+			CampaignResults: []models.SearchResult{
+				{
+					SourceTable:  "chapters",
+					SourceID:     1,
+					SourceName:   "Chapter 1",
+					ChunkContent: "Background context.",
+				},
+			},
+		},
+	}
+
+	prompt := buildUserPrompt(input)
+
+	assert.NotContains(t, prompt, "Scope:")
+}
+
+// ---------------------------------------------------------------------------
+// System prompt tests
+// ---------------------------------------------------------------------------
+
+func TestBuildSystemPrompt(t *testing.T) {
+	prompt := buildSystemPrompt("")
+
+	assert.NotEmpty(t, prompt)
+	// The system prompt should instruct the LLM to return JSON.
+	assert.Contains(t, prompt, "JSON")
+	// It should mention the expected response structure.
+	assert.Contains(t, prompt, "contradictions")
+}
+
+func TestBuildSystemPrompt_Scoped(t *testing.T) {
+	tests := []struct {
+		scope    enrichment.SourceScope
+		contains string
+	}{
+		{enrichment.ScopeCampaign, "Campaign Overview"},
+		{enrichment.ScopeChapter, "Chapter Overview"},
+		{enrichment.ScopeSession, "Session Notes"},
+		{enrichment.ScopeEntity, "Entity Description"},
+	}
+	for _, tc := range tests {
+		t.Run(string(tc.scope), func(t *testing.T) {
+			prompt := buildSystemPrompt(tc.scope)
+			assert.Contains(t, prompt, tc.contains)
+			// Should still contain the standard sections.
+			assert.Contains(t, prompt, "JSON")
+			assert.Contains(t, prompt, "contradictions")
+		})
+	}
+}
+
+func TestBuildSystemPrompt_UnknownScope(t *testing.T) {
+	prompt := buildSystemPrompt("unknown")
+
+	assert.NotEmpty(t, prompt)
+	// Should still contain the standard sections but no scope heading.
+	assert.Contains(t, prompt, "JSON")
+	assert.NotContains(t, prompt, "## Scope:")
+}

@@ -41,8 +41,8 @@ import {
     Check as CheckIcon,
 } from '@mui/icons-material';
 import { AnalysisBadge } from '../components/AnalysisBadge';
-import { SaveSplitButton } from '../components/SaveSplitButton';
-import type { SaveMode } from '../components/SaveSplitButton';
+import { PhaseStrip } from '../components/PhaseStrip';
+import type { PhaseSelection } from '../components/PhaseStrip';
 import { MarkdownEditor } from '../components/MarkdownEditor';
 import { GENRE_OPTIONS } from '../components/CampaignSettings';
 import {
@@ -52,10 +52,24 @@ import {
     useCampaignStats,
     useEntities,
 } from '../hooks';
+import { useUserSettings } from '../hooks/useUserSettings';
 import { useCampaignContext } from '../contexts/CampaignContext';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import type { WikiLinkEntity } from '../components/MarkdownRenderer';
 import type { GameSystem } from '../types';
+
+/**
+ * Small helper that redirects to the campaigns list when a campaign can't
+ * be loaded (e.g. after deletion). Extracted as a component so the
+ * useEffect/useNavigate hooks run at the right lifecycle point.
+ */
+function CampaignErrorRedirect() {
+    const navigate = useNavigate();
+    useEffect(() => {
+        navigate('/campaigns', { replace: true });
+    }, [navigate]);
+    return null;
+}
 
 /**
  * Fields that can be edited inline.
@@ -139,6 +153,16 @@ export default function CampaignOverview() {
 
     // Update campaign mutation
     const updateCampaign = useUpdateCampaign();
+
+    // LLM availability check — used to disable AI-dependent phases
+    const { data: userSettings } = useUserSettings();
+    const hasLLM = !!userSettings?.contentGenService
+                && !!userSettings?.contentGenApiKey;
+
+    const disabledPhases = !hasLLM
+        ? { revise: 'Configure an LLM in Account Settings',
+            enrich: 'Configure an LLM in Account Settings' }
+        : undefined;
 
     // Analysis snackbar state
     const [analysisSnackbar, setAnalysisSnackbar] = useState<{
@@ -260,20 +284,26 @@ export default function CampaignOverview() {
     };
 
     /**
-     * Save all changes with an optional save mode that controls whether
-     * analysis and enrichment pipelines are triggered after saving.
+     * Save all changes with phase selection that controls which pipeline
+     * stages run after saving.
      *
-     * @param mode - The save mode: "save" (no analysis), "analyze"
-     *   (phase 1 only), or "enrich" (phase 1 + phase 2). Defaults to
-     *   "analyze" to preserve the existing auto-analyze behavior.
+     * @param phases - Which workflow phases the GM has selected.
      */
-    const handleSaveAll = useCallback(async (mode: SaveMode = 'analyze') => {
+    const handleSaveAll = useCallback(async (phases: PhaseSelection) => {
         if (!campaignId) return;
 
         if (!formData.name.trim()) {
             // TODO: Show validation error
             return;
         }
+
+        const hasAnyPhase = phases.identify || phases.revise || phases.enrich;
+
+        // Build phases array from selection
+        const phaseKeys: string[] = [];
+        if (phases.identify) phaseKeys.push('identify');
+        if (phases.revise) phaseKeys.push('revise');
+        if (phases.enrich) phaseKeys.push('enrich');
 
         try {
             const result = await updateCampaign.mutateAsync({
@@ -287,32 +317,33 @@ export default function CampaignOverview() {
                     },
                 },
                 options: {
-                    analyze: mode !== 'save',
-                    enrich: mode === 'enrich',
+                    analyze: phases.identify || phases.revise,
+                    enrich: phases.enrich,
+                    phases: phaseKeys.length > 0 ? phaseKeys : undefined,
                 },
             });
 
             // Check for analysis results
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const analysisResult = (result as any)?._analysis;
-            if (mode !== 'save' && analysisResult) {
-                if (mode === 'enrich' && analysisResult.jobId) {
-                    // Go directly to triage — no snackbar
-                    navigate(`/campaigns/${campaignId}/analysis/${analysisResult.jobId}`);
-                } else if (analysisResult.pendingCount > 0) {
-                    setAnalysisSnackbar({
-                        open: true,
-                        jobId: analysisResult.jobId,
-                        count: analysisResult.pendingCount,
-                    });
-                } else {
-                    setAnalysisSnackbar({
-                        open: true,
-                        jobId: analysisResult.jobId,
-                        count: 0,
-                        message: 'Analysis complete: no issues found.',
-                    });
-                }
+            if (hasAnyPhase && analysisResult?.jobId) {
+                navigate(`/campaigns/${campaignId}/analysis/${analysisResult.jobId}`);
+            } else if (hasAnyPhase && analysisResult?.pendingCount > 0) {
+                setAnalysisSnackbar({
+                    open: true,
+                    jobId: analysisResult.jobId,
+                    count: analysisResult.pendingCount,
+                });
+            } else if (!hasAnyPhase) {
+                // Plain save - no navigation
+                setIsEditing(false);
+            } else {
+                setAnalysisSnackbar({
+                    open: true,
+                    jobId: analysisResult?.jobId ?? 0,
+                    count: 0,
+                    message: 'Analysis complete: no issues found.',
+                });
             }
 
             setIsEditing(false);
@@ -349,15 +380,9 @@ export default function CampaignOverview() {
         );
     }
 
-    // Error state
+    // Error state - redirect to campaigns list (e.g. after deletion)
     if (campaignError) {
-        return (
-            <Box>
-                <Alert severity="error" sx={{ mb: 2 }}>
-                    Failed to load campaign. Please try again later.
-                </Alert>
-            </Box>
-        );
+        return <CampaignErrorRedirect />;
     }
 
     // No campaign selected state
@@ -390,10 +415,11 @@ export default function CampaignOverview() {
                     Campaign Overview
                 </Typography>
                 {isEditing ? (
-                    <SaveSplitButton
+                    <PhaseStrip
                         onSave={handleSaveAll}
                         isDirty={isEditing}
                         isSaving={updateCampaign.isPending}
+                        disabledPhases={disabledPhases}
                     />
                 ) : (
                     <Button
@@ -416,8 +442,9 @@ export default function CampaignOverview() {
             {/* Cancel button when in edit mode */}
             {isEditing && (
                 <Alert severity="info" sx={{ mb: 2 }}>
-                    You are in edit mode. Make your changes and click "Save & Analyze" to save.
+                    You are in edit mode. Make your changes and use Save &amp; Go to save.
                     <Button
+                        variant="outlined"
                         size="small"
                         onClick={handleToggleEdit}
                         sx={{ ml: 2 }}

@@ -66,7 +66,7 @@ func (e *Expert) Run(
 		return []models.ContentAnalysisItem{}, nil
 	}
 
-	systemPrompt := buildSystemPrompt()
+	systemPrompt := buildSystemPrompt(input.SourceScope)
 	userPrompt := buildUserPrompt(input)
 
 	resp, err := provider.Complete(ctx, llm.CompletionRequest{

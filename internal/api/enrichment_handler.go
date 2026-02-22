@@ -222,6 +222,7 @@ func (h *EnrichmentHandler) TriggerEnrichment(w http.ResponseWriter, r *http.Req
 			JobID:        jobID,
 			SourceTable:  job.SourceTable,
 			SourceID:     job.SourceID,
+			SourceScope:  enrichment.ScopeFromSourceTable(job.SourceTable),
 			Content:      content,
 			Entities:     entities,
 			GameSystemID: gameSystemID,

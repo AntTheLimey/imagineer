@@ -459,6 +459,23 @@ func TestBuildUserPrompt_MinimalInput(t *testing.T) {
 	// Should not contain schema or RAG sections when they are absent.
 	assert.NotContains(t, prompt, "Game System")
 	assert.NotContains(t, prompt, "Campaign Context")
+	// Should not contain scope when it is empty.
+	assert.NotContains(t, prompt, "Scope:")
+}
+
+func TestBuildUserPrompt_WithScope(t *testing.T) {
+	input := enrichment.PipelineInput{
+		CampaignID:  1,
+		JobID:       10,
+		SourceTable: "sessions",
+		SourceID:    5,
+		SourceScope: enrichment.ScopeSession,
+		Content:     "The investigators question the barkeep.",
+	}
+
+	prompt := buildUserPrompt(input)
+
+	assert.Contains(t, prompt, "- Scope: session")
 }
 
 // ---------------------------------------------------------------------------
@@ -466,7 +483,7 @@ func TestBuildUserPrompt_MinimalInput(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestBuildSystemPrompt(t *testing.T) {
-	prompt := buildSystemPrompt()
+	prompt := buildSystemPrompt("")
 
 	assert.NotEmpty(t, prompt)
 	// The system prompt should instruct the LLM to return JSON.
@@ -474,6 +491,37 @@ func TestBuildSystemPrompt(t *testing.T) {
 	// It should mention the expected response fields.
 	assert.Contains(t, prompt, "report")
 	assert.Contains(t, prompt, "findings")
+}
+
+func TestBuildSystemPrompt_Scoped(t *testing.T) {
+	tests := []struct {
+		scope    enrichment.SourceScope
+		contains string
+	}{
+		{enrichment.ScopeCampaign, "Campaign Overview"},
+		{enrichment.ScopeChapter, "Chapter Overview"},
+		{enrichment.ScopeSession, "Session Notes"},
+		{enrichment.ScopeEntity, "Entity Description"},
+	}
+	for _, tc := range tests {
+		t.Run(string(tc.scope), func(t *testing.T) {
+			prompt := buildSystemPrompt(tc.scope)
+			assert.Contains(t, prompt, tc.contains)
+			// Should still contain the standard sections.
+			assert.Contains(t, prompt, "JSON")
+			assert.Contains(t, prompt, "report")
+			assert.Contains(t, prompt, "findings")
+		})
+	}
+}
+
+func TestBuildSystemPrompt_UnknownScope(t *testing.T) {
+	prompt := buildSystemPrompt("unknown")
+
+	assert.NotEmpty(t, prompt)
+	// Should still contain the standard sections but no scope heading.
+	assert.Contains(t, prompt, "JSON")
+	assert.NotContains(t, prompt, "## Scope:")
 }
 
 // ---------------------------------------------------------------------------

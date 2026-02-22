@@ -16,9 +16,17 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     Alert,
     Box,
+    Button,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogContentText,
+    DialogTitle,
+    Divider,
     FormControl,
     InputLabel,
     MenuItem,
@@ -29,7 +37,8 @@ import {
     Typography,
 } from '@mui/material';
 import { MarkdownEditor } from '../MarkdownEditor';
-import { useGameSystems } from '../../hooks';
+import { useDeleteCampaign, useGameSystems } from '../../hooks';
+import { useCampaignContext } from '../../contexts/CampaignContext';
 import type { Campaign, GameSystem } from '../../types';
 
 /**
@@ -84,6 +93,8 @@ interface CampaignSettingsProps {
     onChange: (data: CampaignSettingsData, isDirty: boolean) => void;
     /** Optional initial form data (for external state management) */
     formData?: CampaignSettingsData;
+    /** Hide the description editor (used when description is edited elsewhere) */
+    hideDescription?: boolean;
 }
 
 /**
@@ -130,6 +141,7 @@ export default function CampaignSettings({
     error,
     onChange,
     formData: externalFormData,
+    hideDescription,
 }: CampaignSettingsProps) {
     // Form state - use external state if provided, otherwise manage internally
     const [internalFormData, setInternalFormData] =
@@ -139,6 +151,15 @@ export default function CampaignSettings({
 
     const formData = externalFormData ?? internalFormData;
     const isExternallyManaged = !!externalFormData;
+
+    // Delete campaign state
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [deleteConfirmName, setDeleteConfirmName] = useState('');
+    const [deleteError, setDeleteError] = useState<string | null>(null);
+
+    const navigate = useNavigate();
+    const { setCurrentCampaignId } = useCampaignContext();
+    const deleteCampaign = useDeleteCampaign();
 
     // Fetch game systems
     const {
@@ -207,6 +228,44 @@ export default function CampaignSettings({
         return system?.name ?? 'Unknown System';
     };
 
+    /**
+     * Open the delete confirmation dialog.
+     */
+    const handleOpenDeleteDialog = () => {
+        setDeleteConfirmName('');
+        setDeleteError(null);
+        setDeleteDialogOpen(true);
+    };
+
+    /**
+     * Close the delete confirmation dialog.
+     */
+    const handleCloseDeleteDialog = () => {
+        if (deleteCampaign.isPending) return;
+        setDeleteDialogOpen(false);
+        setDeleteConfirmName('');
+        setDeleteError(null);
+    };
+
+    /**
+     * Delete the campaign after confirmation.
+     */
+    const handleDeleteCampaign = () => {
+        if (!campaign) return;
+
+        deleteCampaign.mutate(campaign.id, {
+            onSuccess: () => {
+                setCurrentCampaignId(null);
+                navigate('/campaigns', { replace: true });
+            },
+            onError: (err: Error) => {
+                setDeleteError(
+                    err.message || 'Failed to delete campaign. Please try again.'
+                );
+            },
+        });
+    };
+
     // Loading state
     if (isLoading) {
         return (
@@ -260,6 +319,7 @@ export default function CampaignSettings({
             />
 
             {/* Description */}
+            {!hideDescription && (
             <Box sx={{ mb: 3 }}>
                 <MarkdownEditor
                     label="Description"
@@ -271,6 +331,7 @@ export default function CampaignSettings({
                     campaignId={campaign?.id}
                 />
             </Box>
+            )}
 
             {/* RPG System */}
             <FormControl fullWidth sx={{ mb: 3 }}>
@@ -337,6 +398,99 @@ export default function CampaignSettings({
                 placeholder="e.g., 'dark gothic horror, oil painting style, muted colors, 1920s aesthetic'"
                 helperText="Default style prompt used when generating AI images for this campaign"
             />
+
+            {/* Danger Zone */}
+            <Divider sx={{ my: 4 }} />
+            <Box
+                sx={{
+                    border: 1,
+                    borderColor: 'error.main',
+                    borderRadius: 1,
+                    p: 3,
+                    bgcolor: (theme) =>
+                        theme.palette.mode === 'dark'
+                            ? 'rgba(211, 47, 47, 0.08)'
+                            : 'rgba(211, 47, 47, 0.04)',
+                }}
+            >
+                <Typography
+                    variant="h6"
+                    color="error"
+                    gutterBottom
+                    sx={{ fontFamily: 'Cinzel' }}
+                >
+                    Danger Zone
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    Permanently delete this campaign and all of its data,
+                    including chapters, sessions, entities, and relationships.
+                    This action cannot be undone.
+                </Typography>
+                <Button
+                    variant="outlined"
+                    color="error"
+                    onClick={handleOpenDeleteDialog}
+                >
+                    Delete Campaign
+                </Button>
+            </Box>
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog
+                open={deleteDialogOpen}
+                onClose={() => {
+                    if (deleteCampaign.isPending) return;
+                    handleCloseDeleteDialog();
+                }}
+                disableEscapeKeyDown={deleteCampaign.isPending}
+                maxWidth="sm"
+                fullWidth
+            >
+                <DialogTitle>Delete Campaign</DialogTitle>
+                <DialogContent>
+                    <DialogContentText sx={{ mb: 2 }}>
+                        This action is permanent and cannot be undone. All
+                        campaign data will be lost, including chapters,
+                        sessions, entities, relationships, and timeline events.
+                    </DialogContentText>
+                    <DialogContentText sx={{ mb: 2 }}>
+                        To confirm, type the campaign name below:
+                        {' '}<strong>{campaign.name}</strong>
+                    </DialogContentText>
+                    {deleteError && (
+                        <Alert severity="error" sx={{ mb: 2 }}>
+                            {deleteError}
+                        </Alert>
+                    )}
+                    <TextField
+                        autoFocus
+                        fullWidth
+                        label="Campaign name"
+                        value={deleteConfirmName}
+                        onChange={(e) => setDeleteConfirmName(e.target.value)}
+                        placeholder={campaign.name}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button
+                        onClick={handleCloseDeleteDialog}
+                        disabled={deleteCampaign.isPending}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleDeleteCampaign}
+                        color="error"
+                        variant="contained"
+                        disabled={
+                            deleteConfirmName !== campaign.name ||
+                            deleteCampaign.isPending
+                        }
+                    >
+                        {deleteCampaign.isPending ? 'Deleting...' : 'Delete'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Paper>
     );
 }

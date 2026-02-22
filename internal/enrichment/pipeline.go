@@ -20,6 +20,33 @@ import (
 	"github.com/antonypegg/imagineer/internal/models"
 )
 
+// SourceScope indicates the level of content being analysed, allowing
+// agents to tailor their analysis to the appropriate narrative scope.
+type SourceScope string
+
+const (
+	ScopeCampaign SourceScope = "campaign"
+	ScopeChapter  SourceScope = "chapter"
+	ScopeSession  SourceScope = "session"
+	ScopeEntity   SourceScope = "entity"
+)
+
+// ScopeFromSourceTable derives a SourceScope from a database table name.
+func ScopeFromSourceTable(table string) SourceScope {
+	switch table {
+	case "campaigns":
+		return ScopeCampaign
+	case "chapters":
+		return ScopeChapter
+	case "sessions":
+		return ScopeSession
+	case "entities":
+		return ScopeEntity
+	default:
+		return ScopeCampaign
+	}
+}
+
 // RAGContext holds retrieved context shared across all pipeline agents.
 type RAGContext struct {
 	CampaignResults []models.SearchResult
@@ -33,6 +60,7 @@ type PipelineInput struct {
 	SourceTable   string
 	SourceID      int64
 	SourceField   string
+	SourceScope   SourceScope
 	Content       string
 	Entities      []models.Entity
 	Relationships []models.Relationship

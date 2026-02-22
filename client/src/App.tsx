@@ -35,6 +35,7 @@ import AuthCallback from './pages/AuthCallback';
 import AccountSettings from './pages/AccountSettings';
 import AnalysisTriagePage from './pages/AnalysisTriagePage';
 import SessionEditorPage from './pages/SessionEditorPage';
+import CampaignSettingsPage from './pages/CampaignSettingsPage';
 
 /**
  * Guards access to child routes based on authentication state.
@@ -144,7 +145,7 @@ function FullScreenWrapper() {
  *
  * Routes:
  * - Public: /login, /auth/callback
- * - Protected (requires authentication, rendered inside the AppShell): /, /campaigns (redirects to /), /campaigns/:id/overview, /campaigns/:id/entities, /campaigns/:id/sessions, /campaigns/:id/import, /campaigns/:id/timeline, and legacy /campaigns/:id/dashboard -> ../overview
+ * - Protected (requires authentication, rendered inside the AppShell): /, /campaigns (redirects to /), /campaigns/:id/overview, /campaigns/:id/entities, /campaigns/:id/sessions, /campaigns/:id/import, /campaigns/:id/timeline, /campaigns/:id/settings, and legacy /campaigns/:id/dashboard -> ../overview
  * - Full-screen (requires authentication, rendered outside the AppShell): /campaigns/new, /campaigns/:campaignId/entities/new, /campaigns/:campaignId/entities/:entityId/edit, /campaigns/:campaignId/chapters/new, /campaigns/:campaignId/chapters/:chapterId/edit
  * - Account settings (full-screen, requires authentication): /settings
  * - Fallback: any other path redirects to /
@@ -174,6 +175,7 @@ function AppRoutes() {
                     <Route path="/campaigns/:id/sessions" element={<SessionsManagement />} />
                     <Route path="/campaigns/:id/import" element={<CampaignImport />} />
                     <Route path="/campaigns/:id/timeline" element={<Timeline />} />
+                    <Route path="/campaigns/:id/settings" element={<CampaignSettingsPage />} />
 
                     {/* Legacy route redirect - dashboard to overview */}
                     <Route

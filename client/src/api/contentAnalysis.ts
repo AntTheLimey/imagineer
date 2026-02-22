@@ -30,6 +30,8 @@ export interface ContentAnalysisJob {
     resolvedItems: number;
     enrichmentTotal: number;
     enrichmentResolved: number;
+    phases: string[];
+    currentPhase: string | null;
     createdAt: string;
     updatedAt: string;
 }

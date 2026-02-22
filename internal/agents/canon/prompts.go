@@ -18,6 +18,44 @@ import (
 	"github.com/antonypegg/imagineer/internal/enrichment"
 )
 
+// canonScopeGuidance maps each SourceScope to a scope-specific
+// section that is injected into the canon expert system prompt.
+var canonScopeGuidance = map[enrichment.SourceScope]string{
+	enrichment.ScopeCampaign: `## Scope: Campaign Overview
+
+You are checking a campaign-level description against established facts.
+Pay special attention to:
+- Core setting facts (world name, time period, major factions)
+- Tone and genre consistency with established canon
+- Major NPC descriptions matching their entity records
+`,
+	enrichment.ScopeChapter: `## Scope: Chapter Overview
+
+You are checking a chapter overview against established facts.
+Pay special attention to:
+- Plot events matching established timeline
+- Location descriptions consistent with entity records
+- Character appearances consistent with their last known state
+`,
+	enrichment.ScopeSession: `## Scope: Session Notes
+
+You are checking session notes against established facts.
+Pay special attention to:
+- NPC behaviour matching established personality and motivations
+- Location details matching established descriptions
+- Timeline progression from previous sessions
+- Item and clue references matching existing entities
+`,
+	enrichment.ScopeEntity: `## Scope: Entity Description
+
+You are checking an entity description update against established facts.
+Pay special attention to:
+- Attribute changes that contradict previously established facts
+- Relationship descriptions matching the relationship graph
+- Biographical details consistent with session/chapter records
+`,
+}
+
 // maxContentLength is the maximum number of characters from the source
 // content that will be included in the user prompt. Content exceeding
 // this length is truncated with a notice.
@@ -25,9 +63,13 @@ const maxContentLength = 6000
 
 // buildSystemPrompt returns the system prompt instructing the LLM to
 // act as a campaign continuity checker that detects contradictions
-// between new content and established campaign facts.
-func buildSystemPrompt() string {
-	return `You are a TTRPG campaign continuity checker. Your role is to compare
+// between new content and established campaign facts. When a non-empty
+// scope is provided, scope-specific guidance is injected before the
+// rules section.
+func buildSystemPrompt(scope enrichment.SourceScope) string {
+	var b strings.Builder
+
+	b.WriteString(`You are a TTRPG campaign continuity checker. Your role is to compare
 new content against ESTABLISHED FACTS provided as campaign context and detect
 genuine contradictions. You are NOT looking for new information or expansions
 of existing lore. You are ONLY looking for statements that directly contradict
@@ -49,7 +91,15 @@ previously established canon.
   justification. For example, a loyal ally suddenly betraying their faction
   with no foreshadowing or explanation.
 
-## Rules
+`)
+
+	// Inject scope-specific guidance when available.
+	if guidance, ok := canonScopeGuidance[scope]; ok {
+		b.WriteString(guidance)
+		b.WriteString("\n")
+	}
+
+	b.WriteString(`## Rules
 
 1. Only flag GENUINE contradictions. New information that does not conflict
    with existing facts is NOT a contradiction.
@@ -90,7 +140,9 @@ Respond with ONLY valid JSON in the following structure:
   ]
 }
 
-Do not include any text outside the JSON object.`
+Do not include any text outside the JSON object.`)
+
+	return b.String()
 }
 
 // buildUserPrompt constructs the user prompt from the pipeline input,
@@ -196,6 +248,9 @@ func buildUserPrompt(input enrichment.PipelineInput) string {
 	))
 	if input.SourceField != "" {
 		b.WriteString(fmt.Sprintf("- Field: %s\n", input.SourceField))
+	}
+	if input.SourceScope != "" {
+		b.WriteString(fmt.Sprintf("- Scope: %s\n", input.SourceScope))
 	}
 
 	return b.String()

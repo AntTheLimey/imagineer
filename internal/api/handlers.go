@@ -17,6 +17,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/antonypegg/imagineer/internal/analysis"
 	"github.com/antonypegg/imagineer/internal/auth"
@@ -40,6 +41,33 @@ func NewHandler(db *database.DB, caHandler *ContentAnalysisHandler) *Handler {
 		analyzer:  analysis.NewAnalyzer(db),
 		caHandler: caHandler,
 	}
+}
+
+// validPhaseKeys defines the permitted phase_key values.
+var validPhaseKeys = map[string]bool{
+	"identify": true,
+	"revise":   true,
+	"enrich":   true,
+}
+
+// parsePhases extracts the phases query parameter, splitting
+// comma-separated values into individual phase keys. Only
+// recognised phase keys are returned; unknown values are
+// silently dropped.
+func parsePhases(r *http.Request) []string {
+	raw := r.URL.Query()["phases"]
+	seen := make(map[string]bool)
+	var phases []string
+	for _, v := range raw {
+		for _, p := range strings.Split(v, ",") {
+			p = strings.TrimSpace(p)
+			if p != "" && validPhaseKeys[p] && !seen[p] {
+				seen[p] = true
+				phases = append(phases, p)
+			}
+		}
+	}
+	return phases
 }
 
 // EntityWithAnalysis wraps an entity response with optional analysis metadata.
@@ -165,6 +193,7 @@ func (h *Handler) createEnrichmentJob(
 		SourceField: sourceField,
 		Status:      "completed",
 		TotalItems:  0,
+		Phases:      []string{"enrich"},
 	}
 
 	createdJob, err := h.db.CreateAnalysisJob(ctx, job)
@@ -337,6 +366,7 @@ func (h *Handler) UpdateCampaign(w http.ResponseWriter, r *http.Request) {
 
 	shouldAnalyze := r.URL.Query().Get("analyze") == "true"
 	shouldEnrich := r.URL.Query().Get("enrich") == "true"
+	phases := parsePhases(r)
 
 	response := CampaignWithAnalysis{Campaign: campaign}
 	if req.Description != nil {
@@ -346,6 +376,7 @@ func (h *Handler) UpdateCampaign(w http.ResponseWriter, r *http.Request) {
 				r.Context(), campaign.ID,
 				"campaigns", "description", campaign.ID,
 				content,
+				phases,
 			)
 			if analyzeErr != nil {
 				log.Printf("Content analysis failed for campaign %d: %v", campaign.ID, analyzeErr)
@@ -360,6 +391,8 @@ func (h *Handler) UpdateCampaign(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		} else if shouldEnrich && h.caHandler != nil {
+			// Enrich-only jobs always use a single "enrich" phase
+			// regardless of the phases query parameter.
 			job := h.createEnrichmentJob(
 				r.Context(), campaign.ID, "campaigns", "description", campaign.ID)
 			if job != nil {
@@ -549,6 +582,7 @@ func (h *Handler) UpdateEntity(w http.ResponseWriter, r *http.Request) {
 
 	shouldAnalyze := r.URL.Query().Get("analyze") == "true"
 	shouldEnrich := r.URL.Query().Get("enrich") == "true"
+	phases := parsePhases(r)
 	userID, _ := auth.GetUserIDFromContext(r.Context())
 
 	// Trigger content analysis if description changed and analysis requested
@@ -560,6 +594,7 @@ func (h *Handler) UpdateEntity(w http.ResponseWriter, r *http.Request) {
 				r.Context(), entity.CampaignID,
 				"entities", "description", entity.ID,
 				content,
+				phases,
 			)
 			if analyzeErr != nil {
 				log.Printf("Content analysis failed for entity %d description: %v", entity.ID, analyzeErr)
@@ -574,6 +609,8 @@ func (h *Handler) UpdateEntity(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		} else if shouldEnrich && h.caHandler != nil {
+			// Enrich-only jobs always use a single "enrich" phase
+			// regardless of the phases query parameter.
 			job := h.createEnrichmentJob(
 				r.Context(), entity.CampaignID, "entities", "description", entity.ID)
 			if job != nil {
@@ -594,6 +631,7 @@ func (h *Handler) UpdateEntity(w http.ResponseWriter, r *http.Request) {
 				r.Context(), entity.CampaignID,
 				"entities", "gm_notes", entity.ID,
 				content,
+				phases,
 			)
 			if analyzeErr != nil {
 				log.Printf("Content analysis failed for entity %d gm_notes: %v", entity.ID, analyzeErr)
@@ -608,6 +646,8 @@ func (h *Handler) UpdateEntity(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		} else if shouldEnrich && h.caHandler != nil && response.Analysis == nil {
+			// Enrich-only jobs always use a single "enrich" phase
+			// regardless of the phases query parameter.
 			job := h.createEnrichmentJob(
 				r.Context(), entity.CampaignID, "entities", "gm_notes", entity.ID)
 			if job != nil {
@@ -1800,6 +1840,7 @@ func (h *Handler) UpdateChapter(w http.ResponseWriter, r *http.Request) {
 
 	shouldAnalyze := r.URL.Query().Get("analyze") == "true"
 	shouldEnrich := r.URL.Query().Get("enrich") == "true"
+	phases := parsePhases(r)
 
 	response := ChapterWithAnalysis{Chapter: chapter}
 	if req.Overview != nil {
@@ -1809,6 +1850,7 @@ func (h *Handler) UpdateChapter(w http.ResponseWriter, r *http.Request) {
 				r.Context(), chapter.CampaignID,
 				"chapters", "overview", chapter.ID,
 				content,
+				phases,
 			)
 			if analyzeErr != nil {
 				log.Printf("Content analysis failed for chapter %d: %v", chapter.ID, analyzeErr)
@@ -1824,6 +1866,8 @@ func (h *Handler) UpdateChapter(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		} else if shouldEnrich && h.caHandler != nil {
+			// Enrich-only jobs always use a single "enrich" phase
+			// regardless of the phases query parameter.
 			userID, _ := auth.GetUserIDFromContext(r.Context())
 			job := h.createEnrichmentJob(
 				r.Context(), chapter.CampaignID, "chapters", "overview", chapter.ID)
@@ -2099,6 +2143,7 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 
 	shouldAnalyze := r.URL.Query().Get("analyze") == "true"
 	shouldEnrich := r.URL.Query().Get("enrich") == "true"
+	phases := parsePhases(r)
 	userID, _ := auth.GetUserIDFromContext(r.Context())
 
 	response := SessionWithAnalysis{Session: session}
@@ -2109,6 +2154,7 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 				r.Context(), session.CampaignID,
 				"sessions", "prep_notes", session.ID,
 				content,
+				phases,
 			)
 			if analyzeErr != nil {
 				log.Printf("Content analysis failed for session %d prep_notes: %v", session.ID, analyzeErr)
@@ -2123,6 +2169,8 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		} else if shouldEnrich && h.caHandler != nil {
+			// Enrich-only jobs always use a single "enrich" phase
+			// regardless of the phases query parameter.
 			job := h.createEnrichmentJob(
 				r.Context(), session.CampaignID, "sessions", "prep_notes", session.ID)
 			if job != nil {
@@ -2142,6 +2190,7 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 				r.Context(), session.CampaignID,
 				"sessions", "actual_notes", session.ID,
 				content,
+				phases,
 			)
 			if analyzeErr != nil {
 				log.Printf("Content analysis failed for session %d actual_notes: %v", session.ID, analyzeErr)
@@ -2156,6 +2205,8 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		} else if shouldEnrich && h.caHandler != nil && response.Analysis == nil {
+			// Enrich-only jobs always use a single "enrich" phase
+			// regardless of the phases query parameter.
 			job := h.createEnrichmentJob(
 				r.Context(), session.CampaignID, "sessions", "actual_notes", session.ID)
 			if job != nil {

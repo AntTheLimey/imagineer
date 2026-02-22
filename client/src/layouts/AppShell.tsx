@@ -160,6 +160,13 @@ const NAV_ITEMS: NavItem[] = [
         path: '/campaigns/:id/timeline',
         requiresCampaign: true,
     },
+    {
+        id: 'settings',
+        label: 'Settings',
+        icon: <SettingsIcon />,
+        path: '/campaigns/:id/settings',
+        requiresCampaign: true,
+    },
 ];
 
 /**

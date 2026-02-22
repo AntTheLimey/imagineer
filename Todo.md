@@ -181,6 +181,87 @@ enrichment pipeline. The implementation covers the pipeline
 orchestrator, TTRPG Expert, Canon Expert, Revision, Graph
 Expert agents, and RAG context assembly with token budgets.
 
+- [ ] `[MVP-2]` Rewrite/style-choice capability: add a
+  Revision Agent mode to the Revise phase that can rewrite
+  content in different styles (prose, bullet notes, narrative
+  recap).
+- [ ] `[MVP-2]` Phase strip on other pages: roll out
+  `PhaseStrip` to ChapterEditor, SessionEditor, and
+  EntityEditor.
+- [ ] `[MVP-2]` Scope-aware RAG filtering: filter and weight
+  RAG context results by scope level (currently the pipeline
+  only adds scope metadata to prompts).
+- [ ] `[MVP-2]` Phase-specific triage screens: the triage
+  page now conditionally shows sections based on job phases,
+  but a full UX redesign with separate screens per phase
+  remains a future improvement.
+
+### Entity Suggestion Quality
+
+These fixes improve the quality of new entity suggestions
+from the enrichment pipeline and ensure the description
+data flows through to entity creation.
+
+- [ ] `[MVP-2]` Improve new entity suggestion descriptions
+  in the LLM prompt. The system prompt in
+  `internal/enrichment/prompts.go:213` provides a terse
+  example description ("A Scotland Yard detective mentioned
+  in the chapter") and provides no guidance on desired length
+  or detail. Update the prompt to request two to three
+  sentences summarising everything known from the source
+  content: role, relationships, characteristics, and
+  actions. Update the example to match.
+- [ ] `[MVP-2]` Pass the suggested description through when
+  creating entities. In
+  `content_analysis_handler.go:321-326`, when the user
+  clicks "Create Entity" on a `new_entity_suggestion`, only
+  `Name` and `EntityType` are passed to
+  `CreateEntityRequest`. The `Description` field from
+  `suggestedContent` JSONB is never extracted or included,
+  even though the model supports the field. Fix the handler
+  to extract and pass the description through.
+- [ ] `[MVP-2]` Insert wiki link tags when creating entities
+  from `new_entity_suggestion`. When the user resolves a
+  `new_entity_suggestion` item as `new_entity`, the handler
+  creates the entity but never inserts `[[wiki link]]` tags
+  into the source text. Enrichment-phase items have no
+  `position_start`/`position_end` offsets, and the wiki link
+  insertion at `content_analysis_handler.go:393` is gated on
+  those values being non-nil. After creating the entity,
+  perform a global find-and-replace across the source content
+  to wrap every exact match of the entity name in `[[...]]`
+  tags, skipping occurrences already inside brackets. This
+  approach does not require position offsets.
+
+### Revise Phase Rework
+
+The current AnalysisTriagePage combines Revise and Enrich
+items on a single screen. As the Revise phase gains richer
+functionality, the Revise workflow needs its own dedicated
+screen and more actionable GM tools.
+
+- [ ] `[MVP-2]` Separate the Revise phase onto its own
+  screen. The AnalysisTriagePage currently combines Revise
+  (content analysis) and Enrich items in one view, which
+  will become too crowded as Revise features grow.
+- [ ] `[MVP-2]` Make Revise items actionable for the GM.
+  The current acknowledge/dismiss actions are passive.
+  Revise items should offer suggested fixes, allow the GM
+  to apply corrections, and provide meaningful actions
+  beyond noting and moving on.
+- [ ] `[MVP-2]` Offer suggested fixes on demand. When
+  reviewing Revise items, the GM should be able to request
+  suggested fixes (such as rewritten text or corrected
+  mechanics) rather than only seeing advisory notes.
+- [ ] `[MVP-2]` Add "update upwards" propagation for
+  revised content. When revising granular content (such as
+  a scene), offer the option to propagate changes upward
+  through the hierarchy: scene to session to chapter to
+  campaign. For example, creating Chapter 4 could
+  optionally update the campaign description. This feature
+  could live on the Revise screen or appear as a task in
+  the Enrich phase.
+
 ---
 
 ## MVP Backlog
@@ -598,6 +679,28 @@ Features planned for after the initial release.
   `agents.TruncateString`, shared `fetchSourceContent`,
   and `buildDefaultPipeline` factory (minus 198 net
   lines).
+
+### Job Phases & Draft Lifecycle
+
+- [x] `job_phases` junction table persisting pipeline phase
+  selections (identify, revise, enrich) per analysis job.
+- [x] `current_phase` tracking on `content_analysis_jobs`.
+- [x] Phase-aware triage page conditionally showing sections
+  based on selected phases with backward compatibility.
+- [x] Server-side phase allowlist validation in
+  `parsePhases`.
+- [x] CHECK constraints on `phase_key`, `current_phase`,
+  and `drafts.status`.
+- [x] `revision_count` and `status` columns on drafts for
+  lifecycle tracking.
+- [x] `CreateAnalysisJob` wrapped in a transaction for
+  atomicity.
+- [x] Shared `loadJobPhases` helper with proper
+  `rows.Err()` checking.
+- [x] Migration backfill for existing jobs with enrichment
+  and analysis items.
+- [x] Client phases integration across all update hooks
+  and API endpoints.
 
 ### Entity & Campaign Features
 

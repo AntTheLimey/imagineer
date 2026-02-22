@@ -12,6 +12,7 @@
  */
 
 import { apiClient } from './client';
+import type { AnalysisOptions } from './types';
 import type { Campaign } from '../types';
 
 /**
@@ -73,11 +74,13 @@ export const campaignsApi = {
     update(
         id: number,
         input: UpdateCampaignInput,
-        options?: { analyze?: boolean; enrich?: boolean },
+        options?: AnalysisOptions,
     ): Promise<Campaign> {
         const params: Record<string, string> = {};
         if (options?.analyze) params.analyze = 'true';
         if (options?.enrich) params.enrich = 'true';
+        if (options?.phases?.length)
+            params.phases = options.phases.join(',');
         return apiClient.put<Campaign>(
             `/campaigns/${id}`, input, params,
         );

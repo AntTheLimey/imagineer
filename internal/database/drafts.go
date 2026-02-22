@@ -28,7 +28,8 @@ var validSourceTables = map[string]bool{
 
 // draftColumns is the standard column list for draft queries.
 const draftColumns = `id, campaign_id, user_id, source_table, source_id,
-	is_new, draft_data, server_version, created_at, updated_at`
+	is_new, draft_data, server_version, revision_count, status,
+	created_at, updated_at`
 
 // validateSourceTable checks that the given source table name is one of
 // the permitted values.
@@ -45,6 +46,7 @@ func scanDraft(row pgx.Row) (*models.Draft, error) {
 	err := row.Scan(
 		&d.ID, &d.CampaignID, &d.UserID, &d.SourceTable, &d.SourceID,
 		&d.IsNew, &d.DraftData, &d.ServerVersion,
+		&d.RevisionCount, &d.Status,
 		&d.CreatedAt, &d.UpdatedAt,
 	)
 	if err != nil {
@@ -71,6 +73,7 @@ func (db *DB) SaveDraft(ctx context.Context, campaignID, userID int64, req model
 			draft_data     = EXCLUDED.draft_data,
 			server_version = EXCLUDED.server_version,
 			is_new         = EXCLUDED.is_new,
+			revision_count = drafts.revision_count + 1,
 			updated_at     = NOW()
 		RETURNING %s`, draftColumns)
 

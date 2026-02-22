@@ -12,6 +12,7 @@
  */
 
 import { apiClient } from './client';
+import type { AnalysisOptions } from './types';
 import type { Entity, EntityType, SourceConfidence } from '../types';
 
 /**
@@ -108,11 +109,13 @@ export const entitiesApi = {
         _campaignId: number,
         entityId: number,
         input: UpdateEntityInput,
-        options?: { analyze?: boolean; enrich?: boolean },
+        options?: AnalysisOptions,
     ): Promise<Entity> {
         const params: Record<string, string> = {};
         if (options?.analyze) params.analyze = 'true';
         if (options?.enrich) params.enrich = 'true';
+        if (options?.phases?.length)
+            params.phases = options.phases.join(',');
         return apiClient.put<Entity>(
             `/entities/${entityId}`, input, params,
         );

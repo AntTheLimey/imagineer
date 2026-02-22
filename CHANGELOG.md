@@ -8,6 +8,56 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Job Phases Persistence
+  - The `job_phases` junction table persists which pipeline
+    phases (Identify, Revise, Enrich) the GM selected when
+    triggering analysis, so the triage page shows only the
+    relevant sections and the GM can resume later.
+  - The `current_phase` column on `content_analysis_jobs`
+    tracks which phase the job is currently executing.
+  - The phase-aware triage page conditionally shows analysis,
+    detection, and enrichment sections based on the job's
+    selected phases, with backward compatibility for
+    pre-existing jobs.
+  - The `parsePhases` server-side helper validates phase
+    values against an allowlist before storage, preventing
+    arbitrary data from reaching the database.
+  - Migration 003 adds CHECK constraints on `phase_key`,
+    `current_phase`, and `drafts.status` columns.
+- Draft Lifecycle Tracking
+  - The `revision_count` column on drafts increments
+    atomically on each save for engagement tracking.
+  - The `status` column on drafts (`active`, `stale`,
+    `abandoned`) supports a cleanup index for future
+    maintenance jobs.
+- Client Phases Integration
+  - PhaseStrip selection flows through the API as a
+    comma-separated `phases` query parameter on all update
+    endpoints (campaigns, entities, chapters, sessions).
+  - The `ContentAnalysisJob` type gains `phases` and
+    `currentPhase` fields.
+  - All update hooks (`useCampaigns`, `useChapters`,
+    `useEntities`, `useSessions`) accept an optional `phases`
+    parameter.
+- Campaign Deletion UI
+  - "Delete Campaign" danger zone on Campaign Settings with a
+    confirmation dialog requiring the user to type the campaign
+    name. On success, the system clears campaign context and
+    navigates to `/campaigns`.
+- TTRPG Expert Scope Awareness
+  - `SourceScope` enum on `PipelineInput` derived from
+    `SourceTable` (campaigns, chapters, sessions, entities).
+    TTRPG Expert and Canon Expert prompts now vary analysis
+    and continuity guidance based on content level
+    (campaign = world-building, chapter = narrative arc,
+    session = tactical detail, entity = character
+    consistency).
+- Phase Strip UI
+  - `PhaseStrip` component replaces `SaveSplitButton` on
+    Campaign Overview. Three independent workflow phases
+    (Identify, Revise, Enrich) display as labelled checkboxes
+    with a Save & Go button. Phase selection persists in
+    `localStorage` for downstream use on the triage page.
 - Session Workflows Phase 1
   - Full-screen session editor page with two-column prep
     layout (form and scene sidebar), stage tabs (Prep active,
@@ -363,6 +413,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- `CreateAnalysisJob` now wraps job and phase inserts in a
+  database transaction for atomicity.
+- Missing `rows.Err()` check after iterating phase rows in
+  `GetAnalysisJob` and `GetLatestAnalysisJob`; extracted a
+  shared `loadJobPhases` helper to eliminate duplication.
+- Migration backfill adds `enrich` and `revise` phases for
+  existing jobs that already have enrichment or analysis
+  items, preventing those items from being hidden on the
+  triage page.
+- Markdown paste in TipTap editor rendering raw Markdown
+  syntax (headings, lists, blockquotes, horizontal rules) as
+  plain text instead of formatted content. A new
+  `MarkdownPasteHandler` extension intercepts plain-text
+  paste events containing block-level Markdown patterns and
+  converts them to rich content.
 - Cross-campaign IDOR in `fetchSourceContent` queries; all
   content retrieval now scopes by `campaign_id` to prevent
   unauthorized access to other campaigns' data (VULN-004).
@@ -445,6 +510,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- CampaignOverview builds a phases array from PhaseStrip
+  selection and passes the array through the API; removed
+  localStorage-based phase persistence.
 - Extracted shared utilities to reduce code duplication
   (-198 net lines): `agents.StripCodeFences` (was 4 copies),
   `agents.TruncateString` (was 3 copies), shared
