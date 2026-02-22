@@ -58,6 +58,19 @@ import type { WikiLinkEntity } from '../components/MarkdownRenderer';
 import type { GameSystem } from '../types';
 
 /**
+ * Small helper that redirects to the campaigns list when a campaign can't
+ * be loaded (e.g. after deletion). Extracted as a component so the
+ * useEffect/useNavigate hooks run at the right lifecycle point.
+ */
+function CampaignErrorRedirect() {
+    const navigate = useNavigate();
+    useEffect(() => {
+        navigate('/campaigns', { replace: true });
+    }, [navigate]);
+    return null;
+}
+
+/**
  * Fields that can be edited inline.
  */
 type EditableField = 'name' | 'description' | 'genre' | 'imageStylePrompt';
@@ -356,15 +369,9 @@ export default function CampaignOverview() {
         );
     }
 
-    // Error state
+    // Error state - redirect to campaigns list (e.g. after deletion)
     if (campaignError) {
-        return (
-            <Box>
-                <Alert severity="error" sx={{ mb: 2 }}>
-                    Failed to load campaign. Please try again later.
-                </Alert>
-            </Box>
-        );
+        return <CampaignErrorRedirect />;
     }
 
     // No campaign selected state
@@ -423,8 +430,9 @@ export default function CampaignOverview() {
             {/* Cancel button when in edit mode */}
             {isEditing && (
                 <Alert severity="info" sx={{ mb: 2 }}>
-                    You are in edit mode. Make your changes and click "Save & Analyze" to save.
+                    You are in edit mode. Make your changes and use Save &amp; Go to save.
                     <Button
+                        variant="outlined"
                         size="small"
                         onClick={handleToggleEdit}
                         sx={{ ml: 2 }}

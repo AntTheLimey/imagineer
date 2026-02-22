@@ -69,12 +69,6 @@ const MarkdownPasteHandler = Extension.create({
                 key: new PluginKey('markdownPasteHandler'),
                 props: {
                     handlePaste: (view, event) => {
-                        // If HTML is on the clipboard, let the
-                        // default handler deal with it.
-                        const html =
-                            event.clipboardData?.getData('text/html');
-                        if (html) return false;
-
                         const text =
                             event.clipboardData?.getData('text/plain');
                         if (!text) return false;

@@ -93,6 +93,8 @@ interface CampaignSettingsProps {
     onChange: (data: CampaignSettingsData, isDirty: boolean) => void;
     /** Optional initial form data (for external state management) */
     formData?: CampaignSettingsData;
+    /** Hide the description editor (used when description is edited elsewhere) */
+    hideDescription?: boolean;
 }
 
 /**
@@ -139,6 +141,7 @@ export default function CampaignSettings({
     error,
     onChange,
     formData: externalFormData,
+    hideDescription,
 }: CampaignSettingsProps) {
     // Form state - use external state if provided, otherwise manage internally
     const [internalFormData, setInternalFormData] =
@@ -252,7 +255,7 @@ export default function CampaignSettings({
         deleteCampaign.mutate(campaign.id, {
             onSuccess: () => {
                 setCurrentCampaignId(null);
-                navigate('/campaigns');
+                navigate('/campaigns', { replace: true });
             },
             onError: (err: Error) => {
                 setDeleteError(
@@ -315,6 +318,7 @@ export default function CampaignSettings({
             />
 
             {/* Description */}
+            {!hideDescription && (
             <Box sx={{ mb: 3 }}>
                 <MarkdownEditor
                     label="Description"
@@ -326,6 +330,7 @@ export default function CampaignSettings({
                     campaignId={campaign?.id}
                 />
             </Box>
+            )}
 
             {/* RPG System */}
             <FormControl fullWidth sx={{ mb: 3 }}>

@@ -101,9 +101,23 @@ export function useDeleteCampaign() {
     return useMutation({
         mutationFn: (id: number) => campaignsApi.delete(id),
         onSuccess: (_data: void, id: number) => {
-            // Remove from cache
+            // Cancel any in-flight queries for the deleted campaign
+            // before removing the cache entry. This prevents a race
+            // condition where a still-mounted useCampaign hook refetches
+            // the deleted campaign and briefly shows a 404 error.
+            queryClient.cancelQueries({ queryKey: campaignKeys.detail(id) });
             queryClient.removeQueries({ queryKey: campaignKeys.detail(id) });
-            // Invalidate lists to refetch
+
+            // Optimistically remove the deleted campaign from all cached
+            // lists immediately. Without this, HomePage.getLatestCampaign()
+            // can pick the deleted campaign from stale cache and redirect
+            // to its overview before the background refetch completes.
+            queryClient.setQueriesData<Campaign[]>(
+                { queryKey: campaignKeys.lists() },
+                (old) => old?.filter((c) => c.id !== id),
+            );
+
+            // Also refetch lists from the server for consistency
             queryClient.invalidateQueries({ queryKey: campaignKeys.lists() });
         },
     });
