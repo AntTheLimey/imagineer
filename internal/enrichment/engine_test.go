@@ -1169,10 +1169,10 @@ func TestBuildUserPrompt_WithRAGContext(t *testing.T) {
 		SourceID:    5,
 		Content:     "Viktor entered the tavern.",
 		Entity: models.Entity{
-			ID:         100,
-			CampaignID: 1,
-			EntityType: models.EntityTypeNPC,
-			Name:       "Viktor",
+			ID:          100,
+			CampaignID:  1,
+			EntityType:  models.EntityTypeNPC,
+			Name:        "Viktor",
 			Description: &desc,
 		},
 		CampaignResults: []models.SearchResult{

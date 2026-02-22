@@ -27,7 +27,7 @@ type RevisionInput struct {
 	AcceptedItems   []models.ContentAnalysisItem // Accepted Stage 1 findings
 	SourceTable     string                       // e.g., "chapters", "sessions"
 	SourceID        int64
-	GameSystemYAML  string               // Optional game system context
+	GameSystemYAML  string                // Optional game system context
 	CampaignResults []models.SearchResult // RAG: campaign search results
 }
 

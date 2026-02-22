@@ -46,7 +46,7 @@ type EnrichmentInput struct {
 	JobID           int64
 	SourceTable     string
 	SourceID        int64
-	Content         string                // Source content (Markdown)
+	Content         string // Source content (Markdown)
 	Entity          models.Entity
 	OtherEntities   []models.Entity       // Other entities mentioned in the same content
 	Relationships   []models.Relationship // Existing relationships for this entity
