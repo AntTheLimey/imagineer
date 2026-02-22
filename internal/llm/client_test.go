@@ -275,7 +275,7 @@ func TestIsQuotaError_429WithQuotaMessage(t *testing.T) {
 		err  error
 	}{
 		{"quota keyword", fmt.Errorf("you have exceeded your current quota")},
-		{"exceeded keyword", fmt.Errorf("rate limit exceeded for this billing period")},
+		{"billing keyword", fmt.Errorf("rate limit exceeded for this billing period")},
 		{"mixed case quota", fmt.Errorf("Quota limit reached")},
 	}
 	for _, tt := range tests {
@@ -291,6 +291,19 @@ func TestIsQuotaError_429RateLimit(t *testing.T) {
 	err := fmt.Errorf("rate limited, please slow down")
 	if isQuotaError(429, err) {
 		t.Error("expected isQuotaError to return false for normal 429 rate limit")
+	}
+}
+
+func TestIsQuotaError_429RateLimitExceeded(t *testing.T) {
+	err := fmt.Errorf("Rate limit exceeded")
+	if isQuotaError(429, err) {
+		t.Error("expected isQuotaError to return false for 'Rate limit exceeded' (temporary rate limit, not quota)")
+	}
+}
+
+func TestIsQuotaError_429NilError(t *testing.T) {
+	if isQuotaError(429, nil) {
+		t.Error("expected isQuotaError to return false for 429 with nil error")
 	}
 }
 
