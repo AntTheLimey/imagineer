@@ -27,7 +27,8 @@ type RevisionInput struct {
 	AcceptedItems   []models.ContentAnalysisItem // Accepted Stage 1 findings
 	SourceTable     string                       // e.g., "chapters", "sessions"
 	SourceID        int64
-	GameSystemYAML  string // Optional game system context
+	GameSystemYAML  string                // Optional game system context
+	CampaignResults []models.SearchResult // RAG: campaign search results
 }
 
 // RevisionResult contains the generated revision.
@@ -132,6 +133,20 @@ func buildRevisionUserPrompt(input RevisionInput) string {
 		b.WriteString("```yaml\n")
 		b.WriteString(input.GameSystemYAML)
 		b.WriteString("\n```\n\n")
+	}
+
+	if len(input.CampaignResults) > 0 {
+		b.WriteString("## Campaign Context\n\n")
+		b.WriteString("Related content from the campaign (for continuity):\n\n")
+		for _, r := range input.CampaignResults {
+			chunk := r.ChunkContent
+			if len([]rune(chunk)) > 300 {
+				chunk = string([]rune(chunk)[:300]) + "..."
+			}
+			fmt.Fprintf(&b, "- **%s** (%s): %s\n",
+				r.SourceName, r.SourceTable, chunk)
+		}
+		b.WriteString("\n")
 	}
 
 	return b.String()

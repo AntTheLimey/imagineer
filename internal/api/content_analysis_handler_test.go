@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"testing"
 
 	"github.com/antonypegg/imagineer/internal/models"
@@ -410,6 +411,178 @@ func TestContentAnalysis_RoutesRegistered(t *testing.T) {
 			// but NOT 404 (route not found) or 405 (method not allowed).
 			assert.Equal(t, http.StatusUnauthorized, rec.Code,
 				"Expected 401 for %s %s, got %d", tt.method, tt.path, rec.Code)
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// insideWikiLink tests
+// ---------------------------------------------------------------------------
+
+func TestInsideWikiLink(t *testing.T) {
+	tests := []struct {
+		name   string
+		start  int
+		end    int
+		spans  [][]int
+		expect bool
+	}{
+		{
+			name:   "no spans",
+			start:  0,
+			end:    5,
+			spans:  nil,
+			expect: false,
+		},
+		{
+			name:   "outside all spans",
+			start:  0,
+			end:    5,
+			spans:  [][]int{{10, 20}, {30, 40}},
+			expect: false,
+		},
+		{
+			name:   "inside first span",
+			start:  12,
+			end:    18,
+			spans:  [][]int{{10, 20}, {30, 40}},
+			expect: true,
+		},
+		{
+			name:   "inside second span",
+			start:  32,
+			end:    38,
+			spans:  [][]int{{10, 20}, {30, 40}},
+			expect: true,
+		},
+		{
+			name:   "exactly matching span",
+			start:  10,
+			end:    20,
+			spans:  [][]int{{10, 20}},
+			expect: true,
+		},
+		{
+			name:   "partially overlapping start",
+			start:  8,
+			end:    15,
+			spans:  [][]int{{10, 20}},
+			expect: false,
+		},
+		{
+			name:   "partially overlapping end",
+			start:  15,
+			end:    25,
+			spans:  [][]int{{10, 20}},
+			expect: false,
+		},
+		{
+			name:   "between spans",
+			start:  22,
+			end:    28,
+			spans:  [][]int{{10, 20}, {30, 40}},
+			expect: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := insideWikiLink(tc.start, tc.end, tc.spans)
+			assert.Equal(t, tc.expect, result)
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Wiki-link replacement logic tests
+// ---------------------------------------------------------------------------
+
+func TestWikiLinkReplacement(t *testing.T) {
+	tests := []struct {
+		name       string
+		content    string
+		entityName string
+		expected   string
+		changed    bool
+	}{
+		{
+			name:       "basic replacement",
+			content:    "Viktor entered the tavern.",
+			entityName: "Viktor",
+			expected:   "[[Viktor]] entered the tavern.",
+			changed:    true,
+		},
+		{
+			name:       "multiple occurrences",
+			content:    "Viktor met Elara. Viktor smiled.",
+			entityName: "Viktor",
+			expected:   "[[Viktor]] met Elara. [[Viktor]] smiled.",
+			changed:    true,
+		},
+		{
+			name:       "already inside wiki link",
+			content:    "[[Viktor]] entered the tavern.",
+			entityName: "Viktor",
+			expected:   "[[Viktor]] entered the tavern.",
+			changed:    false,
+		},
+		{
+			name:       "mixed: one inside, one outside",
+			content:    "[[Viktor]] met Viktor at the gate.",
+			entityName: "Viktor",
+			expected:   "[[Viktor]] met [[Viktor]] at the gate.",
+			changed:    true,
+		},
+		{
+			name:       "word boundary prevents partial match",
+			content:    "Viktorian architecture is grand.",
+			entityName: "Viktor",
+			expected:   "Viktorian architecture is grand.",
+			changed:    false,
+		},
+		{
+			name:       "no matches",
+			content:    "Elara entered the tavern.",
+			entityName: "Viktor",
+			expected:   "Elara entered the tavern.",
+			changed:    false,
+		},
+		{
+			name:       "entity with special regex chars",
+			content:    "Dr. Smith arrived at the manor.",
+			entityName: "Dr. Smith",
+			expected:   "[[Dr. Smith]] arrived at the manor.",
+			changed:    true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			escaped := regexp.QuoteMeta(tc.entityName)
+			namePattern, err := regexp.Compile(
+				`\b` + escaped + `\b`)
+			require.NoError(t, err)
+
+			linkSpans := wikiLinkPattern.FindAllStringIndex(
+				tc.content, -1)
+
+			matches := namePattern.FindAllStringIndex(
+				tc.content, -1)
+			replacement := "[[" + tc.entityName + "]]"
+			result := tc.content
+			changed := false
+			for i := len(matches) - 1; i >= 0; i-- {
+				m := matches[i]
+				if insideWikiLink(m[0], m[1], linkSpans) {
+					continue
+				}
+				result = result[:m[0]] + replacement +
+					result[m[1]:]
+				changed = true
+			}
+
+			assert.Equal(t, tc.expected, result)
+			assert.Equal(t, tc.changed, changed)
 		})
 	}
 }

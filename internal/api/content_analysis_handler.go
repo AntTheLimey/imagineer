@@ -287,6 +287,37 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Fetch item details up-front: needed by new_entity (for
+	// description) and by the content-fix block (for positions
+	// and source info).
+	var suggestedContent json.RawMessage
+	var detectionType string
+	var srcTable, srcField string
+	var srcID int64
+	var posStart, posEnd *int
+	var matchedText string
+	var fetchJobID int64
+	err = h.db.QueryRow(r.Context(),
+		`SELECT COALESCE(i.suggested_content, '{}'),
+		        i.detection_type,
+		        i.position_start, i.position_end,
+		        i.matched_text,
+		        j.source_table, j.source_id,
+		        j.source_field, i.job_id
+		 FROM content_analysis_items i
+		 JOIN content_analysis_jobs j ON i.job_id = j.id
+		 WHERE i.id = $1`,
+		itemID,
+	).Scan(&suggestedContent, &detectionType,
+		&posStart, &posEnd, &matchedText,
+		&srcTable, &srcID, &srcField, &fetchJobID)
+	if err != nil {
+		log.Printf("Error fetching item details: %v", err)
+		respondError(w, http.StatusNotFound,
+			"Analysis item not found")
+		return
+	}
+
 	// Determine the resolved entity ID based on resolution type
 	var resolvedEntityID *int64
 
@@ -318,9 +349,19 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 			return
 		}
 
+		// Extract description from suggestedContent if available.
+		var desc *string
+		var sc map[string]interface{}
+		if jsonErr := json.Unmarshal(suggestedContent, &sc); jsonErr == nil {
+			if d, ok := sc["description"].(string); ok && d != "" {
+				desc = &d
+			}
+		}
+
 		createReq := models.CreateEntityRequest{
-			EntityType: *req.EntityType,
-			Name:       *req.EntityName,
+			EntityType:  *req.EntityType,
+			Name:        *req.EntityName,
+			Description: desc,
 		}
 
 		entity, err := h.db.CreateEntity(r.Context(), campaignID, createReq)
@@ -367,84 +408,74 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 	// Apply content fix for accepted/new_entity resolutions that have
 	// position offsets. This wraps the matched text in [[wiki link]]
 	// brackets within the source content.
-	var fixJobID int64
-	var fixJobIDFound bool
-	var detectionType string
-	var suggestedContent json.RawMessage
 	if req.Resolution == "accepted" || req.Resolution == "new_entity" {
-		var posStart, posEnd *int
-		var matchedText, srcTable, srcField string
-		var srcID int64
-		err := h.db.QueryRow(r.Context(),
-			`SELECT i.position_start, i.position_end, i.matched_text,
-			        i.detection_type, i.job_id, i.suggested_content,
-			        j.source_table, j.source_id, j.source_field
-			 FROM content_analysis_items i
-			 JOIN content_analysis_jobs j ON i.job_id = j.id
-			 WHERE i.id = $1`,
-			itemID,
-		).Scan(&posStart, &posEnd, &matchedText, &detectionType,
-			&fixJobID, &suggestedContent, &srcTable, &srcID, &srcField)
-		if err != nil {
-			log.Printf("Error fetching item details for content fix (item %d): %v",
-				itemID, err)
-		} else {
-			fixJobIDFound = true
-			if posStart != nil && posEnd != nil && !strings.HasPrefix(detectionType, "wiki_link_") {
-				// Determine the replacement text based on resolution type.
-				var replacement string
-				if req.Resolution == "new_entity" && req.EntityName != nil && *req.EntityName != "" {
-					replacement = "[[" + *req.EntityName + "]]"
-				} else if detectionType == "potential_alias" && resolvedEntityID != nil {
-					// For potential aliases, use wiki alias syntax
-					// to preserve the original display text.
-					var entityName string
-					err = h.db.QueryRow(r.Context(),
-						"SELECT name FROM entities WHERE id = $1",
-						*resolvedEntityID,
-					).Scan(&entityName)
-					if err != nil {
-						log.Printf("Error fetching entity name for alias link (item %d): %v",
-							itemID, err)
-						replacement = "[[" + matchedText + "]]"
-					} else {
-						replacement = "[[" + entityName + "|" + matchedText + "]]"
-					}
-				} else {
+		if posStart != nil && posEnd != nil && !strings.HasPrefix(detectionType, "wiki_link_") {
+			// Determine the replacement text based on resolution type.
+			var replacement string
+			if req.Resolution == "new_entity" && req.EntityName != nil && *req.EntityName != "" {
+				replacement = "[[" + *req.EntityName + "]]"
+			} else if detectionType == "potential_alias" && resolvedEntityID != nil {
+				// For potential aliases, use wiki alias syntax
+				// to preserve the original display text.
+				var entityName string
+				err = h.db.QueryRow(r.Context(),
+					"SELECT name FROM entities WHERE id = $1",
+					*resolvedEntityID,
+				).Scan(&entityName)
+				if err != nil {
+					log.Printf("Error fetching entity name for alias link (item %d): %v",
+						itemID, err)
 					replacement = "[[" + matchedText + "]]"
-				}
-
-				if fixErr := h.applyContentFix(
-					r.Context(), srcTable, srcID, srcField,
-					*posStart, *posEnd, matchedText, replacement,
-				); fixErr != nil {
-					// Content fix failure is non-fatal: log but still
-					// return success since the resolution itself succeeded.
-					log.Printf("Content fix failed for item %d: %v",
-						itemID, fixErr)
 				} else {
-					// Adjust byte offsets of remaining pending items
-					// in the same job so that subsequent fixes apply
-					// at the correct positions.
-					delta := len(replacement) - (*posEnd - *posStart)
-					if delta != 0 {
-						adjErr := h.db.Exec(r.Context(),
-							`UPDATE content_analysis_items
-							 SET position_start = position_start + $1,
-							     position_end = position_end + $1
-							 WHERE job_id = $2
-							   AND id != $3
-							   AND resolution = 'pending'
-							   AND position_start >= $4`,
-							delta, fixJobID, itemID, *posEnd,
-						)
-						if adjErr != nil {
-							log.Printf(
-								"Failed to adjust offsets for job %d after item %d: %v",
-								fixJobID, itemID, adjErr)
-						}
+					replacement = "[[" + entityName + "|" + matchedText + "]]"
+				}
+			} else {
+				replacement = "[[" + matchedText + "]]"
+			}
+
+			if fixErr := h.applyContentFix(
+				r.Context(), srcTable, srcID, srcField,
+				*posStart, *posEnd, matchedText, replacement,
+			); fixErr != nil {
+				// Content fix failure is non-fatal: log but still
+				// return success since the resolution itself succeeded.
+				log.Printf("Content fix failed for item %d: %v",
+					itemID, fixErr)
+			} else {
+				// Adjust byte offsets of remaining pending items
+				// in the same job so that subsequent fixes apply
+				// at the correct positions.
+				delta := len(replacement) - (*posEnd - *posStart)
+				if delta != 0 {
+					adjErr := h.db.Exec(r.Context(),
+						`UPDATE content_analysis_items
+						 SET position_start = position_start + $1,
+						     position_end = position_end + $1
+						 WHERE job_id = $2
+						   AND id != $3
+						   AND resolution = 'pending'
+						   AND position_start >= $4`,
+						delta, fetchJobID, itemID, *posEnd,
+					)
+					if adjErr != nil {
+						log.Printf(
+							"Failed to adjust offsets for job %d after item %d: %v",
+							fetchJobID, itemID, adjErr)
 					}
 				}
+			}
+		}
+
+		// For new_entity_suggestion items without position offsets,
+		// do a global find-and-replace across the source content.
+		if req.Resolution == "new_entity" && posStart == nil && posEnd == nil && req.EntityName != nil {
+			if linkErr := h.applyGlobalWikiLinks(
+				r.Context(), campaignID,
+				srcTable, srcID, srcField,
+				*req.EntityName,
+			); linkErr != nil {
+				log.Printf("Global wiki-link insertion failed for item %d: %v",
+					itemID, linkErr)
 			}
 		}
 	}
@@ -452,7 +483,7 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 	// Handle relationship_suggestion acceptance: create the actual
 	// relationship and auto-resolve any pending inverse suggestion.
 	if req.Resolution == "accepted" && detectionType == "relationship_suggestion" && len(suggestedContent) > 0 {
-		h.handleRelationshipSuggestion(r.Context(), campaignID, fixJobID, itemID, suggestedContent, req.SuggestedContentOverride)
+		h.handleRelationshipSuggestion(r.Context(), campaignID, fetchJobID, itemID, suggestedContent, req.SuggestedContentOverride)
 	}
 
 	// Handle description_update acceptance: apply the suggested
@@ -467,33 +498,22 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 		h.handleLogEntry(r.Context(), campaignID, *resolvedEntityID, suggestedContent)
 	}
 
-	// Update the job's resolved count. Reuse the job ID fetched above
-	// when available; otherwise fall back to a separate lookup.
-	jobID := fixJobID
-	if !fixJobIDFound {
-		jobID, err = h.getItemJobID(r.Context(), itemID)
+	// Update the job's resolved count.
+	if err := h.db.UpdateJobResolvedCount(r.Context(), fetchJobID); err != nil {
+		log.Printf("Error updating job resolved count: %v", err)
 	}
-	if !fixJobIDFound && err != nil {
-		log.Printf("Error getting job ID for item %d: %v", itemID, err)
-		// The item was resolved successfully; the count update is
-		// non-critical so we still return success.
-	} else {
-		if err := h.db.UpdateJobResolvedCount(r.Context(), jobID); err != nil {
-			log.Printf("Error updating job resolved count: %v", err)
-		}
-		if err := h.db.UpdateJobEnrichmentCount(r.Context(), jobID); err != nil {
-			log.Printf("Error updating job enrichment count: %v", err)
-		}
+	if err := h.db.UpdateJobEnrichmentCount(r.Context(), fetchJobID); err != nil {
+		log.Printf("Error updating job enrichment count: %v", err)
+	}
 
-		// Auto-trigger enrichment if all Phase 1 items are resolved
-		// and the "enrich" phase was selected for this job.
-		updatedJob, jobErr := h.db.GetAnalysisJob(r.Context(), jobID)
-		if jobErr == nil &&
-			updatedJob.ResolvedItems == updatedJob.TotalItems &&
-			updatedJob.EnrichmentTotal == 0 &&
-			jobHasPhase(updatedJob.Phases, "enrich") {
-			h.TryAutoEnrich(r.Context(), jobID, userID)
-		}
+	// Auto-trigger enrichment if all Phase 1 items are resolved
+	// and the "enrich" phase was selected for this job.
+	updatedJob, jobErr := h.db.GetAnalysisJob(r.Context(), fetchJobID)
+	if jobErr == nil &&
+		updatedJob.ResolvedItems == updatedJob.TotalItems &&
+		updatedJob.EnrichmentTotal == 0 &&
+		jobHasPhase(updatedJob.Phases, "enrich") {
+		h.TryAutoEnrich(r.Context(), fetchJobID, userID)
 	}
 
 	respondJSON(w, http.StatusOK, map[string]string{
@@ -792,16 +812,6 @@ func (h *ContentAnalysisHandler) GetPendingCount(w http.ResponseWriter, r *http.
 	respondJSON(w, http.StatusOK, PendingCountResponse{Count: count})
 }
 
-// getItemJobID retrieves the job_id for a content analysis item.
-func (h *ContentAnalysisHandler) getItemJobID(ctx context.Context, itemID int64) (int64, error) {
-	var jobID int64
-	err := h.db.QueryRow(ctx,
-		"SELECT job_id FROM content_analysis_items WHERE id = $1",
-		itemID,
-	).Scan(&jobID)
-	return jobID, err
-}
-
 // applyContentFix modifies the source content at the specified position,
 // replacing the matched text with the given replacement string. It verifies
 // that the content has not changed since analysis before applying the fix.
@@ -899,6 +909,118 @@ func (h *ContentAnalysisHandler) applyContentFix(
 	}
 
 	return nil
+}
+
+// applyGlobalWikiLinks replaces all occurrences of entityName in the
+// source content with [[entityName]], skipping text already inside
+// [[...]] brackets. Uses word-boundary matching to avoid partial
+// replacements within longer words.
+func (h *ContentAnalysisHandler) applyGlobalWikiLinks(
+	ctx context.Context,
+	campaignID int64,
+	sourceTable string,
+	sourceID int64,
+	sourceField string,
+	entityName string,
+) error {
+	content, err := fetchSourceContent(
+		ctx, h.db, campaignID, sourceTable, sourceID, sourceField)
+	if err != nil {
+		return fmt.Errorf("failed to fetch source content: %w", err)
+	}
+
+	// Build a regex that matches the entity name on word boundaries.
+	escaped := regexp.QuoteMeta(entityName)
+	namePattern, err := regexp.Compile(`\b` + escaped + `\b`)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to compile entity name pattern: %w", err)
+	}
+
+	// Find all wiki-link spans so we can skip matches inside them.
+	linkSpans := wikiLinkPattern.FindAllStringIndex(content, -1)
+
+	// Process matches in reverse order so earlier byte offsets
+	// remain valid after each replacement.
+	matches := namePattern.FindAllStringIndex(content, -1)
+	replacement := "[[" + entityName + "]]"
+	changed := false
+	for i := len(matches) - 1; i >= 0; i-- {
+		m := matches[i]
+		if insideWikiLink(m[0], m[1], linkSpans) {
+			continue
+		}
+		content = content[:m[0]] + replacement + content[m[1]:]
+		changed = true
+	}
+
+	if !changed {
+		return nil
+	}
+
+	return h.updateSourceContent(
+		ctx, sourceTable, sourceID, sourceField, content)
+}
+
+// insideWikiLink checks whether the range [start, end) falls within
+// any of the given wiki-link spans.
+func insideWikiLink(start, end int, spans [][]int) bool {
+	for _, span := range spans {
+		if start >= span[0] && end <= span[1] {
+			return true
+		}
+	}
+	return false
+}
+
+// updateSourceContent writes content back to the specified source
+// table and field.
+func (h *ContentAnalysisHandler) updateSourceContent(
+	ctx context.Context,
+	sourceTable string,
+	sourceID int64,
+	sourceField string,
+	content string,
+) error {
+	var updateSQL string
+	switch sourceTable {
+	case "entities":
+		switch sourceField {
+		case "description":
+			updateSQL = "UPDATE entities SET description = $2, updated_at = NOW() WHERE id = $1"
+		case "gm_notes":
+			updateSQL = "UPDATE entities SET gm_notes = $2, updated_at = NOW() WHERE id = $1"
+		default:
+			return fmt.Errorf("unsupported field %q for table %q", sourceField, sourceTable)
+		}
+	case "chapters":
+		switch sourceField {
+		case "overview":
+			updateSQL = "UPDATE chapters SET overview = $2, updated_at = NOW() WHERE id = $1"
+		default:
+			return fmt.Errorf("unsupported field %q for table %q", sourceField, sourceTable)
+		}
+	case "sessions":
+		switch sourceField {
+		case "prep_notes":
+			updateSQL = "UPDATE sessions SET prep_notes = $2, updated_at = NOW() WHERE id = $1"
+		case "actual_notes":
+			updateSQL = "UPDATE sessions SET actual_notes = $2, updated_at = NOW() WHERE id = $1"
+		default:
+			return fmt.Errorf("unsupported field %q for table %q", sourceField, sourceTable)
+		}
+	case "campaigns":
+		switch sourceField {
+		case "description":
+			updateSQL = "UPDATE campaigns SET description = $2, updated_at = NOW() WHERE id = $1"
+		default:
+			return fmt.Errorf("unsupported field %q for table %q", sourceField, sourceTable)
+		}
+	default:
+		return fmt.Errorf("unsupported source table: %s", sourceTable)
+	}
+
+	return h.db.Exec(ctx, updateSQL, sourceID, content)
 }
 
 // wikiLinkPattern matches wiki links of the form [[text]] or
@@ -1837,12 +1959,35 @@ func (h *ContentAnalysisHandler) GenerateRevision(w http.ResponseWriter, r *http
 		return
 	}
 
+	// Build RAG context for the revision agent.
+	campaign, campaignErr := h.db.GetCampaign(r.Context(), campaignID)
+	var gameSystemCode string
+	if campaignErr != nil {
+		log.Printf("GenerateRevision: failed to get campaign %d: %v",
+			campaignID, campaignErr)
+	} else if campaign.System != nil {
+		gameSystemCode = campaign.System.Code
+	}
+
+	ctxBuilder := enrichment.NewContextBuilder(h.db, "")
+	ragCtx, ragErr := ctxBuilder.BuildContext(
+		r.Context(), campaignID, originalContent,
+		gameSystemCode, nil)
+	if ragErr != nil {
+		log.Printf("GenerateRevision: failed to build RAG context for job %d: %v",
+			jobID, ragErr)
+	}
+
 	// Call the RevisionAgent to generate revised content.
 	revisionInput := enrichment.RevisionInput{
 		OriginalContent: originalContent,
 		AcceptedItems:   acceptedItems,
 		SourceTable:     job.SourceTable,
 		SourceID:        job.SourceID,
+	}
+	if ragCtx != nil {
+		revisionInput.GameSystemYAML = ragCtx.GameSystemYAML
+		revisionInput.CampaignResults = ragCtx.CampaignResults
 	}
 
 	result, err := enrichment.NewRevisionAgent().GenerateRevision(

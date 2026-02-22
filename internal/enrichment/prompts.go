@@ -144,6 +144,27 @@ func buildUserPrompt(input EnrichmentInput) string {
 		b.WriteString("\n")
 	}
 
+	// Campaign context from RAG (vector search results).
+	if len(input.CampaignResults) > 0 {
+		fmt.Fprintf(&b, "## Campaign Context\n\n")
+		fmt.Fprintf(&b, "Related content from the campaign (for continuity and context):\n\n")
+		for _, r := range input.CampaignResults {
+			chunk := r.ChunkContent
+			if len([]rune(chunk)) > 300 {
+				chunk = string([]rune(chunk)[:300]) + "..."
+			}
+			fmt.Fprintf(&b, "- **%s** (%s): %s\n",
+				r.SourceName, r.SourceTable, chunk)
+		}
+		b.WriteString("\n")
+	}
+
+	// Game system schema from RAG.
+	if input.GameSystemYAML != "" {
+		fmt.Fprintf(&b, "## Game System Schema\n\n")
+		fmt.Fprintf(&b, "```yaml\n%s\n```\n\n", input.GameSystemYAML)
+	}
+
 	b.WriteString("Analyse the source content and produce enrichment ")
 	b.WriteString("suggestions for the entity above. Respond with JSON only.")
 
@@ -221,6 +242,10 @@ Rules:
   "the stranger", or "some soldiers".
 - Only identify entities that are clearly distinct from any entity in the
   known entities list.
+- For each entity, write a description of two to three sentences
+  summarising everything known from the source content: their role,
+  relationships to other characters or places, notable characteristics,
+  and any actions described.
 
 Supported entity types:
   npc, location, item, faction, clue, creature, organization, event,
@@ -235,7 +260,7 @@ Response format:
     {
       "name": "Inspector Barrington",
       "entity_type": "npc",
-      "description": "A Scotland Yard detective mentioned in the chapter",
+      "description": "Inspector Barrington is a Scotland Yard detective assigned to investigate the disappearances in Whitechapel. He is described as methodical and sceptical of the occult, preferring forensic evidence over superstition. He first appears at the crime scene where he clashes with the investigators over jurisdiction.",
       "reasoning": "Named character appearing in paragraph 3 who is not in the known entities list"
     }
   ]

@@ -104,6 +104,38 @@ analysis and triage workflow.
   014) defines which relationship types are valid between
   which entity type pairs, and the Graph Expert enforces
   these constraints during analysis.
+- [ ] `[MVP-1]` LLM quota and rate limit error handling:
+  when the enrichment pipeline hits an LLM API token or
+  rate limit during background enrichment, the job is
+  silently marked as "failed" with no explanation to the
+  GM. The frontend `useResolveItem` hook has no `onError`
+  callback and never displays errors. Add quota-specific
+  error detection (distinguish HTTP 402 quota exceeded
+  from 429 rate limiting), surface the failure reason on
+  the job record, and display a clear message to the GM
+  on the triage page explaining that the API limit was
+  reached and to return later. Also add `onError`
+  handling to `useResolveItem` so resolve failures are
+  visible.
+- [ ] `[MVP-2]` Fix graph expert receiving incomplete data:
+  `PipelineInput.Relationships` is never populated by any
+  of the three API callers (`enrichment_handler.go`,
+  `content_analysis_handler.go` TryAutoEnrich,
+  `content_analysis_handler.go` RunContentEnrichment).
+  This causes orphan detection to flag every entity as
+  orphaned (false positives) and the LLM semantic checks
+  to only see proposed relationships, never existing
+  ones. Populate the relationships field from the
+  database before invoking the pipeline.
+- [ ] `[MVP-2]` Entity description auto-tagging and
+  pre-acceptance editing: when creating or updating an
+  entity from an accepted enrichment suggestion, the
+  description should be auto-tagged with wiki links for
+  all exact entity name matches. Additionally, the GM
+  needs the ability to edit entity text (description,
+  suggested content) before accepting, so the GM can
+  correct inaccuracies such as fixing a location
+  reference from Vienna to London.
 
 ### Graph Maintenance
 
@@ -181,6 +213,12 @@ enrichment pipeline. The implementation covers the pipeline
 orchestrator, TTRPG Expert, Canon Expert, Revision, Graph
 Expert agents, and RAG context assembly with token budgets.
 
+- [x] `[MVP-2]` RAG context for enrichment and revision
+  agents: the enrichment agent now performs per-entity
+  hybrid vector search and includes campaign context and
+  game system schema in its LLM prompt. The revision agent
+  now receives campaign search results and game system YAML
+  from the handler via ContextBuilder.
 - [ ] `[MVP-2]` Rewrite/style-choice capability: add a
   Revision Agent mode to the Revise phase that can rewrite
   content in different styles (prose, bullet notes, narrative
@@ -202,7 +240,7 @@ These fixes improve the quality of new entity suggestions
 from the enrichment pipeline and ensure the description
 data flows through to entity creation.
 
-- [ ] `[MVP-2]` Improve new entity suggestion descriptions
+- [x] `[MVP-2]` Improve new entity suggestion descriptions
   in the LLM prompt. The system prompt in
   `internal/enrichment/prompts.go:213` provides a terse
   example description ("A Scotland Yard detective mentioned
@@ -211,7 +249,7 @@ data flows through to entity creation.
   sentences summarising everything known from the source
   content: role, relationships, characteristics, and
   actions. Update the example to match.
-- [ ] `[MVP-2]` Pass the suggested description through when
+- [x] `[MVP-2]` Pass the suggested description through when
   creating entities. In
   `content_analysis_handler.go:321-326`, when the user
   clicks "Create Entity" on a `new_entity_suggestion`, only
@@ -220,7 +258,7 @@ data flows through to entity creation.
   `suggestedContent` JSONB is never extracted or included,
   even though the model supports the field. Fix the handler
   to extract and pass the description through.
-- [ ] `[MVP-2]` Insert wiki link tags when creating entities
+- [x] `[MVP-2]` Insert wiki link tags when creating entities
   from `new_entity_suggestion`. When the user resolves a
   `new_entity_suggestion` item as `new_entity`, the handler
   creates the entity but never inserts `[[wiki link]]` tags

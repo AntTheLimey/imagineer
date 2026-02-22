@@ -117,6 +117,15 @@ func (a *EnrichmentAgent) Run(
 		allKnownEntities = entities
 	}
 
+	// Prepare RAG context. Extract game system YAML
+	// from pipeline context and check vectorization
+	// availability for per-entity search.
+	var gameSystemYAML string
+	if input.Context != nil {
+		gameSystemYAML = input.Context.GameSystemYAML
+	}
+	vectorAvailable := a.db.IsVectorizationAvailable(ctx)
+
 	// Enrich each entity individually.
 	for i, entity := range entities {
 		if ctx.Err() != nil {
@@ -142,15 +151,35 @@ func (a *EnrichmentAgent) Run(
 			relationships = nil
 		}
 
+		// Per-entity RAG: search campaign content
+		// for context about this specific entity.
+		var campaignResults []models.SearchResult
+		if vectorAvailable {
+			results, searchErr :=
+				a.db.SearchCampaignContent(
+					ctx, input.CampaignID,
+					entity.Name, 5)
+			if searchErr != nil {
+				log.Printf(
+					"enrichment-agent: RAG search "+
+						"failed for entity %d: %v",
+					entity.ID, searchErr)
+			} else {
+				campaignResults = results
+			}
+		}
+
 		enrichInput := EnrichmentInput{
-			CampaignID:    input.CampaignID,
-			JobID:         input.JobID,
-			SourceTable:   input.SourceTable,
-			SourceID:      input.SourceID,
-			Content:       input.Content,
-			Entity:        entity,
-			OtherEntities: otherEntities,
-			Relationships: relationships,
+			CampaignID:      input.CampaignID,
+			JobID:           input.JobID,
+			SourceTable:     input.SourceTable,
+			SourceID:        input.SourceID,
+			Content:         input.Content,
+			Entity:          entity,
+			OtherEntities:   otherEntities,
+			Relationships:   relationships,
+			CampaignResults: campaignResults,
+			GameSystemYAML:  gameSystemYAML,
 		}
 
 		items, err := a.engine.EnrichEntity(ctx, provider, enrichInput)
