@@ -969,6 +969,7 @@ func TestBuildNewEntityDetectionSystemPrompt(t *testing.T) {
 	assert.Contains(t, prompt, "npc")
 	assert.Contains(t, prompt, "location")
 	assert.Contains(t, prompt, "valid JSON only")
+	assert.Contains(t, prompt, "two to three sentences")
 }
 
 func TestBuildNewEntityDetectionUserPrompt(t *testing.T) {
