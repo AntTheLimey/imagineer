@@ -40,9 +40,9 @@ import {
     Paper,
     Tooltip,
 } from '@mui/material';
-import { Check, Close, AddCircle } from '@mui/icons-material';
+import { Check, Close, AddCircle, DoneAll } from '@mui/icons-material';
 import { useWizardContext } from '../contexts/AnalysisWizardContext';
-import { useResolveItem } from '../hooks/useContentAnalysis';
+import { useResolveItem, useBatchResolve } from '../hooks/useContentAnalysis';
 import {
     entityTypeColors,
     formatEntityType,
@@ -132,8 +132,9 @@ function truncate(text: string, maxLen: number): string {
 
 export default function IdentifyPhasePage() {
     const { campaignId } = useParams<{ campaignId: string }>();
-    const { phaseItems, pendingCount } = useWizardContext();
+    const { phaseItems, pendingCount, job } = useWizardContext();
     const resolveItem = useResolveItem(Number(campaignId));
+    const batchResolve = useBatchResolve(Number(campaignId));
 
     // -- Local state -------------------------------------------------------
 
@@ -240,6 +241,23 @@ export default function IdentifyPhasePage() {
         }
     };
 
+    const handleBatchResolve = (detectionType: string) => {
+        if (!job) return;
+        batchResolve.mutate({
+            jobId: job.id,
+            detectionType,
+            resolution: 'accepted',
+        }, {
+            onSuccess: () => {
+                // Clear selection since the items are now resolved
+                setSelectedItemId(null);
+            },
+            onError: (err: Error) => {
+                console.error('Batch resolve failed:', err.message);
+            },
+        });
+    };
+
     // -- Render ------------------------------------------------------------
 
     return (
@@ -258,7 +276,15 @@ export default function IdentifyPhasePage() {
                     </Box>
                     <Divider />
                     <List disablePadding>
-                        {groupedItems.map((group) => (
+                        {groupedItems.map((group) => {
+                            const pendingInGroup = group.items.filter(
+                                (i) => i.resolution === 'pending',
+                            ).length;
+                            const allHaveEntity = group.items
+                                .filter((i) => i.resolution === 'pending')
+                                .every((i) => !!i.entityId);
+
+                            return (
                             <Box key={group.key}>
                                 {/* Group header */}
                                 <Box
@@ -286,6 +312,22 @@ export default function IdentifyPhasePage() {
                                     >
                                         {group.label}
                                     </Typography>
+                                    {allHaveEntity && pendingInGroup > 0 && (
+                                        <Tooltip title={`Accept all ${pendingInGroup} items in this group`}>
+                                            <span>
+                                                <Button
+                                                    size="small"
+                                                    variant="outlined"
+                                                    startIcon={<DoneAll fontSize="small" />}
+                                                    onClick={() => handleBatchResolve(group.key)}
+                                                    disabled={batchResolve.isPending}
+                                                    sx={{ textTransform: 'none', py: 0, minHeight: 28 }}
+                                                >
+                                                    Accept All
+                                                </Button>
+                                            </span>
+                                        </Tooltip>
+                                    )}
                                     <Chip
                                         label={group.items.length}
                                         size="small"
@@ -411,7 +453,8 @@ export default function IdentifyPhasePage() {
                                     </ListItemButton>
                                 ))}
                             </Box>
-                        ))}
+                        );
+                        })}
                         {groupedItems.length === 0 && (
                             <Box sx={{ p: 3, textAlign: 'center' }}>
                                 <Typography

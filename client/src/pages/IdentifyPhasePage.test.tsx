@@ -32,14 +32,16 @@ vi.mock('../contexts/AnalysisWizardContext', () => ({
 
 vi.mock('../hooks/useContentAnalysis', () => ({
     useResolveItem: vi.fn(),
+    useBatchResolve: vi.fn(),
 }));
 
 import { useWizardContext } from '../contexts/AnalysisWizardContext';
-import { useResolveItem } from '../hooks/useContentAnalysis';
+import { useResolveItem, useBatchResolve } from '../hooks/useContentAnalysis';
 import IdentifyPhasePage from './IdentifyPhasePage';
 
 const mockUseWizardContext = vi.mocked(useWizardContext);
 const mockUseResolveItem = vi.mocked(useResolveItem);
+const mockUseBatchResolve = vi.mocked(useBatchResolve);
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -173,6 +175,10 @@ describe('IdentifyPhasePage', () => {
             mutate: vi.fn(),
             isPending: false,
         } as unknown as ReturnType<typeof useResolveItem>);
+        mockUseBatchResolve.mockReturnValue({
+            mutate: vi.fn(),
+            isPending: false,
+        } as unknown as ReturnType<typeof useBatchResolve>);
     });
 
     // -- Grouping ----------------------------------------------------------
@@ -259,6 +265,49 @@ describe('IdentifyPhasePage', () => {
         expect(
             screen.getByText('Select an item to view details'),
         ).toBeInTheDocument();
+    });
+
+    // -- Accept All button visibility --------------------------------------
+
+    it('shows Accept All for groups where all pending items have entities', () => {
+        mockUseWizardContext.mockReturnValue(
+            makeWizardState({
+                job: { id: 1 } as AnalysisWizardState['job'],
+                phaseItems: mockItems,
+                pendingCount: 5,
+            }),
+        );
+
+        renderPage();
+
+        // There should be 4 Accept All buttons (resolved wiki links,
+        // untagged mentions, potential aliases, misspellings -- all
+        // have entityId set). The unresolved wiki-link group should
+        // NOT have Accept All since its item has no entityId.
+        const acceptAllButtons = screen.getAllByRole('button', {
+            name: /accept all/i,
+        });
+        expect(acceptAllButtons).toHaveLength(4);
+    });
+
+    it('hides Accept All for groups with items missing an entity', () => {
+        // Only include the unresolved wiki-link item (no entityId)
+        const unresolvedOnly: ContentAnalysisItem[] = [
+            mockItems[1], // wiki_link_unresolved, no entityId
+        ];
+        mockUseWizardContext.mockReturnValue(
+            makeWizardState({
+                job: { id: 1 } as AnalysisWizardState['job'],
+                phaseItems: unresolvedOnly,
+                pendingCount: 1,
+            }),
+        );
+
+        renderPage();
+
+        expect(
+            screen.queryByRole('button', { name: /accept all/i }),
+        ).not.toBeInTheDocument();
     });
 
     // -- Create entity form for unresolved wiki-links ----------------------
