@@ -52,6 +52,7 @@ import {
     useCampaignStats,
     useEntities,
 } from '../hooks';
+import { useUserSettings } from '../hooks/useUserSettings';
 import { useCampaignContext } from '../contexts/CampaignContext';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import type { WikiLinkEntity } from '../components/MarkdownRenderer';
@@ -152,6 +153,16 @@ export default function CampaignOverview() {
 
     // Update campaign mutation
     const updateCampaign = useUpdateCampaign();
+
+    // LLM availability check — used to disable AI-dependent phases
+    const { data: userSettings } = useUserSettings();
+    const hasLLM = !!userSettings?.contentGenService
+                && !!userSettings?.contentGenApiKey;
+
+    const disabledPhases = !hasLLM
+        ? { revise: 'Configure an LLM in Account Settings',
+            enrich: 'Configure an LLM in Account Settings' }
+        : undefined;
 
     // Analysis snackbar state
     const [analysisSnackbar, setAnalysisSnackbar] = useState<{
@@ -408,6 +419,7 @@ export default function CampaignOverview() {
                         onSave={handleSaveAll}
                         isDirty={isEditing}
                         isSaving={updateCampaign.isPending}
+                        disabledPhases={disabledPhases}
                     />
                 ) : (
                     <Button

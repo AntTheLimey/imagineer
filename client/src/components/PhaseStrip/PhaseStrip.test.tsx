@@ -163,4 +163,81 @@ describe('PhaseStrip', () => {
 
         expect(screen.getByRole('progressbar')).toBeInTheDocument();
     });
+
+    describe('disabledPhases', () => {
+        const disabledProps = {
+            ...defaultProps,
+            disabledPhases: {
+                revise: 'Configure an LLM in Account Settings',
+                enrich: 'Configure an LLM in Account Settings',
+            },
+        };
+
+        it('renders disabled checkboxes for disabled phases', () => {
+            render(<PhaseStrip {...disabledProps} />);
+
+            const checkboxes = screen.getAllByRole('checkbox');
+            expect(checkboxes[0]).not.toBeDisabled(); // identify
+            expect(checkboxes[1]).toBeDisabled();     // revise
+            expect(checkboxes[2]).toBeDisabled();     // enrich
+        });
+
+        it('does not toggle disabled checkboxes on click', async () => {
+            const user = userEvent.setup({ pointerEventsCheck: 0 });
+            render(<PhaseStrip {...disabledProps} />);
+
+            const reviseCheckbox = screen.getAllByRole('checkbox')[1];
+            expect(reviseCheckbox).not.toBeChecked();
+
+            await user.click(reviseCheckbox);
+            expect(reviseCheckbox).not.toBeChecked();
+        });
+
+        it('forces disabled phases to false even with stale localStorage', () => {
+            localStorage.setItem(
+                'imagineer:phaseSelection',
+                JSON.stringify({ identify: true, revise: true, enrich: true }),
+            );
+
+            render(<PhaseStrip {...disabledProps} />);
+
+            const checkboxes = screen.getAllByRole('checkbox');
+            expect(checkboxes[0]).toBeChecked();     // identify - not disabled
+            expect(checkboxes[1]).not.toBeChecked(); // revise - forced false
+            expect(checkboxes[2]).not.toBeChecked(); // enrich - forced false
+        });
+
+        it('keeps non-disabled phases interactive', async () => {
+            const user = userEvent.setup();
+            render(<PhaseStrip {...disabledProps} />);
+
+            const identifyCheckbox = screen.getAllByRole('checkbox')[0];
+            expect(identifyCheckbox).toBeChecked();
+
+            await user.click(identifyCheckbox);
+            expect(identifyCheckbox).not.toBeChecked();
+        });
+
+        it('excludes disabled phases from onSave payload', async () => {
+            const user = userEvent.setup();
+            const onSave = vi.fn();
+
+            render(
+                <PhaseStrip
+                    {...disabledProps}
+                    onSave={onSave}
+                />,
+            );
+
+            await user.click(
+                screen.getByRole('button', { name: /Save/i }),
+            );
+
+            expect(onSave).toHaveBeenCalledWith({
+                identify: true,
+                revise: false,
+                enrich: false,
+            });
+        });
+    });
 });

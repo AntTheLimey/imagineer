@@ -40,6 +40,8 @@ export interface PhaseStripProps {
     isDirty: boolean;
     /** Whether a save operation is currently in progress. */
     isSaving: boolean;
+    /** Phase keys that should be disabled (greyed out), with tooltip text. */
+    disabledPhases?: Partial<Record<keyof PhaseSelection, string>>;
 }
 
 /** localStorage key for persisting the default phase selection. */
@@ -111,6 +113,7 @@ export default function PhaseStrip({
     onSave,
     isDirty,
     isSaving,
+    disabledPhases,
 }: PhaseStripProps) {
     const [phases, setPhases] = useState<PhaseSelection>(loadPhases);
 
@@ -119,15 +122,31 @@ export default function PhaseStrip({
         localStorage.setItem(STORAGE_KEY, JSON.stringify(phases));
     }, [phases]);
 
+    // Force disabled phases to false so stale localStorage cannot re-enable them.
+    useEffect(() => {
+        if (disabledPhases) {
+            setPhases((prev) => {
+                const next = { ...prev };
+                for (const key of Object.keys(disabledPhases) as (keyof PhaseSelection)[]) {
+                    if (disabledPhases[key]) {
+                        next[key] = false;
+                    }
+                }
+                return next;
+            });
+        }
+    }, [disabledPhases]);
+
     const hasAnyPhase = phases.identify || phases.revise || phases.enrich;
     const buttonLabel = hasAnyPhase ? 'Save & Go' : 'Save';
     const isDisabled = !isDirty || isSaving;
 
     const handleToggle = useCallback(
         (key: keyof PhaseSelection) => {
+            if (disabledPhases?.[key]) return;
             setPhases((prev) => ({ ...prev, [key]: !prev[key] }));
         },
-        [],
+        [disabledPhases],
     );
 
     const handleClick = useCallback(() => {
@@ -146,44 +165,53 @@ export default function PhaseStrip({
                 bgcolor: 'action.hover',
             }}
         >
-            {PHASES.map((phase) => (
-                <Tooltip key={phase.key} title={phase.tooltip} arrow>
-                    <Box
-                        sx={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            minWidth: 100,
-                        }}
-                    >
-                        <FormControlLabel
-                            control={
-                                <Checkbox
-                                    checked={phases[phase.key]}
-                                    onChange={() => handleToggle(phase.key)}
-                                    size="small"
-                                />
-                            }
-                            label={
-                                <Typography
-                                    variant="body2"
-                                    sx={{ fontWeight: 'bold', lineHeight: 1.2 }}
-                                >
-                                    {phase.label}
-                                </Typography>
-                            }
-                            sx={{ mr: 0 }}
-                        />
-                        <Typography
-                            variant="caption"
-                            color="text.secondary"
-                            sx={{ mt: -0.5 }}
+            {PHASES.map((phase) => {
+                const isPhaseDisabled = !!disabledPhases?.[phase.key];
+                const tooltipText = isPhaseDisabled
+                    ? disabledPhases![phase.key]!
+                    : phase.tooltip;
+
+                return (
+                    <Tooltip key={phase.key} title={tooltipText} arrow>
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                minWidth: 100,
+                                opacity: isPhaseDisabled ? 0.5 : 1,
+                            }}
                         >
-                            {phase.subtitle}
-                        </Typography>
-                    </Box>
-                </Tooltip>
-            ))}
+                            <FormControlLabel
+                                control={
+                                    <Checkbox
+                                        checked={phases[phase.key]}
+                                        onChange={() => handleToggle(phase.key)}
+                                        size="small"
+                                        disabled={isPhaseDisabled}
+                                    />
+                                }
+                                label={
+                                    <Typography
+                                        variant="body2"
+                                        sx={{ fontWeight: 'bold', lineHeight: 1.2 }}
+                                    >
+                                        {phase.label}
+                                    </Typography>
+                                }
+                                sx={{ mr: 0 }}
+                            />
+                            <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{ mt: -0.5 }}
+                            >
+                                {phase.subtitle}
+                            </Typography>
+                        </Box>
+                    </Tooltip>
+                );
+            })}
 
             <Button
                 variant="contained"
