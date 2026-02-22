@@ -1955,12 +1955,35 @@ func (h *ContentAnalysisHandler) GenerateRevision(w http.ResponseWriter, r *http
 		return
 	}
 
+	// Build RAG context for the revision agent.
+	campaign, campaignErr := h.db.GetCampaign(r.Context(), campaignID)
+	var gameSystemCode string
+	if campaignErr != nil {
+		log.Printf("GenerateRevision: failed to get campaign %d: %v",
+			campaignID, campaignErr)
+	} else if campaign.System != nil {
+		gameSystemCode = campaign.System.Code
+	}
+
+	ctxBuilder := enrichment.NewContextBuilder(h.db, "")
+	ragCtx, ragErr := ctxBuilder.BuildContext(
+		r.Context(), campaignID, originalContent,
+		gameSystemCode, nil)
+	if ragErr != nil {
+		log.Printf("GenerateRevision: failed to build RAG context for job %d: %v",
+			jobID, ragErr)
+	}
+
 	// Call the RevisionAgent to generate revised content.
 	revisionInput := enrichment.RevisionInput{
 		OriginalContent: originalContent,
 		AcceptedItems:   acceptedItems,
 		SourceTable:     job.SourceTable,
 		SourceID:        job.SourceID,
+	}
+	if ragCtx != nil {
+		revisionInput.GameSystemYAML = ragCtx.GameSystemYAML
+		revisionInput.CampaignResults = ragCtx.CampaignResults
 	}
 
 	result, err := enrichment.NewRevisionAgent().GenerateRevision(
