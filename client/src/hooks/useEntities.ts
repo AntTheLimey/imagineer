@@ -116,7 +116,7 @@ export function useUpdateEntity() {
             campaignId: number;
             entityId: number;
             input: UpdateEntityInput;
-            options?: { analyze?: boolean; enrich?: boolean };
+            options?: { analyze?: boolean; enrich?: boolean; phases?: string[] };
         }) => entitiesApi.update(campaignId, entityId, input, options),
         onSuccess: (data: Entity) => {
             // Update the specific entity in cache

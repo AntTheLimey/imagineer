@@ -664,6 +664,8 @@ type ContentAnalysisJob struct {
 	ResolvedItems      int       `json:"resolvedItems"`
 	EnrichmentTotal    int       `json:"enrichmentTotal"`
 	EnrichmentResolved int       `json:"enrichmentResolved"`
+	CurrentPhase       *string   `json:"currentPhase"`
+	Phases             []string  `json:"phases"`
 	CreatedAt          time.Time `json:"createdAt"`
 	UpdatedAt          time.Time `json:"updatedAt"`
 }
@@ -783,6 +785,8 @@ type Draft struct {
 	ServerVersion *int            `json:"serverVersion,omitempty"`
 	CreatedAt     time.Time       `json:"createdAt"`
 	UpdatedAt     time.Time       `json:"updatedAt"`
+	RevisionCount int             `json:"revisionCount"`
+	Status        string          `json:"status"`
 }
 
 // DraftIndicator is a lightweight representation of a draft used in

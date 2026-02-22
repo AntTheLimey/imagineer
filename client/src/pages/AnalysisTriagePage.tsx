@@ -729,6 +729,22 @@ export default function AnalysisTriagePage() {
     const isLoading = jobLoading || itemsLoading;
 
     /**
+     * Check whether a given phase was selected for this job.
+     *
+     * Job phase keys map to item phase values as follows:
+     *   'identify' → items with phase 'identification' (DETECTION_GROUPS)
+     *   'revise'   → items with phase 'analysis'       (ANALYSIS_GROUPS)
+     *   'enrich'   → items with phase 'enrichment'     (ENRICHMENT_GROUPS)
+     *
+     * Returns true for all phases when job.phases is empty or undefined,
+     * ensuring backward compatibility with pre-existing jobs.
+     */
+    const hasPhase = useCallback(
+        (key: string) => !job?.phases?.length || job.phases.includes(key),
+        [job?.phases],
+    );
+
+    /**
      * Split items by phase and resolution status.
      */
     const identificationItems = useMemo(() => {
@@ -797,20 +813,31 @@ export default function AnalysisTriagePage() {
         if (!job) return undefined;
         const source = `${job.sourceTable} — ${job.sourceField}`;
 
-        if (isEnriching || enrichmentItems.length > 0) {
-            return `Step 2 of 2: Entity Enrichment — ${source}`;
+        // Count active phases for step numbering
+        const activePhases: string[] = [];
+        if (hasPhase('revise')) activePhases.push('revise');
+        if (hasPhase('identify')) activePhases.push('identify');
+        if (hasPhase('enrich')) activePhases.push('enrich');
+        const totalSteps = activePhases.length;
+
+        if (totalSteps <= 1) return source;
+
+        // Determine current step
+        if (hasPhase('enrich') && (isEnriching || enrichmentItems.length > 0 ||
+            (job.resolvedItems === job.totalItems && job.totalItems > 0 && hasLLMConfigured))) {
+            const step = activePhases.indexOf('enrich') + 1;
+            return `Step ${step} of ${totalSteps}: Entity Enrichment — ${source}`;
         }
 
-        if (job.resolvedItems === job.totalItems && job.totalItems > 0 && hasLLMConfigured) {
-            return `Step 2 of 2: Entity Enrichment — ${source}`;
+        if (!hasLLMConfigured) return source;
+
+        const step = activePhases.indexOf('identify') + 1;
+        if (step > 0) {
+            return `Step ${step} of ${totalSteps}: Entity Detection — ${source}`;
         }
 
-        if (!hasLLMConfigured) {
-            return `${source}`;
-        }
-
-        return `Step 1 of 2: Entity Detection — ${source}`;
-    }, [job, isEnriching, enrichmentItems, hasLLMConfigured]);
+        return source;
+    }, [job, isEnriching, enrichmentItems, hasLLMConfigured, hasPhase]);
 
     const pendingIdentificationItems = useMemo(() => {
         return identificationItems.filter((i) => i.resolution === 'pending');
@@ -831,11 +858,11 @@ export default function AnalysisTriagePage() {
 
     const pendingItems = useMemo(() => {
         return [
-            ...pendingAnalysisItems,
-            ...pendingIdentificationItems,
-            ...pendingEnrichmentItems,
+            ...(hasPhase('revise') ? pendingAnalysisItems : []),
+            ...(hasPhase('identify') ? pendingIdentificationItems : []),
+            ...(hasPhase('enrich') ? pendingEnrichmentItems : []),
         ];
-    }, [pendingAnalysisItems, pendingIdentificationItems, pendingEnrichmentItems]);
+    }, [hasPhase, pendingAnalysisItems, pendingIdentificationItems, pendingEnrichmentItems]);
 
     /**
      * Group only pending identification items by detection type for the
@@ -924,55 +951,55 @@ export default function AnalysisTriagePage() {
 
     const resolvedCount = resolvedItems.length;
     const totalCount = items ? items.length : 0;
-    const allResolved = resolvedCount === totalCount && totalCount > 0;
+    const allResolved = pendingItems.length === 0 && totalCount > 0;
 
     // System status message for the title bar
     const systemStatus = useMemo(() => {
         if (!job) return null;
 
-        // Phase 1: still reviewing
-        if (job.resolvedItems < job.totalItems) {
-            if (hasLLMConfigured) {
+        // Phase 1: still reviewing identification items
+        if (hasPhase('identify') && job.resolvedItems < job.totalItems) {
+            if (hasLLMConfigured && hasPhase('enrich')) {
                 return {
                     message: 'Review detections below, then enrichment will analyse linked entities',
                     color: 'text.secondary' as const,
                     showSpinner: false,
                 };
             }
-            return null; // No extra status needed when no LLM
+            return null;
         }
 
-        // All Phase 1 done, enrichment starting/waiting
-        if (isEnriching) {
-            const resolved = job.enrichmentResolved ?? 0;
-            const total = job.enrichmentTotal ?? 0;
-            return {
-                message: total > 0
-                    ? `Analysing entities... (${resolved} of ${total})`
-                    : 'Starting entity analysis...',
-                color: 'info.main' as const,
-                showSpinner: true,
-            };
-        }
-
-        // All Phase 1 done, waiting for enrichment to start
-        if (hasLLMConfigured && job.enrichmentTotal === 0 && job.status !== 'completed') {
-            return {
-                message: 'Starting entity analysis...',
-                color: 'info.main' as const,
-                showSpinner: true,
-            };
-        }
-
-        // Enrichment items ready to review
-        if (enrichmentItems.length > 0) {
-            const pendingEnrichment = enrichmentItems.filter(i => i.resolution === 'pending').length;
-            if (pendingEnrichment > 0) {
+        // Enrichment phases
+        if (hasPhase('enrich')) {
+            if (isEnriching) {
+                const resolved = job.enrichmentResolved ?? 0;
+                const total = job.enrichmentTotal ?? 0;
                 return {
-                    message: `${pendingEnrichment} enrichment suggestion${pendingEnrichment === 1 ? '' : 's'} ready for review`,
-                    color: 'success.main' as const,
-                    showSpinner: false,
+                    message: total > 0
+                        ? `Analysing entities... (${resolved} of ${total})`
+                        : 'Starting entity analysis...',
+                    color: 'info.main' as const,
+                    showSpinner: true,
                 };
+            }
+
+            if (hasLLMConfigured && job.enrichmentTotal === 0 && job.status !== 'completed') {
+                return {
+                    message: 'Starting entity analysis...',
+                    color: 'info.main' as const,
+                    showSpinner: true,
+                };
+            }
+
+            if (enrichmentItems.length > 0) {
+                const pendingEnrichment = enrichmentItems.filter(i => i.resolution === 'pending').length;
+                if (pendingEnrichment > 0) {
+                    return {
+                        message: `${pendingEnrichment} enrichment suggestion${pendingEnrichment === 1 ? '' : 's'} ready for review`,
+                        color: 'success.main' as const,
+                        showSpinner: false,
+                    };
+                }
             }
         }
 
@@ -986,7 +1013,7 @@ export default function AnalysisTriagePage() {
         }
 
         return null;
-    }, [job, isEnriching, enrichmentItems, hasLLMConfigured, allResolved]);
+    }, [job, isEnriching, enrichmentItems, hasLLMConfigured, allResolved, hasPhase]);
 
     /**
      * Build the return path based on the job's source table and ID.
@@ -1024,66 +1051,69 @@ export default function AnalysisTriagePage() {
     const leftPanelOrder = useMemo((): LeftPanelEntry[] => {
         const entries: LeftPanelEntry[] = [];
 
-        // Analysis phase items listed individually per detection group.
-        for (const key of Object.keys(ANALYSIS_GROUPS)) {
-            const groupItems = pendingAnalysisItems.filter(
-                (item) => item.detectionType === key,
-            );
-            for (const item of groupItems) {
-                entries.push({ kind: 'item', item });
-            }
-        }
-
-        // Phase 1: identification items listed individually per
-        // detection group.
-        for (const group of DETECTION_GROUPS) {
-            const groupItems = groupedPendingItems[group.key];
-            if (!groupItems || groupItems.length === 0) continue;
-            for (const item of groupItems) {
-                entries.push({ kind: 'item', item });
-            }
-        }
-
-        // Phase 2: enrichment items. log_entry and
-        // relationship_suggestion are grouped by entity; others
-        // are listed individually.
-        for (const group of ENRICHMENT_GROUPS) {
-            const groupItems = pendingEnrichmentItems.filter(
-                (item) => item.detectionType === group.key,
-            );
-            if (groupItems.length === 0) continue;
-
-            if (
-                group.key === 'log_entry' ||
-                group.key === 'relationship_suggestion'
-            ) {
-                const entityGroups = new Map<
-                    number,
-                    ContentAnalysisItem[]
-                >();
-                for (const item of groupItems) {
-                    const eid = item.entityId ?? 0;
-                    if (!entityGroups.has(eid))
-                        entityGroups.set(eid, []);
-                    entityGroups.get(eid)!.push(item);
-                }
-                for (const [entityId, entityItems] of entityGroups) {
-                    entries.push({
-                        kind: 'entityGroup',
-                        entityId,
-                        detectionType: group.key,
-                        itemIds: entityItems.map((i) => i.id),
-                    });
-                }
-            } else {
+        // Analysis phase items (only if 'revise' phase is active)
+        if (hasPhase('revise')) {
+            for (const key of Object.keys(ANALYSIS_GROUPS)) {
+                const groupItems = pendingAnalysisItems.filter(
+                    (item) => item.detectionType === key,
+                );
                 for (const item of groupItems) {
                     entries.push({ kind: 'item', item });
                 }
             }
         }
 
+        // Phase 1: identification items (only if 'identify' phase is active)
+        if (hasPhase('identify')) {
+            for (const group of DETECTION_GROUPS) {
+                const groupItems = groupedPendingItems[group.key];
+                if (!groupItems || groupItems.length === 0) continue;
+                for (const item of groupItems) {
+                    entries.push({ kind: 'item', item });
+                }
+            }
+        }
+
+        // Phase 2: enrichment items (only if 'enrich' phase is active)
+        if (hasPhase('enrich')) {
+            for (const group of ENRICHMENT_GROUPS) {
+                const groupItems = pendingEnrichmentItems.filter(
+                    (item) => item.detectionType === group.key,
+                );
+                if (groupItems.length === 0) continue;
+
+                if (
+                    group.key === 'log_entry' ||
+                    group.key === 'relationship_suggestion'
+                ) {
+                    const entityGroups = new Map<
+                        number,
+                        ContentAnalysisItem[]
+                    >();
+                    for (const item of groupItems) {
+                        const eid = item.entityId ?? 0;
+                        if (!entityGroups.has(eid))
+                            entityGroups.set(eid, []);
+                        entityGroups.get(eid)!.push(item);
+                    }
+                    for (const [entityId, entityItems] of entityGroups) {
+                        entries.push({
+                            kind: 'entityGroup',
+                            entityId,
+                            detectionType: group.key,
+                            itemIds: entityItems.map((i) => i.id),
+                        });
+                    }
+                } else {
+                    for (const item of groupItems) {
+                        entries.push({ kind: 'item', item });
+                    }
+                }
+            }
+        }
+
         return entries;
-    }, [pendingAnalysisItems, groupedPendingItems, pendingEnrichmentItems]);
+    }, [hasPhase, pendingAnalysisItems, groupedPendingItems, pendingEnrichmentItems]);
 
     /**
      * Advance the selection to the next pending item after a resolution,
@@ -1632,7 +1662,7 @@ export default function AnalysisTriagePage() {
                             </Box>
                         )}
                         {/* Analysis phase items (advisory) */}
-                        {pendingAnalysisItems.length > 0 && (
+                        {hasPhase('revise') && pendingAnalysisItems.length > 0 && (
                             <Box>
                                 <Box
                                     sx={{
@@ -1909,7 +1939,7 @@ export default function AnalysisTriagePage() {
                             </Box>
                         )}
 
-                        {DETECTION_GROUPS.map((group) => {
+                        {hasPhase('identify') && DETECTION_GROUPS.map((group) => {
                             const groupItems =
                                 groupedPendingItems[group.key];
                             if (!groupItems || groupItems.length === 0) {
@@ -2121,7 +2151,7 @@ export default function AnalysisTriagePage() {
                     </List>
 
                     {/* Enrichment status */}
-                    {enrichmentStatus && (
+                    {hasPhase('enrich') && enrichmentStatus && (
                         <Box
                             sx={{
                                 px: 2,
@@ -2161,7 +2191,7 @@ export default function AnalysisTriagePage() {
                     )}
 
                     {/* Enrichment groups */}
-                    {ENRICHMENT_GROUPS.map((group) => {
+                    {hasPhase('enrich') && ENRICHMENT_GROUPS.map((group) => {
                         const groupItems = pendingEnrichmentItems.filter(
                             (item) => item.detectionType === group.key,
                         );

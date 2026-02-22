@@ -110,7 +110,7 @@ export function useUpdateChapter() {
             campaignId: number;
             chapterId: number;
             input: UpdateChapterInput;
-            options?: { analyze?: boolean; enrich?: boolean };
+            options?: { analyze?: boolean; enrich?: boolean; phases?: string[] };
         }) => chaptersApi.update(campaignId, chapterId, input, options),
         onSuccess: (data: Chapter) => {
             // Update the specific chapter in cache

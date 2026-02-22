@@ -720,10 +720,13 @@ func (h *ContentAnalysisHandler) TriggerAnalysis(w http.ResponseWriter, r *http.
 		return
 	}
 
+	phases := parsePhases(r)
+
 	job, items, err := h.analyzer.AnalyzeContent(
 		r.Context(), campaignID,
 		req.SourceTable, req.SourceField, req.SourceID,
 		content,
+		phases,
 	)
 	if err != nil {
 		log.Printf("Error analyzing content: %v", err)

@@ -144,11 +144,13 @@ export function useUpdateSession() {
             campaignId,
             sessionId,
             input,
+            options,
         }: {
             campaignId: number;
             sessionId: number;
             input: UpdateSessionInput;
-        }) => sessionsApi.update(campaignId, sessionId, input),
+            options?: { analyze?: boolean; enrich?: boolean; phases?: string[] };
+        }) => sessionsApi.update(campaignId, sessionId, input, options),
         onSuccess: (data: Session) => {
             // Update the specific session in cache
             queryClient.setQueryData(

@@ -20,43 +20,89 @@ import (
 )
 
 // CreateAnalysisJob inserts a new content analysis job and returns the
-// populated record including server-generated fields.
+// populated record including server-generated fields. When the input
+// job includes Phases, they are batch-inserted into job_phases and the
+// first phase is set as current_phase.
 func (db *DB) CreateAnalysisJob(ctx context.Context, job *models.ContentAnalysisJob) (*models.ContentAnalysisJob, error) {
+	// If phases are provided, set current_phase to the first one.
+	var currentPhase *string
+	if len(job.Phases) > 0 {
+		currentPhase = &job.Phases[0]
+	}
+
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
 	query := `
 		INSERT INTO content_analysis_jobs
 			(campaign_id, source_table, source_id, source_field,
 			 status, total_items, resolved_items,
-			 enrichment_total, enrichment_resolved)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			 enrichment_total, enrichment_resolved, current_phase)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING id, campaign_id, source_table, source_id, source_field,
 		          status, total_items, resolved_items,
 		          enrichment_total, enrichment_resolved,
+		          current_phase,
 		          created_at, updated_at`
 
 	var j models.ContentAnalysisJob
-	err := db.QueryRow(ctx, query,
+	err = tx.QueryRow(ctx, query,
 		job.CampaignID, job.SourceTable, job.SourceID, job.SourceField,
 		job.Status, job.TotalItems, job.ResolvedItems,
-		job.EnrichmentTotal, job.EnrichmentResolved,
+		job.EnrichmentTotal, job.EnrichmentResolved, currentPhase,
 	).Scan(
 		&j.ID, &j.CampaignID, &j.SourceTable, &j.SourceID, &j.SourceField,
 		&j.Status, &j.TotalItems, &j.ResolvedItems,
 		&j.EnrichmentTotal, &j.EnrichmentResolved,
+		&j.CurrentPhase,
 		&j.CreatedAt, &j.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create analysis job: %w", err)
 	}
 
+	// SAFETY: Only numeric placeholder tokens ($1, $2, ...) are
+	// interpolated into the SQL string; all data values are passed
+	// as query arguments, preventing SQL injection.
+	if len(job.Phases) > 0 {
+		const phaseCols = 3
+		phaseValues := make([]string, 0, len(job.Phases))
+		phaseArgs := make([]interface{}, 0, len(job.Phases)*phaseCols)
+		for i, phase := range job.Phases {
+			base := i * phaseCols
+			phaseValues = append(phaseValues, fmt.Sprintf(
+				"($%d, $%d, $%d)", base+1, base+2, base+3,
+			))
+			phaseArgs = append(phaseArgs, j.ID, phase, i)
+		}
+		phaseQuery := fmt.Sprintf(
+			"INSERT INTO job_phases (job_id, phase_key, sort_order) VALUES %s",
+			strings.Join(phaseValues, ", "),
+		)
+		if _, err := tx.Exec(ctx, phaseQuery, phaseArgs...); err != nil {
+			return nil, fmt.Errorf("failed to insert job phases: %w", err)
+		}
+		j.Phases = job.Phases
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit analysis job: %w", err)
+	}
+
 	return &j, nil
 }
 
-// GetAnalysisJob retrieves a content analysis job by ID.
+// GetAnalysisJob retrieves a content analysis job by ID, including its
+// ordered list of phases.
 func (db *DB) GetAnalysisJob(ctx context.Context, id int64) (*models.ContentAnalysisJob, error) {
 	query := `
 		SELECT id, campaign_id, source_table, source_id, source_field,
 		       status, total_items, resolved_items,
 		       enrichment_total, enrichment_resolved,
+		       current_phase,
 		       created_at, updated_at
 		FROM content_analysis_jobs
 		WHERE id = $1`
@@ -66,22 +112,30 @@ func (db *DB) GetAnalysisJob(ctx context.Context, id int64) (*models.ContentAnal
 		&j.ID, &j.CampaignID, &j.SourceTable, &j.SourceID, &j.SourceField,
 		&j.Status, &j.TotalItems, &j.ResolvedItems,
 		&j.EnrichmentTotal, &j.EnrichmentResolved,
+		&j.CurrentPhase,
 		&j.CreatedAt, &j.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get analysis job: %w", err)
 	}
 
+	j.Phases, err = db.loadJobPhases(ctx, j.ID)
+	if err != nil {
+		return nil, err
+	}
+
 	return &j, nil
 }
 
 // ListAnalysisJobsByCampaign retrieves all content analysis jobs for a
-// campaign, ordered by most recent first.
+// campaign, ordered by most recent first. Phases are not loaded for
+// list operations to avoid N+1 queries.
 func (db *DB) ListAnalysisJobsByCampaign(ctx context.Context, campaignID int64) ([]models.ContentAnalysisJob, error) {
 	query := `
 		SELECT id, campaign_id, source_table, source_id, source_field,
 		       status, total_items, resolved_items,
 		       enrichment_total, enrichment_resolved,
+		       current_phase,
 		       created_at, updated_at
 		FROM content_analysis_jobs
 		WHERE campaign_id = $1
@@ -97,12 +151,13 @@ func (db *DB) ListAnalysisJobsByCampaign(ctx context.Context, campaignID int64) 
 }
 
 // GetLatestAnalysisJob retrieves the most recent analysis job for a
-// specific content source field.
+// specific content source field, including its ordered phases.
 func (db *DB) GetLatestAnalysisJob(ctx context.Context, campaignID int64, sourceTable string, sourceID int64, sourceField string) (*models.ContentAnalysisJob, error) {
 	query := `
 		SELECT id, campaign_id, source_table, source_id, source_field,
 		       status, total_items, resolved_items,
 		       enrichment_total, enrichment_resolved,
+		       current_phase,
 		       created_at, updated_at
 		FROM content_analysis_jobs
 		WHERE campaign_id = $1
@@ -117,10 +172,16 @@ func (db *DB) GetLatestAnalysisJob(ctx context.Context, campaignID int64, source
 		&j.ID, &j.CampaignID, &j.SourceTable, &j.SourceID, &j.SourceField,
 		&j.Status, &j.TotalItems, &j.ResolvedItems,
 		&j.EnrichmentTotal, &j.EnrichmentResolved,
+		&j.CurrentPhase,
 		&j.CreatedAt, &j.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get latest analysis job: %w", err)
+	}
+
+	j.Phases, err = db.loadJobPhases(ctx, j.ID)
+	if err != nil {
+		return nil, err
 	}
 
 	return &j, nil
@@ -338,7 +399,41 @@ func (db *DB) DeleteAnalysisJobsForSource(ctx context.Context, campaignID int64,
 	return db.Exec(ctx, query, campaignID, sourceTable, sourceID, sourceField)
 }
 
-// scanAnalysisJobs scans multiple content analysis job rows.
+// SetJobCurrentPhase updates the current_phase of a content analysis job.
+func (db *DB) SetJobCurrentPhase(ctx context.Context, jobID int64, phase *string) error {
+	query := `
+		UPDATE content_analysis_jobs
+		SET current_phase = $2
+		WHERE id = $1`
+	return db.Exec(ctx, query, jobID, phase)
+}
+
+// loadJobPhases retrieves the ordered phase keys for a given job.
+func (db *DB) loadJobPhases(ctx context.Context, jobID int64) ([]string, error) {
+	rows, err := db.Query(ctx,
+		"SELECT phase_key FROM job_phases WHERE job_id = $1 ORDER BY sort_order",
+		jobID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get job phases: %w", err)
+	}
+	defer rows.Close()
+	var phases []string
+	for rows.Next() {
+		var pk string
+		if err := rows.Scan(&pk); err != nil {
+			return nil, fmt.Errorf("failed to scan job phase: %w", err)
+		}
+		phases = append(phases, pk)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating job phases: %w", err)
+	}
+	return phases, nil
+}
+
+// scanAnalysisJobs scans multiple content analysis job rows. Phases
+// are not loaded here to avoid N+1 queries in list operations.
 func scanAnalysisJobs(rows pgx.Rows) ([]models.ContentAnalysisJob, error) {
 	var jobs []models.ContentAnalysisJob
 	for rows.Next() {
@@ -347,6 +442,7 @@ func scanAnalysisJobs(rows pgx.Rows) ([]models.ContentAnalysisJob, error) {
 			&j.ID, &j.CampaignID, &j.SourceTable, &j.SourceID, &j.SourceField,
 			&j.Status, &j.TotalItems, &j.ResolvedItems,
 			&j.EnrichmentTotal, &j.EnrichmentResolved,
+			&j.CurrentPhase,
 			&j.CreatedAt, &j.UpdatedAt,
 		)
 		if err != nil {

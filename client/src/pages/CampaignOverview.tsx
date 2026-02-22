@@ -275,6 +275,12 @@ export default function CampaignOverview() {
 
         const hasAnyPhase = phases.identify || phases.revise || phases.enrich;
 
+        // Build phases array from selection
+        const phaseKeys: string[] = [];
+        if (phases.identify) phaseKeys.push('identify');
+        if (phases.revise) phaseKeys.push('revise');
+        if (phases.enrich) phaseKeys.push('enrich');
+
         try {
             const result = await updateCampaign.mutateAsync({
                 id: campaignId!,
@@ -289,16 +295,9 @@ export default function CampaignOverview() {
                 options: {
                     analyze: phases.identify || phases.revise,
                     enrich: phases.enrich,
+                    phases: phaseKeys.length > 0 ? phaseKeys : undefined,
                 },
             });
-
-            // Store phase selection so triage page knows the workflow
-            if (hasAnyPhase) {
-                localStorage.setItem(
-                    'imagineer:activePhases',
-                    JSON.stringify(phases),
-                );
-            }
 
             // Check for analysis results
             // eslint-disable-next-line @typescript-eslint/no-explicit-any

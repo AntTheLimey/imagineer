@@ -81,7 +81,7 @@ export function useUpdateCampaign() {
         }: {
             id: number;
             input: UpdateCampaignInput;
-            options?: { analyze?: boolean; enrich?: boolean };
+            options?: { analyze?: boolean; enrich?: boolean; phases?: string[] };
         }) => campaignsApi.update(id, input, options),
         onSuccess: (data: Campaign) => {
             // Update the specific campaign in cache

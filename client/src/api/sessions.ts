@@ -98,11 +98,18 @@ export const sessionsApi = {
     update(
         campaignId: number,
         sessionId: number,
-        input: UpdateSessionInput
+        input: UpdateSessionInput,
+        options?: { analyze?: boolean; enrich?: boolean; phases?: string[] },
     ): Promise<Session> {
+        const params: Record<string, string> = {};
+        if (options?.analyze) params.analyze = 'true';
+        if (options?.enrich) params.enrich = 'true';
+        if (options?.phases?.length)
+            params.phases = options.phases.join(',');
         return apiClient.put<Session>(
             `/campaigns/${campaignId}/sessions/${sessionId}`,
-            input
+            input,
+            params,
         );
     },
 
