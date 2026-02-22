@@ -104,6 +104,38 @@ analysis and triage workflow.
   014) defines which relationship types are valid between
   which entity type pairs, and the Graph Expert enforces
   these constraints during analysis.
+- [ ] `[MVP-1]` LLM quota and rate limit error handling:
+  when the enrichment pipeline hits an LLM API token or
+  rate limit during background enrichment, the job is
+  silently marked as "failed" with no explanation to the
+  GM. The frontend `useResolveItem` hook has no `onError`
+  callback and never displays errors. Add quota-specific
+  error detection (distinguish HTTP 402 quota exceeded
+  from 429 rate limiting), surface the failure reason on
+  the job record, and display a clear message to the GM
+  on the triage page explaining that the API limit was
+  reached and to return later. Also add `onError`
+  handling to `useResolveItem` so resolve failures are
+  visible.
+- [ ] `[MVP-2]` Fix graph expert receiving incomplete data:
+  `PipelineInput.Relationships` is never populated by any
+  of the three API callers (`enrichment_handler.go`,
+  `content_analysis_handler.go` TryAutoEnrich,
+  `content_analysis_handler.go` RunContentEnrichment).
+  This causes orphan detection to flag every entity as
+  orphaned (false positives) and the LLM semantic checks
+  to only see proposed relationships, never existing
+  ones. Populate the relationships field from the
+  database before invoking the pipeline.
+- [ ] `[MVP-2]` Entity description auto-tagging and
+  pre-acceptance editing: when creating or updating an
+  entity from an accepted enrichment suggestion, the
+  description should be auto-tagged with wiki links for
+  all exact entity name matches. Additionally, the GM
+  needs the ability to edit entity text (description,
+  suggested content) before accepting, so the GM can
+  correct inaccuracies such as fixing a location
+  reference from Vienna to London.
 
 ### Graph Maintenance
 
