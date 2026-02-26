@@ -32,6 +32,7 @@ export interface ContentAnalysisJob {
     enrichmentResolved: number;
     phases: string[];
     currentPhase: string | null;
+    failureReason?: string;
     createdAt: string;
     updatedAt: string;
 }

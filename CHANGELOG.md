@@ -8,6 +8,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Analysis Wizard (Phase Screens)
+  - Replaced the monolithic 4,400-line AnalysisTriagePage
+    with a step-by-step wizard where each analysis phase
+    (Identify, Revise, Enrich) has its own focused screen
+    accessible via nested routes under
+    `/campaigns/:id/analysis/:jobId/`.
+  - `useAnalysisWizard` hook provides phase filtering via
+    detection type groups, phase navigation, and
+    auto-advance with a 1500 ms timer when all items in a
+    phase are resolved.
+  - `AnalysisWizard` shell component renders an MUI Stepper,
+    error banner (quota, rate limit, and general errors),
+    loading spinner, navigation buttons, and auto-advance
+    snackbar.
+  - `IdentifyPhasePage` displays a two-column layout with
+    items grouped by five detection types, color dots and
+    counts, a detail panel with context highlighting, entity
+    chip display, a create entity form, and an Accept All
+    batch action per detection type group.
+  - `EntityAutocomplete` component provides debounced
+    (300 ms) MUI Autocomplete for entity search with type
+    chips.
+  - `RevisePhasePage` groups analysis findings by eight
+    detection types with severity indicators, a revision
+    workflow (Generate, diff view, edit, Apply with
+    iteration counter), and a new mentions section for
+    identification items created after revision apply.
+  - `DiffView` component renders side-by-side diffs with
+    line-by-line comparison, changed-line highlighting
+    (red/green), and optional inline editing.
+  - `EnrichPhasePage` provides a two-pass enrichment UI
+    (Start Enrichment, polling, results) with items
+    grouped by eight enrichment detection types,
+    type-specific detail views, cancel enrichment support,
+    and edit-before-accept for description updates.
+  - `autoTagWikiLinks` utility wraps untagged entity names
+    in `[[wiki-link]]` syntax with case-insensitive
+    matching and skip-already-tagged logic.
+  - Graph Health summary section displays a consolidated
+    view of graph advisory items with distinctive visual
+    treatment.
+  - 276 tests across 26 test files cover the wizard
+    components.
 - Entity Suggestion Quality
   - The LLM prompt for new entity detection now
     requests two to three sentence descriptions
@@ -438,6 +481,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Migration 005 adds `failure_reason` TEXT column to
+  `content_analysis_jobs` for storing the reason a job
+  failed. The `SetJobFailureReason` helper stores the
+  failure reason atomically with `status='failed'`.
+- LLM quota detection: a new `QuotaExceededError` type
+  distinguishes HTTP 402 quota exceeded from 429 rate
+  limiting, and `doWithRetry` fails immediately on quota
+  errors instead of retrying.
+- `PipelineInput.Relationships` now populates from the
+  database before pipeline invocation, eliminating
+  false-positive orphan warnings from the Graph Expert.
 - `CreateAnalysisJob` now wraps job and phase inserts in a
   database transaction for atomicity.
 - Missing `rows.Err()` check after iterating phase rows in
@@ -532,9 +586,57 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Fixed `search_campaign_content()` SQL function referencing
   non-existent column `c.chunk` (correct column is `c.content`
   in pgedge_vectorizer chunk tables).
+- EnrichPhasePage `renderSuggestedContent` default case rendered
+  raw `JSON.stringify` output for log entries and graph items.
+  A new `SuggestedContentView` component renders structured JSON
+  fields (description, content, recommendation) as readable
+  prose with key-value fallback.
+- RevisePhasePage `newMentions` filter selected all
+  identification-type items regardless of resolution status,
+  causing already-accepted items to appear under "New Mentions".
+  The filter now requires `resolution === 'pending'`.
+- Generate Revision button appeared non-functional when no
+  findings were acknowledged because the disabled state had no
+  explanation and errors logged to console only. The button now
+  shows helper text ("Acknowledge at least one finding to
+  generate a revision") and an error Alert component.
+- RevisePhasePage acknowledged items lacked visual
+  differentiation. Acknowledged items now display a green left
+  border, CheckCircle icon, and "Queued" chip so the GM can see
+  which items will be included in the revision.
+- Campaigns not supported as a revision source: jobs with
+  `source_table='campaigns'` failed because `GenerateRevision`
+  and `ApplyRevision` handlers only supported chapters and
+  sessions. Both handlers now include a campaigns case.
+- API client body stream double-read error in `client.ts`
+  where error handling called `response.json()` then fell back
+  to `response.text()`, but the Fetch API body stream can only
+  be read once. The client now reads as text first and then
+  parses with `JSON.parse`.
+- LLM revision call timeout caused by the server `WriteTimeout`
+  of 60 seconds being too short for LLM calls. The server now
+  uses a 180-second `WriteTimeout` and a 3-minute background
+  context for LLM calls instead of the request context.
+- `useAnalysisWizard` phase normalization mismatch between
+  backend route-style phase names (`identify`, `revise`,
+  `enrich`) and frontend canonical names (`identification`,
+  `analysis`, `enrichment`). A `normalizePhase()` mapping
+  function ensures the stepper and phase index work correctly.
+- IdentifyPhasePage polish: added a collapsible "Done" section
+  for resolved items, improved highlight styling with `<mark>`
+  instead of `<strong>`, and fixed dark theme backgrounds using
+  `bgcolor: 'action.hover'` instead of `'grey.50'`.
+- Dark theme fixes across EnrichPhasePage and RevisePhasePage
+  replacing hardcoded `bgcolor: 'grey.50'` with theme-aware
+  `'action.hover'` on Paper components.
 
 ### Changed
 
+- Replaced the monolithic AnalysisTriagePage (4,755 lines)
+  with the AnalysisWizard component and three focused phase
+  pages (IdentifyPhasePage, RevisePhasePage,
+  EnrichPhasePage). The old triage page and its test file
+  are deleted.
 - CampaignOverview builds a phases array from PhaseStrip
   selection and passes the array through the API; removed
   localStorage-based phase persistence.

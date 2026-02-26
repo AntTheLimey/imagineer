@@ -665,6 +665,7 @@ type ContentAnalysisJob struct {
 	EnrichmentTotal    int       `json:"enrichmentTotal"`
 	EnrichmentResolved int       `json:"enrichmentResolved"`
 	CurrentPhase       *string   `json:"currentPhase"`
+	FailureReason      *string   `json:"failureReason,omitempty"`
 	Phases             []string  `json:"phases,omitempty"`
 	CreatedAt          time.Time `json:"createdAt"`
 	UpdatedAt          time.Time `json:"updatedAt"`

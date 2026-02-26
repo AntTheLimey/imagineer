@@ -33,7 +33,10 @@ import Timeline from './pages/Timeline';
 import Login from './pages/Login';
 import AuthCallback from './pages/AuthCallback';
 import AccountSettings from './pages/AccountSettings';
-import AnalysisTriagePage from './pages/AnalysisTriagePage';
+import AnalysisWizard from './pages/AnalysisWizard';
+import IdentifyPhasePage from './pages/IdentifyPhasePage';
+import RevisePhasePage from './pages/RevisePhasePage';
+import EnrichPhasePage from './pages/EnrichPhasePage';
 import SessionEditorPage from './pages/SessionEditorPage';
 import CampaignSettingsPage from './pages/CampaignSettingsPage';
 
@@ -221,11 +224,28 @@ function AppRoutes() {
                         path="/campaigns/:campaignId/sessions/:sessionId/edit"
                         element={<SessionEditorPage />}
                     />
-                    {/* Analysis triage */}
+                    {/* Analysis wizard with phase screens */}
                     <Route
                         path="/campaigns/:campaignId/analysis/:jobId"
-                        element={<AnalysisTriagePage />}
-                    />
+                        element={<AnalysisWizard />}
+                    >
+                        <Route
+                            index
+                            element={<Navigate to="identify" replace />}
+                        />
+                        <Route
+                            path="identify"
+                            element={<IdentifyPhasePage />}
+                        />
+                        <Route
+                            path="revise"
+                            element={<RevisePhasePage />}
+                        />
+                        <Route
+                            path="enrich"
+                            element={<EnrichPhasePage />}
+                        />
+                    </Route>
                 </Route>
             </Route>
 

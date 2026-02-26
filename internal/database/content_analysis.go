@@ -40,12 +40,13 @@ func (db *DB) CreateAnalysisJob(ctx context.Context, job *models.ContentAnalysis
 		INSERT INTO content_analysis_jobs
 			(campaign_id, source_table, source_id, source_field,
 			 status, total_items, resolved_items,
-			 enrichment_total, enrichment_resolved, current_phase)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			 enrichment_total, enrichment_resolved, current_phase,
+			 failure_reason)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING id, campaign_id, source_table, source_id, source_field,
 		          status, total_items, resolved_items,
 		          enrichment_total, enrichment_resolved,
-		          current_phase,
+		          current_phase, failure_reason,
 		          created_at, updated_at`
 
 	var j models.ContentAnalysisJob
@@ -53,11 +54,12 @@ func (db *DB) CreateAnalysisJob(ctx context.Context, job *models.ContentAnalysis
 		job.CampaignID, job.SourceTable, job.SourceID, job.SourceField,
 		job.Status, job.TotalItems, job.ResolvedItems,
 		job.EnrichmentTotal, job.EnrichmentResolved, currentPhase,
+		job.FailureReason,
 	).Scan(
 		&j.ID, &j.CampaignID, &j.SourceTable, &j.SourceID, &j.SourceField,
 		&j.Status, &j.TotalItems, &j.ResolvedItems,
 		&j.EnrichmentTotal, &j.EnrichmentResolved,
-		&j.CurrentPhase,
+		&j.CurrentPhase, &j.FailureReason,
 		&j.CreatedAt, &j.UpdatedAt,
 	)
 	if err != nil {
@@ -102,7 +104,7 @@ func (db *DB) GetAnalysisJob(ctx context.Context, id int64) (*models.ContentAnal
 		SELECT id, campaign_id, source_table, source_id, source_field,
 		       status, total_items, resolved_items,
 		       enrichment_total, enrichment_resolved,
-		       current_phase,
+		       current_phase, failure_reason,
 		       created_at, updated_at
 		FROM content_analysis_jobs
 		WHERE id = $1`
@@ -112,7 +114,7 @@ func (db *DB) GetAnalysisJob(ctx context.Context, id int64) (*models.ContentAnal
 		&j.ID, &j.CampaignID, &j.SourceTable, &j.SourceID, &j.SourceField,
 		&j.Status, &j.TotalItems, &j.ResolvedItems,
 		&j.EnrichmentTotal, &j.EnrichmentResolved,
-		&j.CurrentPhase,
+		&j.CurrentPhase, &j.FailureReason,
 		&j.CreatedAt, &j.UpdatedAt,
 	)
 	if err != nil {
@@ -135,7 +137,7 @@ func (db *DB) ListAnalysisJobsByCampaign(ctx context.Context, campaignID int64) 
 		SELECT id, campaign_id, source_table, source_id, source_field,
 		       status, total_items, resolved_items,
 		       enrichment_total, enrichment_resolved,
-		       current_phase,
+		       current_phase, failure_reason,
 		       created_at, updated_at
 		FROM content_analysis_jobs
 		WHERE campaign_id = $1
@@ -157,7 +159,7 @@ func (db *DB) GetLatestAnalysisJob(ctx context.Context, campaignID int64, source
 		SELECT id, campaign_id, source_table, source_id, source_field,
 		       status, total_items, resolved_items,
 		       enrichment_total, enrichment_resolved,
-		       current_phase,
+		       current_phase, failure_reason,
 		       created_at, updated_at
 		FROM content_analysis_jobs
 		WHERE campaign_id = $1
@@ -172,7 +174,7 @@ func (db *DB) GetLatestAnalysisJob(ctx context.Context, campaignID int64, source
 		&j.ID, &j.CampaignID, &j.SourceTable, &j.SourceID, &j.SourceField,
 		&j.Status, &j.TotalItems, &j.ResolvedItems,
 		&j.EnrichmentTotal, &j.EnrichmentResolved,
-		&j.CurrentPhase,
+		&j.CurrentPhase, &j.FailureReason,
 		&j.CreatedAt, &j.UpdatedAt,
 	)
 	if err != nil {
@@ -399,6 +401,17 @@ func (db *DB) DeleteAnalysisJobsForSource(ctx context.Context, campaignID int64,
 	return db.Exec(ctx, query, campaignID, sourceTable, sourceID, sourceField)
 }
 
+// SetJobFailureReason updates the failure_reason and sets the status
+// to 'failed' for a content analysis job.
+func (db *DB) SetJobFailureReason(ctx context.Context, jobID int64, reason string) error {
+	query := `
+		UPDATE content_analysis_jobs
+		SET status = 'failed',
+		    failure_reason = $2
+		WHERE id = $1`
+	return db.Exec(ctx, query, jobID, reason)
+}
+
 // SetJobCurrentPhase updates the current_phase of a content analysis job.
 func (db *DB) SetJobCurrentPhase(ctx context.Context, jobID int64, phase *string) error {
 	query := `
@@ -442,7 +455,7 @@ func scanAnalysisJobs(rows pgx.Rows) ([]models.ContentAnalysisJob, error) {
 			&j.ID, &j.CampaignID, &j.SourceTable, &j.SourceID, &j.SourceField,
 			&j.Status, &j.TotalItems, &j.ResolvedItems,
 			&j.EnrichmentTotal, &j.EnrichmentResolved,
-			&j.CurrentPhase,
+			&j.CurrentPhase, &j.FailureReason,
 			&j.CreatedAt, &j.UpdatedAt,
 		)
 		if err != nil {

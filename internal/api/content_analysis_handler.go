@@ -1569,30 +1569,51 @@ func (h *ContentAnalysisHandler) RunContentEnrichment(
 				jobID, ragErr)
 		}
 
+		// Load relationships for the enrichment pipeline so
+		// the graph expert receives complete data.
+		relationships, relErr := h.db.ListRelationshipsByCampaign(
+			bgCtx, campaignID)
+		if relErr != nil {
+			log.Printf(
+				"Content-enrich: failed to load relationships for job %d: %v",
+				jobID, relErr)
+			// Continue without relationships rather than
+			// blocking enrichment.
+		}
+
 		var gameSystemID *int64
 		if campaign != nil {
 			gameSystemID = campaign.SystemID
 		}
 
 		input := enrichment.PipelineInput{
-			CampaignID:   campaignID,
-			JobID:        jobID,
-			SourceTable:  job.SourceTable,
-			SourceID:     job.SourceID,
-			SourceScope:  enrichment.ScopeFromSourceTable(job.SourceTable),
-			Content:      content,
-			GameSystemID: gameSystemID,
-			Context:      ragCtx,
+			CampaignID:    campaignID,
+			JobID:         jobID,
+			SourceTable:   job.SourceTable,
+			SourceID:      job.SourceID,
+			SourceScope:   enrichment.ScopeFromSourceTable(job.SourceTable),
+			Content:       content,
+			Relationships: relationships,
+			GameSystemID:  gameSystemID,
+			Context:       ragCtx,
 		}
 
 		enrichItems, err := pipeline.Run(bgCtx, provider, input)
 		if err != nil {
-			log.Printf("Content-enrich: pipeline run failed for job %d: %v",
+			log.Printf(
+				"Content-enrich: pipeline run failed for job %d: %v",
 				jobID, err)
-			_ = h.db.Exec(context.Background(),
-				"UPDATE content_analysis_jobs SET status = 'failed' WHERE id = $1",
-				jobID,
-			)
+
+			reason := "Enrichment encountered an error"
+			var qe *llm.QuotaExceededError
+			if errors.As(err, &qe) {
+				reason = "API quota exceeded"
+			} else if strings.Contains(err.Error(), "rate limit") {
+				reason = "Rate limited after retries"
+			}
+
+			_ = h.db.SetJobFailureReason(
+				context.Background(), jobID, reason)
 			return
 		}
 
@@ -1757,31 +1778,52 @@ func (h *ContentAnalysisHandler) TryAutoEnrich(
 				jobID, ragErr)
 		}
 
+		// Load relationships for the enrichment pipeline so
+		// the graph expert receives complete data.
+		relationships, relErr := h.db.ListRelationshipsByCampaign(
+			bgCtx, job.CampaignID)
+		if relErr != nil {
+			log.Printf(
+				"Auto-enrich: failed to load relationships for job %d: %v",
+				jobID, relErr)
+			// Continue without relationships rather than
+			// blocking enrichment.
+		}
+
 		var gameSystemID *int64
 		if campaign != nil {
 			gameSystemID = campaign.SystemID
 		}
 
 		input := enrichment.PipelineInput{
-			CampaignID:   job.CampaignID,
-			JobID:        jobID,
-			SourceTable:  job.SourceTable,
-			SourceID:     job.SourceID,
-			SourceScope:  enrichment.ScopeFromSourceTable(job.SourceTable),
-			Content:      content,
-			Entities:     entities,
-			GameSystemID: gameSystemID,
-			Context:      ragCtx,
+			CampaignID:    job.CampaignID,
+			JobID:         jobID,
+			SourceTable:   job.SourceTable,
+			SourceID:      job.SourceID,
+			SourceScope:   enrichment.ScopeFromSourceTable(job.SourceTable),
+			Content:       content,
+			Entities:      entities,
+			Relationships: relationships,
+			GameSystemID:  gameSystemID,
+			Context:       ragCtx,
 		}
 
 		enrichItems, err := pipeline.Run(bgCtx, provider, input)
 		if err != nil {
-			log.Printf("Auto-enrich: pipeline run failed for job %d: %v",
+			log.Printf(
+				"Auto-enrich: pipeline run failed for job %d: %v",
 				jobID, err)
-			_ = h.db.Exec(context.Background(),
-				"UPDATE content_analysis_jobs SET status = 'failed' WHERE id = $1",
-				jobID,
-			)
+
+			reason := "Enrichment encountered an error"
+			var qe *llm.QuotaExceededError
+			if errors.As(err, &qe) {
+				reason = "API quota exceeded"
+			} else if strings.Contains(err.Error(), "rate limit") {
+				reason = "Rate limited after retries"
+			}
+
+			_ = h.db.SetJobFailureReason(
+				context.Background(), jobID, reason)
 			return
 		}
 
@@ -1907,6 +1949,18 @@ func (h *ContentAnalysisHandler) GenerateRevision(w http.ResponseWriter, r *http
 				fmt.Sprintf("Unsupported session field: %s", job.SourceField))
 			return
 		}
+	case "campaigns":
+		campaign, cErr := h.db.GetCampaign(r.Context(), job.SourceID)
+		if cErr != nil {
+			log.Printf("GenerateRevision: error fetching campaign %d: %v",
+				job.SourceID, cErr)
+			respondError(w, http.StatusInternalServerError,
+				"Failed to fetch source content")
+			return
+		}
+		if campaign.Description != nil {
+			originalContent = *campaign.Description
+		}
 	default:
 		respondError(w, http.StatusBadRequest,
 			fmt.Sprintf("Unsupported source table for revision: %s", job.SourceTable))
@@ -1990,8 +2044,10 @@ func (h *ContentAnalysisHandler) GenerateRevision(w http.ResponseWriter, r *http
 		revisionInput.CampaignResults = ragCtx.CampaignResults
 	}
 
+	llmCtx, llmCancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer llmCancel()
 	result, err := enrichment.NewRevisionAgent().GenerateRevision(
-		r.Context(), provider, revisionInput,
+		llmCtx, provider, revisionInput,
 	)
 	if err != nil {
 		log.Printf("GenerateRevision: revision agent failed for job %d: %v",
@@ -2113,6 +2169,29 @@ func (h *ContentAnalysisHandler) ApplyRevision(w http.ResponseWriter, r *http.Re
 				job.SourceID, updateErr)
 			respondError(w, http.StatusInternalServerError,
 				"Failed to apply revision to session")
+			return
+		}
+
+	case "campaigns":
+		campaign, cErr := h.db.GetCampaign(r.Context(), job.SourceID)
+		if cErr != nil {
+			log.Printf("ApplyRevision: error fetching campaign %d: %v",
+				job.SourceID, cErr)
+			respondError(w, http.StatusInternalServerError,
+				"Failed to fetch source content")
+			return
+		}
+		_ = campaign // Verify the campaign exists before updating.
+		_, updateErr := h.db.UpdateCampaign(r.Context(), job.SourceID,
+			models.UpdateCampaignRequest{
+				Description: &req.RevisedContent,
+			},
+		)
+		if updateErr != nil {
+			log.Printf("ApplyRevision: error updating campaign %d: %v",
+				job.SourceID, updateErr)
+			respondError(w, http.StatusInternalServerError,
+				"Failed to apply revision to campaign")
 			return
 		}
 

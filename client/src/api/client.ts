@@ -144,11 +144,11 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     // Handle non-2xx responses
     if (!response.ok) {
         let errorBody: unknown;
+        const errorText = await response.text();
         try {
-            errorBody = await response.json();
+            errorBody = JSON.parse(errorText);
         } catch {
-            // Response body is not JSON
-            errorBody = await response.text();
+            errorBody = errorText;
         }
 
         const message =
