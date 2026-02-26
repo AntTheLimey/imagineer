@@ -340,4 +340,173 @@ describe('IdentifyPhasePage', () => {
             screen.getByRole('button', { name: /create & link/i }),
         ).toBeInTheDocument();
     });
+
+    // -- Done section (resolved items) ------------------------------------
+
+    it('shows resolved items in Done section, not in pending groups', () => {
+        const mixedItems: ContentAnalysisItem[] = [
+            { ...mockItems[0], resolution: 'pending' },
+            {
+                ...mockItems[2],
+                id: 3,
+                resolution: 'accepted',
+            },
+        ];
+
+        mockUseWizardContext.mockReturnValue(
+            makeWizardState({
+                phaseItems: mixedItems,
+                pendingCount: 1,
+            }),
+        );
+
+        renderPage();
+
+        // The Done header should be present with count
+        expect(screen.getByText('Done')).toBeInTheDocument();
+
+        // The resolved item (Arkham) should appear in the Done
+        // section, not under the Untagged Mentions group header
+        expect(
+            screen.queryByText(/Untagged Mentions/),
+        ).not.toBeInTheDocument();
+
+        // Pending item still appears in its group
+        expect(
+            screen.getByText(/Wiki Links \(Resolved\)/),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByText('Professor Armitage'),
+        ).toBeInTheDocument();
+    });
+
+    it('hides Done section when no items are resolved', () => {
+        mockUseWizardContext.mockReturnValue(
+            makeWizardState({
+                phaseItems: mockItems,
+                pendingCount: 5,
+            }),
+        );
+
+        renderPage();
+
+        expect(screen.queryByText('Done')).not.toBeInTheDocument();
+    });
+
+    it('allows clicking a resolved item in Done to view details', () => {
+        const mixedItems: ContentAnalysisItem[] = [
+            { ...mockItems[0], resolution: 'pending' },
+            {
+                ...mockItems[2],
+                id: 3,
+                resolution: 'accepted',
+            },
+        ];
+
+        mockUseWizardContext.mockReturnValue(
+            makeWizardState({
+                phaseItems: mixedItems,
+                pendingCount: 1,
+            }),
+        );
+
+        renderPage();
+
+        // Click the resolved item in the Done section
+        fireEvent.click(screen.getAllByText('Arkham')[0]);
+
+        // Detail panel should show the resolution status alert
+        expect(
+            screen.getByText(/This item has been resolved/),
+        ).toBeInTheDocument();
+    });
+
+    it('toggles the Done section expand/collapse icon on click', () => {
+        const resolvedOnly: ContentAnalysisItem[] = [
+            {
+                ...mockItems[0],
+                resolution: 'accepted',
+            },
+        ];
+
+        mockUseWizardContext.mockReturnValue(
+            makeWizardState({
+                phaseItems: resolvedOnly,
+                pendingCount: 0,
+            }),
+        );
+
+        renderPage();
+
+        // Done header is present and item is visible
+        expect(screen.getByText('Done')).toBeInTheDocument();
+        expect(
+            screen.getByText('Professor Armitage'),
+        ).toBeInTheDocument();
+
+        // Initially expanded: ExpandLess icon is shown
+        const doneHeader = screen.getByText('Done').closest('div')!;
+        expect(
+            doneHeader.querySelector('[data-testid="ExpandLessIcon"]'),
+        ).toBeInTheDocument();
+
+        // Click to collapse
+        fireEvent.click(screen.getByText('Done'));
+
+        // Now ExpandMore icon is shown instead
+        expect(
+            doneHeader.querySelector('[data-testid="ExpandMoreIcon"]'),
+        ).toBeInTheDocument();
+        expect(
+            doneHeader.querySelector('[data-testid="ExpandLessIcon"]'),
+        ).not.toBeInTheDocument();
+
+        // Click again to re-expand
+        fireEvent.click(screen.getByText('Done'));
+        expect(
+            doneHeader.querySelector('[data-testid="ExpandLessIcon"]'),
+        ).toBeInTheDocument();
+    });
+
+    it('shows empty state when no pending or resolved items exist', () => {
+        mockUseWizardContext.mockReturnValue(
+            makeWizardState({
+                phaseItems: [],
+                pendingCount: 0,
+            }),
+        );
+
+        renderPage();
+
+        expect(
+            screen.getByText('No items in this phase.'),
+        ).toBeInTheDocument();
+    });
+
+    it('does not show action buttons on resolved items in Done', () => {
+        const resolvedOnly: ContentAnalysisItem[] = [
+            {
+                ...mockItems[0],
+                resolution: 'accepted',
+            },
+        ];
+
+        mockUseWizardContext.mockReturnValue(
+            makeWizardState({
+                phaseItems: resolvedOnly,
+                pendingCount: 0,
+            }),
+        );
+
+        renderPage();
+
+        // The Accept/Dismiss icon buttons should not be present
+        // for resolved items
+        expect(
+            screen.queryByRole('button', { name: /accept$/i }),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole('button', { name: /dismiss/i }),
+        ).not.toBeInTheDocument();
+    });
 });

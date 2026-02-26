@@ -38,7 +38,13 @@ import {
     TextField,
     CircularProgress,
 } from '@mui/material';
-import { Check, Close, Edit, PlayArrow } from '@mui/icons-material';
+import {
+    Check,
+    CheckCircle,
+    Close,
+    Edit,
+    PlayArrow,
+} from '@mui/icons-material';
 import { useWizardContext } from '../contexts/AnalysisWizardContext';
 import {
     useResolveItem,
@@ -207,15 +213,23 @@ export default function RevisePhasePage() {
     >(null);
     const [isEditing, setIsEditing] = useState(false);
     const [revisionCount, setRevisionCount] = useState(0);
+    const [revisionError, setRevisionError] = useState<string | null>(
+        null,
+    );
 
     // -- Derived data ------------------------------------------------------
 
     /** Analysis findings (this phase's items). */
     const analysisItems = phaseItems;
 
-    /** New identification mentions from all items. */
+    /** New identification mentions from all items (pending only). */
     const newMentions = useMemo(
-        () => items.filter((i) => IDENTIFY_TYPES.includes(i.detectionType)),
+        () =>
+            items.filter(
+                (i) =>
+                    IDENTIFY_TYPES.includes(i.detectionType) &&
+                    i.resolution === 'pending',
+            ),
         [items],
     );
 
@@ -269,11 +283,17 @@ export default function RevisePhasePage() {
         );
     }, [analysisItems, newMentions, selectedItemId]);
 
-    /** Whether any acknowledged findings exist. */
-    const hasAcknowledgedFindings = useMemo(
-        () => analysisItems.some((i) => i.resolution === 'acknowledged'),
+    /** Count of acknowledged (queued) findings. */
+    const acknowledgedCount = useMemo(
+        () =>
+            analysisItems.filter(
+                (i) => i.resolution === 'acknowledged',
+            ).length,
         [analysisItems],
     );
+
+    /** Whether any acknowledged findings exist. */
+    const hasAcknowledgedFindings = acknowledgedCount > 0;
 
     // -- Handlers ----------------------------------------------------------
 
@@ -325,16 +345,14 @@ export default function RevisePhasePage() {
 
     const handleGenerateRevision = () => {
         if (!job) return;
+        setRevisionError(null);
         generateRevision.mutate(job.id, {
             onSuccess: (data) => {
                 setRevisionContent(data.revisedContent);
                 setIsEditing(false);
             },
             onError: (err: Error) => {
-                console.error(
-                    'Failed to generate revision:',
-                    err.message,
-                );
+                setRevisionError(err.message);
             },
         });
     };
@@ -410,6 +428,26 @@ export default function RevisePhasePage() {
                         >
                             Generate Revision
                         </Button>
+                        {!hasAcknowledgedFindings &&
+                            !generateRevision.isPending && (
+                                <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    sx={{ display: 'block', mt: 0.5 }}
+                                >
+                                    Acknowledge at least one finding to
+                                    generate a revision.
+                                </Typography>
+                            )}
+                        {revisionError && (
+                            <Alert
+                                severity="error"
+                                sx={{ mt: 1 }}
+                                onClose={() => setRevisionError(null)}
+                            >
+                                {revisionError}
+                            </Alert>
+                        )}
                     </Box>
 
                     {/* Summary */}
@@ -460,7 +498,7 @@ export default function RevisePhasePage() {
                                             variant="outlined"
                                             sx={{
                                                 p: 2,
-                                                bgcolor: 'grey.50',
+                                                bgcolor: 'action.hover',
                                                 maxHeight: 300,
                                                 overflow: 'auto',
                                             }}
@@ -492,7 +530,7 @@ export default function RevisePhasePage() {
                                             variant="outlined"
                                             sx={{
                                                 p: 2,
-                                                bgcolor: 'grey.50',
+                                                bgcolor: 'action.hover',
                                                 maxHeight: 300,
                                                 overflow: 'auto',
                                             }}
@@ -562,7 +600,10 @@ export default function RevisePhasePage() {
                                 color="text.secondary"
                             >
                                 {analysisItems.length} findings (
-                                {pendingCount} pending)
+                                {pendingCount} pending
+                                {acknowledgedCount > 0 &&
+                                    `, ${acknowledgedCount} queued`}
+                                )
                             </Typography>
                         </Box>
                         <Divider />
@@ -626,19 +667,55 @@ export default function RevisePhasePage() {
                                                     item,
                                                 )
                                             }
-                                            sx={{ pl: 4 }}
+                                            sx={{
+                                                pl: 4,
+                                                ...(item.resolution ===
+                                                    'acknowledged' && {
+                                                    borderLeft: 3,
+                                                    borderColor:
+                                                        'success.main',
+                                                    bgcolor:
+                                                        'action.selected',
+                                                }),
+                                            }}
                                         >
+                                            {item.resolution ===
+                                                'acknowledged' && (
+                                                <CheckCircle
+                                                    fontSize="small"
+                                                    color="success"
+                                                    sx={{
+                                                        mr: 1,
+                                                        flexShrink: 0,
+                                                    }}
+                                                />
+                                            )}
                                             <ListItemText
                                                 primary={
-                                                    <Typography
-                                                        variant="body2"
-                                                        fontWeight="bold"
-                                                        noWrap
+                                                    <Stack
+                                                        direction="row"
+                                                        alignItems="center"
+                                                        spacing={1}
                                                     >
-                                                        {
-                                                            item.matchedText
-                                                        }
-                                                    </Typography>
+                                                        <Typography
+                                                            variant="body2"
+                                                            fontWeight="bold"
+                                                            noWrap
+                                                        >
+                                                            {
+                                                                item.matchedText
+                                                            }
+                                                        </Typography>
+                                                        {item.resolution ===
+                                                            'acknowledged' && (
+                                                            <Chip
+                                                                label="Queued"
+                                                                size="small"
+                                                                color="success"
+                                                                variant="outlined"
+                                                            />
+                                                        )}
+                                                    </Stack>
                                                 }
                                                 secondary={
                                                     item.contextSnippet
@@ -928,6 +1005,68 @@ export default function RevisePhasePage() {
 }
 
 // ---------------------------------------------------------------------------
+// Suggested content renderer
+// ---------------------------------------------------------------------------
+
+const SEVERITY_ALERT_MAP: Record<string, 'error' | 'warning' | 'info' | 'success'> = {
+    critical: 'error',
+    warning: 'warning',
+    info: 'info',
+};
+
+/**
+ * Render suggestedContent as readable prose instead of raw JSON.
+ *
+ * Two shapes:
+ *  - analysis_report: { report: string }
+ *  - all others: { category, description, severity, suggestion, lineReference }
+ */
+function SuggestedContentView({
+    content,
+}: {
+    content: Record<string, unknown>;
+}) {
+    // Shape 1: analysis_report with a markdown-ish "report" field
+    if (typeof content.report === 'string') {
+        return (
+            <Typography
+                variant="body2"
+                sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.7 }}
+            >
+                {content.report}
+            </Typography>
+        );
+    }
+
+    // Shape 2: structured suggestion
+    const severity = String(content.severity ?? 'info');
+    const alertColor = SEVERITY_ALERT_MAP[severity] ?? 'info';
+    const description = content.description ? String(content.description) : '';
+    const suggestion = content.suggestion ? String(content.suggestion) : '';
+    const category = content.category ? String(content.category).replace(/_/g, ' ') : '';
+
+    return (
+        <Stack spacing={1.5}>
+            {description && (
+                <Typography variant="body2">
+                    {description}
+                </Typography>
+            )}
+            {suggestion && (
+                <Alert severity={alertColor} variant="outlined">
+                    {suggestion}
+                </Alert>
+            )}
+            {category && (
+                <Typography variant="caption" color="text.secondary">
+                    Category: {category}
+                </Typography>
+            )}
+        </Stack>
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Detail panel sub-component
 // ---------------------------------------------------------------------------
 
@@ -990,7 +1129,7 @@ function DetailPanel({ item, isResolving, onResolve }: DetailPanelProps) {
                         variant="outlined"
                         sx={{
                             p: 2,
-                            bgcolor: 'grey.50',
+                            bgcolor: 'action.hover',
                             fontFamily: 'serif',
                             fontSize: '0.95rem',
                             lineHeight: 1.7,
@@ -1010,27 +1149,18 @@ function DetailPanel({ item, isResolving, onResolve }: DetailPanelProps) {
             {item.suggestedContent && (
                 <Box>
                     <Typography variant="subtitle2" gutterBottom>
-                        Suggested Content
+                        {item.suggestedContent.report
+                            ? 'Analysis Report'
+                            : 'Suggestion'}
                     </Typography>
                     <Paper
                         variant="outlined"
                         sx={{
                             p: 2,
-                            bgcolor: 'grey.50',
+                            bgcolor: 'action.hover',
                         }}
                     >
-                        <Typography
-                            variant="body2"
-                            sx={{ whiteSpace: 'pre-wrap' }}
-                        >
-                            {typeof item.suggestedContent === 'object'
-                                ? JSON.stringify(
-                                      item.suggestedContent,
-                                      null,
-                                      2,
-                                  )
-                                : String(item.suggestedContent)}
-                        </Typography>
+                        <SuggestedContentView content={item.suggestedContent} />
                     </Paper>
                 </Box>
             )}

@@ -17,10 +17,11 @@
  *    entity info, and resolution actions.
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import {
     Box,
+    Collapse,
     Grid,
     List,
     ListItemButton,
@@ -40,7 +41,15 @@ import {
     Paper,
     Tooltip,
 } from '@mui/material';
-import { Check, Close, AddCircle, DoneAll } from '@mui/icons-material';
+import {
+    Check,
+    CheckCircle,
+    Close,
+    AddCircle,
+    DoneAll,
+    ExpandMore,
+    ExpandLess,
+} from '@mui/icons-material';
 import { useWizardContext } from '../contexts/AnalysisWizardContext';
 import { useResolveItem, useBatchResolve } from '../hooks/useContentAnalysis';
 import {
@@ -111,7 +120,9 @@ function highlightContext(
     return (
         <>
             {before}
-            <strong>{match}</strong>
+            <mark style={{ backgroundColor: 'rgba(255, 193, 7, 0.3)', color: 'inherit', borderRadius: 2, padding: '0 2px' }}>
+                {match}
+            </mark>
             {after}
         </>
     );
@@ -149,16 +160,19 @@ export default function IdentifyPhasePage() {
 
     // -- Derived data ------------------------------------------------------
 
-    /** Group items by detection type, preserving the order of IDENTIFY_GROUPS. */
-    const groupedItems = useMemo(() => {
-        const grouped = phaseItems.reduce<
-            Record<string, ContentAnalysisItem[]>
-        >((acc, item) => {
-            const key = item.detectionType;
-            if (!acc[key]) acc[key] = [];
-            acc[key].push(item);
-            return acc;
-        }, {});
+    /** Pending items grouped by detection type, preserving IDENTIFY_GROUPS order. */
+    const pendingGroups = useMemo(() => {
+        const grouped = phaseItems
+            .filter((i) => i.resolution === 'pending')
+            .reduce<Record<string, ContentAnalysisItem[]>>(
+                (acc, item) => {
+                    const key = item.detectionType;
+                    if (!acc[key]) acc[key] = [];
+                    acc[key].push(item);
+                    return acc;
+                },
+                {},
+            );
 
         return IDENTIFY_GROUPS.filter(
             (g) => grouped[g.key] && grouped[g.key].length > 0,
@@ -167,6 +181,19 @@ export default function IdentifyPhasePage() {
             items: grouped[g.key],
         }));
     }, [phaseItems]);
+
+    /** All resolved items (any resolution that is not 'pending'). */
+    const resolvedItems = useMemo(
+        () => phaseItems.filter((i) => i.resolution !== 'pending'),
+        [phaseItems],
+    );
+
+    /** Whether the Done section is expanded. */
+    const [doneExpanded, setDoneExpanded] = useState(true);
+    const toggleDone = useCallback(
+        () => setDoneExpanded((prev) => !prev),
+        [],
+    );
 
     const selectedItem = useMemo(
         () =>
@@ -276,13 +303,11 @@ export default function IdentifyPhasePage() {
                     </Box>
                     <Divider />
                     <List disablePadding>
-                        {groupedItems.map((group) => {
-                            const pendingInGroup = group.items.filter(
-                                (i) => i.resolution === 'pending',
-                            ).length;
-                            const allHaveEntity = group.items
-                                .filter((i) => i.resolution === 'pending')
-                                .every((i) => !!i.entityId);
+                        {pendingGroups.map((group) => {
+                            const pendingInGroup = group.items.length;
+                            const allHaveEntity = group.items.every(
+                                (i) => !!i.entityId,
+                            );
 
                             return (
                             <Box key={group.key}>
@@ -405,57 +430,175 @@ export default function IdentifyPhasePage() {
                                             }
                                         />
                                         {/* Quick action buttons */}
-                                        {item.resolution ===
-                                            'pending' && (
-                                            <Stack
-                                                direction="row"
-                                                spacing={0.5}
-                                                sx={{ ml: 1 }}
-                                            >
-                                                <Tooltip title="Accept">
-                                                    <IconButton
-                                                        size="small"
-                                                        color="success"
-                                                        disabled={resolveItem.isPending}
-                                                        onClick={(
-                                                            e,
-                                                        ) => {
-                                                            e.stopPropagation();
-                                                            handleResolve(
-                                                                item.id,
-                                                                'accepted',
-                                                            );
-                                                        }}
-                                                    >
-                                                        <Check fontSize="small" />
-                                                    </IconButton>
-                                                </Tooltip>
-                                                <Tooltip title="Dismiss">
-                                                    <IconButton
-                                                        size="small"
-                                                        color="error"
-                                                        disabled={resolveItem.isPending}
-                                                        onClick={(
-                                                            e,
-                                                        ) => {
-                                                            e.stopPropagation();
-                                                            handleResolve(
-                                                                item.id,
-                                                                'dismissed',
-                                                            );
-                                                        }}
-                                                    >
-                                                        <Close fontSize="small" />
-                                                    </IconButton>
-                                                </Tooltip>
-                                            </Stack>
-                                        )}
+                                        <Stack
+                                            direction="row"
+                                            spacing={0.5}
+                                            sx={{ ml: 1 }}
+                                        >
+                                            <Tooltip title="Accept">
+                                                <IconButton
+                                                    size="small"
+                                                    color="success"
+                                                    disabled={resolveItem.isPending}
+                                                    onClick={(
+                                                        e,
+                                                    ) => {
+                                                        e.stopPropagation();
+                                                        handleResolve(
+                                                            item.id,
+                                                            'accepted',
+                                                        );
+                                                    }}
+                                                >
+                                                    <Check fontSize="small" />
+                                                </IconButton>
+                                            </Tooltip>
+                                            <Tooltip title="Dismiss">
+                                                <IconButton
+                                                    size="small"
+                                                    color="error"
+                                                    disabled={resolveItem.isPending}
+                                                    onClick={(
+                                                        e,
+                                                    ) => {
+                                                        e.stopPropagation();
+                                                        handleResolve(
+                                                            item.id,
+                                                            'dismissed',
+                                                        );
+                                                    }}
+                                                >
+                                                    <Close fontSize="small" />
+                                                </IconButton>
+                                            </Tooltip>
+                                        </Stack>
                                     </ListItemButton>
                                 ))}
                             </Box>
                         );
                         })}
-                        {groupedItems.length === 0 && (
+
+                        {/* Done section -- resolved items */}
+                        {resolvedItems.length > 0 && (
+                            <Box>
+                                <Divider />
+                                <Box
+                                    onClick={toggleDone}
+                                    sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 1,
+                                        px: 2,
+                                        py: 1,
+                                        bgcolor: 'action.hover',
+                                        cursor: 'pointer',
+                                        userSelect: 'none',
+                                    }}
+                                >
+                                    <CheckCircle
+                                        fontSize="small"
+                                        color="success"
+                                    />
+                                    <Typography
+                                        variant="subtitle2"
+                                        sx={{ flexGrow: 1 }}
+                                    >
+                                        Done
+                                    </Typography>
+                                    <Chip
+                                        label={resolvedItems.length}
+                                        size="small"
+                                        color="success"
+                                        variant="outlined"
+                                    />
+                                    {doneExpanded ? (
+                                        <ExpandLess
+                                            fontSize="small"
+                                            color="action"
+                                        />
+                                    ) : (
+                                        <ExpandMore
+                                            fontSize="small"
+                                            color="action"
+                                        />
+                                    )}
+                                </Box>
+                                <Collapse in={doneExpanded}>
+                                    {resolvedItems.map((item) => (
+                                        <ListItemButton
+                                            key={item.id}
+                                            selected={
+                                                selectedItemId ===
+                                                item.id
+                                            }
+                                            onClick={() =>
+                                                handleSelectItem(item)
+                                            }
+                                            sx={{
+                                                pl: 4,
+                                                opacity: 0.7,
+                                            }}
+                                        >
+                                            <ListItemText
+                                                primary={
+                                                    <Stack
+                                                        direction="row"
+                                                        spacing={1}
+                                                        alignItems="center"
+                                                    >
+                                                        <Typography
+                                                            variant="body2"
+                                                            fontWeight="bold"
+                                                            noWrap
+                                                        >
+                                                            {
+                                                                item.matchedText
+                                                            }
+                                                        </Typography>
+                                                        {item.entityName && (
+                                                            <Chip
+                                                                label={
+                                                                    item.entityName
+                                                                }
+                                                                size="small"
+                                                                color={
+                                                                    item.entityType
+                                                                        ? entityTypeColors[
+                                                                              item
+                                                                                  .entityType
+                                                                          ]
+                                                                        : 'default'
+                                                                }
+                                                                variant="outlined"
+                                                            />
+                                                        )}
+                                                        <Chip
+                                                            label={
+                                                                item.resolution
+                                                            }
+                                                            size="small"
+                                                            variant="outlined"
+                                                            color="success"
+                                                        />
+                                                    </Stack>
+                                                }
+                                                secondary={
+                                                    item.contextSnippet
+                                                        ? truncate(
+                                                              item.contextSnippet,
+                                                              60,
+                                                          )
+                                                        : undefined
+                                                }
+                                            />
+                                        </ListItemButton>
+                                    ))}
+                                </Collapse>
+                            </Box>
+                        )}
+
+                        {pendingGroups.length === 0 &&
+                            resolvedItems.length === 0 && (
                             <Box sx={{ p: 3, textAlign: 'center' }}>
                                 <Typography
                                     variant="body2"
@@ -560,7 +703,7 @@ function DetailPanel({
                         variant="outlined"
                         sx={{
                             p: 2,
-                            bgcolor: 'grey.50',
+                            bgcolor: 'action.hover',
                             fontFamily: 'serif',
                             fontSize: '0.95rem',
                             lineHeight: 1.7,

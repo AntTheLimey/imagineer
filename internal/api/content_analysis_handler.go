@@ -1949,6 +1949,18 @@ func (h *ContentAnalysisHandler) GenerateRevision(w http.ResponseWriter, r *http
 				fmt.Sprintf("Unsupported session field: %s", job.SourceField))
 			return
 		}
+	case "campaigns":
+		campaign, cErr := h.db.GetCampaign(r.Context(), job.SourceID)
+		if cErr != nil {
+			log.Printf("GenerateRevision: error fetching campaign %d: %v",
+				job.SourceID, cErr)
+			respondError(w, http.StatusInternalServerError,
+				"Failed to fetch source content")
+			return
+		}
+		if campaign.Description != nil {
+			originalContent = *campaign.Description
+		}
 	default:
 		respondError(w, http.StatusBadRequest,
 			fmt.Sprintf("Unsupported source table for revision: %s", job.SourceTable))
@@ -2032,8 +2044,10 @@ func (h *ContentAnalysisHandler) GenerateRevision(w http.ResponseWriter, r *http
 		revisionInput.CampaignResults = ragCtx.CampaignResults
 	}
 
+	llmCtx, llmCancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer llmCancel()
 	result, err := enrichment.NewRevisionAgent().GenerateRevision(
-		r.Context(), provider, revisionInput,
+		llmCtx, provider, revisionInput,
 	)
 	if err != nil {
 		log.Printf("GenerateRevision: revision agent failed for job %d: %v",
@@ -2155,6 +2169,29 @@ func (h *ContentAnalysisHandler) ApplyRevision(w http.ResponseWriter, r *http.Re
 				job.SourceID, updateErr)
 			respondError(w, http.StatusInternalServerError,
 				"Failed to apply revision to session")
+			return
+		}
+
+	case "campaigns":
+		campaign, cErr := h.db.GetCampaign(r.Context(), job.SourceID)
+		if cErr != nil {
+			log.Printf("ApplyRevision: error fetching campaign %d: %v",
+				job.SourceID, cErr)
+			respondError(w, http.StatusInternalServerError,
+				"Failed to fetch source content")
+			return
+		}
+		_ = campaign // Verify the campaign exists before updating.
+		_, updateErr := h.db.UpdateCampaign(r.Context(), job.SourceID,
+			models.UpdateCampaignRequest{
+				Description: &req.RevisedContent,
+			},
+		)
+		if updateErr != nil {
+			log.Printf("ApplyRevision: error updating campaign %d: %v",
+				job.SourceID, updateErr)
+			respondError(w, http.StatusInternalServerError,
+				"Failed to apply revision to campaign")
 			return
 		}
 

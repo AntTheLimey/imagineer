@@ -77,6 +77,18 @@ const ROUTE_TO_PHASE: Record<string, string> =
     );
 
 /**
+ * Normalize a phase name to its canonical internal form.
+ *
+ * The backend stores phases using route-style names ('identify',
+ * 'revise', 'enrich') while the wizard internally uses full names
+ * ('identification', 'analysis', 'enrichment'). This function
+ * accepts either form and returns the canonical internal name.
+ */
+function normalizePhase(phase: string): string {
+    return ROUTE_TO_PHASE[phase] ?? phase;
+}
+
+/**
  * Filter items by phase using detection type group membership.
  */
 export function getPhaseItems(
@@ -146,7 +158,7 @@ export function useAnalysisWizard(
         [itemsQuery.data],
     );
     const phases = useMemo(
-        () => job?.phases ?? [],
+        () => (job?.phases ?? []).map(normalizePhase),
         [job?.phases],
     );
 

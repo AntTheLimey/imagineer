@@ -888,7 +888,7 @@ function DetailPanel({
                         variant="outlined"
                         sx={{
                             p: 2,
-                            bgcolor: 'grey.50',
+                            bgcolor: 'action.hover',
                             fontFamily: 'serif',
                             fontSize: '0.95rem',
                             lineHeight: 1.7,
@@ -998,6 +998,87 @@ function DetailPanel({
 }
 
 // ---------------------------------------------------------------------------
+// Suggested content view
+// ---------------------------------------------------------------------------
+
+/**
+ * Render a suggestedContent object as readable prose instead of raw JSON.
+ *
+ * Handles three common shapes:
+ *  - Objects with a `description` key  -- render the description text.
+ *  - Objects with a `recommendation` key -- render as a secondary hint.
+ *  - Objects with a `content` key -- render the content text.
+ *  - Fallback: iterate over key-value pairs and render them as labelled
+ *    fields (key with underscores replaced by spaces, capitalized).
+ */
+function SuggestedContentView({
+    content,
+}: {
+    content: Record<string, unknown>;
+}) {
+    const hasDescription = typeof content.description === 'string';
+    const hasContent = typeof content.content === 'string';
+    const hasRecommendation = typeof content.recommendation === 'string';
+
+    // If none of the well-known keys exist, render each key-value pair
+    // as a labelled field.
+    if (!hasDescription && !hasContent && !hasRecommendation) {
+        const entries = Object.entries(content).filter(
+            ([, v]) => v !== null && v !== undefined,
+        );
+        if (entries.length === 0) return null;
+        return (
+            <Stack spacing={1}>
+                {entries.map(([key, value]) => {
+                    const label =
+                        key.replace(/_/g, ' ').charAt(0).toUpperCase() +
+                        key.replace(/_/g, ' ').slice(1);
+                    return (
+                        <Typography key={key} variant="body2">
+                            <strong>{label}:</strong>{' '}
+                            {typeof value === 'object'
+                                ? JSON.stringify(value)
+                                : String(value)}
+                        </Typography>
+                    );
+                })}
+            </Stack>
+        );
+    }
+
+    return (
+        <Stack spacing={1}>
+            {hasDescription && (
+                <Typography
+                    variant="body2"
+                    sx={{ whiteSpace: 'pre-wrap' }}
+                >
+                    {String(content.description)}
+                </Typography>
+            )}
+            {hasContent && (
+                <Typography
+                    variant="body2"
+                    sx={{ whiteSpace: 'pre-wrap' }}
+                >
+                    {String(content.content)}
+                </Typography>
+            )}
+            {hasRecommendation && (
+                <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mt: 0.5 }}
+                >
+                    <strong>Recommendation:</strong>{' '}
+                    {String(content.recommendation)}
+                </Typography>
+            )}
+        </Stack>
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Suggested content renderers
 // ---------------------------------------------------------------------------
 
@@ -1032,7 +1113,7 @@ function renderSuggestedContent(
                     {'currentDescription' in suggested && (
                         <Paper
                             variant="outlined"
-                            sx={{ p: 2, mb: 1, bgcolor: 'grey.50' }}
+                            sx={{ p: 2, mb: 1, bgcolor: 'action.hover' }}
                         >
                             <Typography
                                 variant="caption"
@@ -1159,7 +1240,7 @@ function renderSuggestedContent(
                     </Typography>
                     <Paper
                         variant="outlined"
-                        sx={{ p: 2, bgcolor: 'grey.50' }}
+                        sx={{ p: 2, bgcolor: 'action.hover' }}
                     >
                         {'relationshipType' in suggested && (
                             <Typography variant="body2">
@@ -1193,16 +1274,9 @@ function renderSuggestedContent(
                     </Typography>
                     <Paper
                         variant="outlined"
-                        sx={{ p: 2, bgcolor: 'grey.50' }}
+                        sx={{ p: 2, bgcolor: 'action.hover' }}
                     >
-                        <Typography
-                            variant="body2"
-                            sx={{ whiteSpace: 'pre-wrap' }}
-                        >
-                            {'content' in suggested
-                                ? String(suggested.content)
-                                : JSON.stringify(suggested, null, 2)}
-                        </Typography>
+                        <SuggestedContentView content={suggested} />
                     </Paper>
                 </Box>
             );
@@ -1215,7 +1289,7 @@ function renderSuggestedContent(
                     </Typography>
                     <Paper
                         variant="outlined"
-                        sx={{ p: 2, bgcolor: 'grey.50' }}
+                        sx={{ p: 2, bgcolor: 'action.hover' }}
                     >
                         {'suggestedName' in suggested && (
                             <Typography variant="body2">
@@ -1251,26 +1325,9 @@ function renderSuggestedContent(
                     </Typography>
                     <Paper
                         variant="outlined"
-                        sx={{ p: 2, bgcolor: 'grey.50' }}
+                        sx={{ p: 2, bgcolor: 'action.hover' }}
                     >
-                        <Typography
-                            variant="body2"
-                            sx={{ whiteSpace: 'pre-wrap' }}
-                        >
-                            {'description' in suggested
-                                ? String(suggested.description)
-                                : JSON.stringify(suggested, null, 2)}
-                        </Typography>
-                        {'recommendation' in suggested && (
-                            <Typography
-                                variant="body2"
-                                sx={{ mt: 1 }}
-                                color="text.secondary"
-                            >
-                                <strong>Recommendation:</strong>{' '}
-                                {String(suggested.recommendation)}
-                            </Typography>
-                        )}
+                        <SuggestedContentView content={suggested} />
                     </Paper>
                 </Box>
             );
