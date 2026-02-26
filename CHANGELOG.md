@@ -586,6 +586,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Fixed `search_campaign_content()` SQL function referencing
   non-existent column `c.chunk` (correct column is `c.content`
   in pgedge_vectorizer chunk tables).
+- EnrichPhasePage `renderSuggestedContent` default case rendered
+  raw `JSON.stringify` output for log entries and graph items.
+  A new `SuggestedContentView` component renders structured JSON
+  fields (description, content, recommendation) as readable
+  prose with key-value fallback.
+- RevisePhasePage `newMentions` filter selected all
+  identification-type items regardless of resolution status,
+  causing already-accepted items to appear under "New Mentions".
+  The filter now requires `resolution === 'pending'`.
+- Generate Revision button appeared non-functional when no
+  findings were acknowledged because the disabled state had no
+  explanation and errors logged to console only. The button now
+  shows helper text ("Acknowledge at least one finding to
+  generate a revision") and an error Alert component.
+- RevisePhasePage acknowledged items lacked visual
+  differentiation. Acknowledged items now display a green left
+  border, CheckCircle icon, and "Queued" chip so the GM can see
+  which items will be included in the revision.
+- Campaigns not supported as a revision source: jobs with
+  `source_table='campaigns'` failed because `GenerateRevision`
+  and `ApplyRevision` handlers only supported chapters and
+  sessions. Both handlers now include a campaigns case.
+- API client body stream double-read error in `client.ts`
+  where error handling called `response.json()` then fell back
+  to `response.text()`, but the Fetch API body stream can only
+  be read once. The client now reads as text first and then
+  parses with `JSON.parse`.
+- LLM revision call timeout caused by the server `WriteTimeout`
+  of 60 seconds being too short for LLM calls. The server now
+  uses a 180-second `WriteTimeout` and a 3-minute background
+  context for LLM calls instead of the request context.
+- `useAnalysisWizard` phase normalization mismatch between
+  backend route-style phase names (`identify`, `revise`,
+  `enrich`) and frontend canonical names (`identification`,
+  `analysis`, `enrichment`). A `normalizePhase()` mapping
+  function ensures the stepper and phase index work correctly.
+- IdentifyPhasePage polish: added a collapsible "Done" section
+  for resolved items, improved highlight styling with `<mark>`
+  instead of `<strong>`, and fixed dark theme backgrounds using
+  `bgcolor: 'action.hover'` instead of `'grey.50'`.
+- Dark theme fixes across EnrichPhasePage and RevisePhasePage
+  replacing hardcoded `bgcolor: 'grey.50'` with theme-aware
+  `'action.hover'` on Paper components.
 
 ### Changed
 
