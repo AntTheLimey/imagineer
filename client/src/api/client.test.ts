@@ -196,8 +196,8 @@ describe('apiClient', () => {
                 ok: false,
                 status: 404,
                 statusText: 'Not Found',
-                json: () => Promise.resolve(errorBody),
-            } as Response);
+                text: () => Promise.resolve(JSON.stringify(errorBody)),
+            } as unknown as Response);
 
             await expect(apiClient.get('/not-found')).rejects.toThrow(ApiError);
 
