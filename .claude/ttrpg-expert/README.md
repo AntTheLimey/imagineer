@@ -12,6 +12,7 @@ This knowledge base provides:
 - Relationship modeling patterns
 - RPG terminology across different systems
 - Scene and encounter design patterns
+- Scenario and encounter writing guidance
 - During-session active play management
 - System-specific session procedures
 
@@ -79,6 +80,17 @@ Scene and encounter design patterns:
   action-oriented, multi-stage)
 - Node-based scenario design (The Alexandrian)
 - Pacing and spotlight management
+
+### [scenario-writing.md](scenario-writing.md)
+
+Scenario and encounter writing guidance:
+
+- How scenario writing differs from fiction writing
+- Read-aloud text conventions and GM-only text
+- Player agency constraints and conditional language
+- Railroading anti-patterns and situation-based design
+- Proactive NPC design and encounter text structure
+- System-specific scenario conventions
 
 ### [active-play-management.md](active-play-management.md)
 
@@ -150,4 +162,4 @@ Comprehensive terminology reference:
 | fearful | Fear-based |
 | respectful | Admiration |
 
-Last Updated: 2026-02-10
+Last Updated: 2026-02-26

@@ -36,6 +36,9 @@ You are analysing a chapter-level overview. Focus on:
 - Pacing across scenes within the chapter
 - Tension buildup and payoff
 - Plot thread management and cliffhanger effectiveness
+- Encounter text structure: hooks not rails, conditional language
+- NPC approach patterns and proactive clue placement
+- Read-aloud text quality (objective descriptions, no assumed actions)
 `,
 	enrichment.ScopeSession: `## Scope: Session Notes
 
@@ -44,6 +47,10 @@ You are analysing session-level notes. Focus on:
 - NPC interaction quality and dialogue
 - Scene-by-scene flow and transitions
 - Player-facing hooks and decision points
+- Encounter text structure and read-aloud text quality
+- Player agency: conditional language, no assumed actions or emotions
+- NPC proactivity: goals, plans, escalation when PCs do not engage
+- Information redundancy (Three Clue Rule for critical information)
 `,
 	enrichment.ScopeEntity: `## Scope: Entity Description
 
@@ -104,6 +111,16 @@ Evaluate the content across these dimensions:
   scenes lacking environmental description or missed opportunities for
   immersion.
 
+- **scenario_writing**: Scenario and encounter text quality. Flag text that
+  assumes PC actions ("You rush to help" should be "If the PCs intervene"),
+  prescribes PC emotions in read-aloud text, uses hedging words ("seems",
+  "appears") that encourage metagaming, gates critical information behind
+  single checks without redundancy, presents linear plot structures with
+  single points of failure, or scripts NPC dialogue instead of providing
+  motivations and key information. Verify that encounters design NPCs as
+  proactive agents with goals, plans, and escalation paths rather than
+  passive obstacles waiting for PCs to engage.
+
 `)
 
 	// Inject scope-specific guidance when available.
@@ -136,7 +153,7 @@ Respond with ONLY valid JSON in the following structure:
   "report": "Full markdown analysis report summarising overall quality...",
   "findings": [
     {
-      "category": "pacing|investigation|spotlight|npc_development|mechanics|pc_agency|continuity|setting",
+      "category": "pacing|investigation|spotlight|npc_development|mechanics|pc_agency|continuity|setting|scenario_writing",
       "severity": "info|warning|error",
       "description": "What was found",
       "suggestion": "How to improve it",
