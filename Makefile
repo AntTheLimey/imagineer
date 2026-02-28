@@ -61,7 +61,6 @@ psql:
 # Build commands
 build:
 	go build -o bin/imagineer ./cmd/server
-	go build -o bin/imagineer-cli ./cmd/cli
 
 run:
 	go run ./cmd/server
