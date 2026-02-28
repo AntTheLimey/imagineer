@@ -122,10 +122,12 @@ func (db *DB) GetCurrentEra(
 	return &e, nil
 }
 
-// UpdateEra updates an existing era.
+// UpdateEra updates an existing era, scoped to the
+// given campaign to prevent cross-campaign modification.
 func (db *DB) UpdateEra(
 	ctx context.Context,
 	id int64,
+	campaignID int64,
 	req models.UpdateEraRequest,
 ) (*models.Era, error) {
 	query := `
@@ -134,7 +136,7 @@ func (db *DB) UpdateEra(
             name        = COALESCE($3, name),
             scale       = COALESCE($4, scale),
             description = COALESCE($5, description)
-        WHERE id = $1
+        WHERE id = $1 AND campaign_id = $6
         RETURNING id, campaign_id, sequence, name,
                   scale, description,
                   created_at, updated_at`
@@ -142,7 +144,7 @@ func (db *DB) UpdateEra(
 	var e models.Era
 	err := db.QueryRow(ctx, query,
 		id, req.Sequence, req.Name,
-		req.Scale, req.Description,
+		req.Scale, req.Description, campaignID,
 	).Scan(
 		&e.ID, &e.CampaignID, &e.Sequence,
 		&e.Name, &e.Scale, &e.Description,
@@ -154,4 +156,51 @@ func (db *DB) UpdateEra(
 	}
 
 	return &e, nil
+}
+
+// DeleteEra deletes an era by ID, scoped to the given
+// campaign. Returns an error if the era is still
+// referenced by relationships or relationship_archive.
+func (db *DB) DeleteEra(
+	ctx context.Context,
+	eraID int64,
+	campaignID int64,
+) error {
+	// Check for references in relationships
+	var refCount int
+	checkQuery := `
+        SELECT COUNT(*) FROM (
+            SELECT 1 FROM relationships
+            WHERE era_id = $1
+            UNION ALL
+            SELECT 1 FROM relationship_archive
+            WHERE era_id = $1
+        ) refs`
+	err := db.QueryRow(ctx, checkQuery, eraID).Scan(
+		&refCount)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to check era references: %w", err)
+	}
+	if refCount > 0 {
+		return fmt.Errorf(
+			"era is still referenced by %d "+
+				"relationship(s)", refCount)
+	}
+
+	query := `
+        DELETE FROM eras
+        WHERE id = $1 AND campaign_id = $2`
+	result, err := db.Pool.Exec(ctx, query,
+		eraID, campaignID)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to delete era: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("era not found")
+	}
+
+	return nil
 }

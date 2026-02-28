@@ -96,6 +96,32 @@ func (db *DB) ListConstraintOverrides(
 	return overrides, nil
 }
 
+// DeleteConstraintOverride removes a constraint override
+// by ID, scoped to the given campaign.
+func (db *DB) DeleteConstraintOverride(
+	ctx context.Context,
+	overrideID int64,
+	campaignID int64,
+) error {
+	query := `
+        DELETE FROM constraint_overrides
+        WHERE id = $1 AND campaign_id = $2`
+	result, err := db.Pool.Exec(ctx, query,
+		overrideID, campaignID)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to delete constraint override: %w",
+			err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf(
+			"constraint override not found")
+	}
+
+	return nil
+}
+
 // HasConstraintOverride checks if a specific constraint
 // override exists for a campaign.
 func (db *DB) HasConstraintOverride(

@@ -76,6 +76,14 @@ func (h *Handler) CreateEra(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	switch req.Scale {
+	case "mythic", "ancient", "distant", "past", "recent", "now":
+		// valid
+	default:
+		respondError(w, http.StatusBadRequest, "Invalid scale value")
+		return
+	}
+
 	era, err := h.db.CreateEra(r.Context(), campaignID, req)
 	if err != nil {
 		log.Printf("Error creating era: %v", err)
@@ -112,7 +120,7 @@ func (h *Handler) UpdateEra(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	era, err := h.db.UpdateEra(r.Context(), eraID, req)
+	era, err := h.db.UpdateEra(r.Context(), eraID, campaignID, req)
 	if err != nil {
 		log.Printf("Error updating era: %v", err)
 		respondError(w, http.StatusInternalServerError, "Failed to update era")
@@ -199,6 +207,14 @@ func (h *Handler) CreateConstraintOverride(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	switch req.ConstraintType {
+	case "domain_range", "cardinality", "required":
+		// valid
+	default:
+		respondError(w, http.StatusBadRequest, "Invalid constraint type")
+		return
+	}
+
 	if req.OverrideKey == "" {
 		respondError(w, http.StatusBadRequest, "Override key is required")
 		return
@@ -212,6 +228,64 @@ func (h *Handler) CreateConstraintOverride(w http.ResponseWriter, r *http.Reques
 	}
 
 	respondJSON(w, http.StatusCreated, override)
+}
+
+// DeleteEra handles DELETE /api/campaigns/{id}/eras/{eraId}
+// Deletes an era if it is not referenced by any relationships.
+func (h *Handler) DeleteEra(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseInt64(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+		return
+	}
+
+	eraID, err := parseInt64(r, "eraId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid era ID")
+		return
+	}
+
+	if err := h.db.DeleteEra(r.Context(), eraID, campaignID); err != nil {
+		log.Printf("Error deleting era: %v", err)
+		respondError(w, http.StatusConflict, "Failed to delete era: "+err.Error())
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DeleteConstraintOverride handles DELETE /api/campaigns/{id}/constraint-overrides/{overrideId}
+// Removes a constraint override so the constraint is enforced again.
+func (h *Handler) DeleteConstraintOverride(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseInt64(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+		return
+	}
+
+	overrideID, err := parseInt64(r, "overrideId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid constraint override ID")
+		return
+	}
+
+	if err := h.db.DeleteConstraintOverride(r.Context(), overrideID, campaignID); err != nil {
+		log.Printf("Error deleting constraint override: %v", err)
+		respondError(w, http.StatusNotFound, "Constraint override not found")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // ListEntityTypes handles GET /api/campaigns/{id}/entity-types

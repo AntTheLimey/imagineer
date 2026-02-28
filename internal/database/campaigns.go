@@ -234,6 +234,8 @@ func (db *DB) GetCampaignByOwner(ctx context.Context, id int64, ownerID int64) (
 }
 
 // CreateCampaign creates a new campaign without an owner.
+// The campaign INSERT and all ontology seeding run inside a
+// single transaction so partial data is never committed.
 // For user-scoped creation, use CreateCampaignWithOwner instead.
 func (db *DB) CreateCampaign(ctx context.Context, req models.CreateCampaignRequest) (*models.Campaign, error) {
 	settings := req.Settings
@@ -248,6 +250,12 @@ func (db *DB) CreateCampaign(ctx context.Context, req models.CreateCampaignReque
 		genreStr = &s
 	}
 
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // Rollback is a no-op if already committed
+
 	query := `
         INSERT INTO campaigns (name, system_id, description, settings, genre, image_style_prompt)
         VALUES ($1, $2, $3, $4, $5, $6)
@@ -255,45 +263,7 @@ func (db *DB) CreateCampaign(ctx context.Context, req models.CreateCampaignReque
 
 	var c models.Campaign
 	var retGenre *string
-	err := db.QueryRow(ctx, query, req.Name, req.SystemID, req.Description, settings, genreStr, req.ImageStylePrompt).Scan(
-		&c.ID, &c.Name, &c.SystemID, &c.OwnerID, &c.Description, &c.Settings,
-		&retGenre, &c.ImageStylePrompt, &c.CreatedAt, &c.UpdatedAt,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create campaign: %w", err)
-	}
-
-	if retGenre != nil {
-		g := models.CampaignGenre(*retGenre)
-		c.Genre = &g
-	}
-
-	return &c, nil
-}
-
-// CreateCampaignWithOwner creates a new campaign with an owner.
-// This is the primary method for user-scoped campaign creation.
-func (db *DB) CreateCampaignWithOwner(ctx context.Context, req models.CreateCampaignRequest, ownerID int64) (*models.Campaign, error) {
-	settings := req.Settings
-	if settings == nil {
-		settings = json.RawMessage("{}")
-	}
-
-	// Convert genre to string pointer for database
-	var genreStr *string
-	if req.Genre != nil {
-		s := string(*req.Genre)
-		genreStr = &s
-	}
-
-	query := `
-        INSERT INTO campaigns (name, system_id, owner_id, description, settings, genre, image_style_prompt)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING id, name, system_id, owner_id, description, settings, genre, image_style_prompt, created_at, updated_at`
-
-	var c models.Campaign
-	var retGenre *string
-	err := db.QueryRow(ctx, query, req.Name, req.SystemID, ownerID, req.Description, settings, genreStr, req.ImageStylePrompt).Scan(
+	err = tx.QueryRow(ctx, query, req.Name, req.SystemID, req.Description, settings, genreStr, req.ImageStylePrompt).Scan(
 		&c.ID, &c.Name, &c.SystemID, &c.OwnerID, &c.Description, &c.Settings,
 		&retGenre, &c.ImageStylePrompt, &c.CreatedAt, &c.UpdatedAt,
 	)
@@ -308,66 +278,141 @@ func (db *DB) CreateCampaignWithOwner(ctx context.Context, req models.CreateCamp
 
 	// Seed campaign from ontology YAML if available,
 	// otherwise fall back to legacy template copying.
-	if db.Ontology != nil {
-		if err := db.seedFromOntology(ctx, c.ID); err != nil {
-			return nil, fmt.Errorf(
-				"failed to seed campaign ontology: %w", err)
-		}
-	} else {
-		// Legacy: copy relationship type templates
-		err = db.Exec(ctx, `
-			INSERT INTO relationship_types
-				(campaign_id, name, inverse_name, is_symmetric,
-				 display_label, inverse_display_label, description)
-			SELECT $1, name, inverse_name, is_symmetric,
-				   display_label, inverse_display_label, description
-			FROM relationship_type_templates
-		`, c.ID)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"failed to seed relationship types: %w", err)
-		}
+	if err := db.seedCampaign(ctx, tx, c.ID); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return &c, nil
+}
+
+// CreateCampaignWithOwner creates a new campaign with an owner.
+// The campaign INSERT and all ontology seeding run inside a
+// single transaction so partial data is never committed.
+// This is the primary method for user-scoped campaign creation.
+func (db *DB) CreateCampaignWithOwner(ctx context.Context, req models.CreateCampaignRequest, ownerID int64) (*models.Campaign, error) {
+	settings := req.Settings
+	if settings == nil {
+		settings = json.RawMessage("{}")
+	}
+
+	// Convert genre to string pointer for database
+	var genreStr *string
+	if req.Genre != nil {
+		s := string(*req.Genre)
+		genreStr = &s
+	}
+
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // Rollback is a no-op if already committed
+
+	query := `
+        INSERT INTO campaigns (name, system_id, owner_id, description, settings, genre, image_style_prompt)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id, name, system_id, owner_id, description, settings, genre, image_style_prompt, created_at, updated_at`
+
+	var c models.Campaign
+	var retGenre *string
+	err = tx.QueryRow(ctx, query, req.Name, req.SystemID, ownerID, req.Description, settings, genreStr, req.ImageStylePrompt).Scan(
+		&c.ID, &c.Name, &c.SystemID, &c.OwnerID, &c.Description, &c.Settings,
+		&retGenre, &c.ImageStylePrompt, &c.CreatedAt, &c.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create campaign: %w", err)
+	}
+
+	if retGenre != nil {
+		g := models.CampaignGenre(*retGenre)
+		c.Genre = &g
+	}
+
+	// Seed campaign from ontology YAML if available,
+	// otherwise fall back to legacy template copying.
+	if err := db.seedCampaign(ctx, tx, c.ID); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return &c, nil
 }
 
 // seedFromOntology seeds all campaign-scoped ontology
-// tables from the loaded YAML definitions.
+// tables from the loaded YAML definitions. The tx
+// parameter must satisfy ontology.DBTX (e.g. pgx.Tx
+// or *pgxpool.Pool).
 func (db *DB) seedFromOntology(
-	ctx context.Context, campaignID int64,
+	ctx context.Context, tx ontology.DBTX, campaignID int64,
 ) error {
 	ont := db.Ontology
 
 	if err := ontology.SeedCampaignEntityTypes(
-		ctx, db.Pool, campaignID,
+		ctx, tx, campaignID,
 		ont.EntityTypes); err != nil {
 		return err
 	}
 
 	if err := ontology.SeedCampaignRelationshipTypes(
-		ctx, db.Pool, campaignID,
+		ctx, tx, campaignID,
 		ont.RelationshipTypes); err != nil {
 		return err
 	}
 
 	if err := ontology.SeedCampaignConstraints(
-		ctx, db.Pool, campaignID,
+		ctx, tx, campaignID,
 		ont.Constraints, ont.EntityTypes); err != nil {
 		return err
 	}
 
 	if err := ontology.SeedCampaignRequiredRelationships(
-		ctx, db.Pool, campaignID,
+		ctx, tx, campaignID,
 		ont.Constraints); err != nil {
 		return err
 	}
 
 	if err := ontology.SeedDefaultEra(
-		ctx, db.Pool, campaignID); err != nil {
+		ctx, tx, campaignID); err != nil {
 		return err
 	}
 
+	return nil
+}
+
+// seedCampaign seeds a newly created campaign using
+// ontology YAML definitions if available, otherwise
+// falls back to legacy template copying. All operations
+// execute within the provided transaction.
+func (db *DB) seedCampaign(
+	ctx context.Context, tx ontology.DBTX, campaignID int64,
+) error {
+	if db.Ontology != nil {
+		if err := db.seedFromOntology(ctx, tx, campaignID); err != nil {
+			return fmt.Errorf(
+				"failed to seed campaign ontology: %w", err)
+		}
+	} else {
+		// Legacy: copy relationship type templates
+		_, err := tx.Exec(ctx, `
+			INSERT INTO relationship_types
+				(campaign_id, name, inverse_name, is_symmetric,
+				 display_label, inverse_display_label, description)
+			SELECT $1, name, inverse_name, is_symmetric,
+				   display_label, inverse_display_label, description
+			FROM relationship_type_templates
+		`, campaignID)
+		if err != nil {
+			return fmt.Errorf(
+				"failed to seed relationship types: %w", err)
+		}
+	}
 	return nil
 }
 

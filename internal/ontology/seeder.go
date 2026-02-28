@@ -13,6 +13,7 @@ package ontology
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -48,7 +49,15 @@ func SeedCampaignEntityTypes(
 
 	args := []interface{}{}
 	i := 0
-	for name, def := range et.Types {
+
+	etNames := make([]string, 0, len(et.Types))
+	for name := range et.Types {
+		etNames = append(etNames, name)
+	}
+	sort.Strings(etNames)
+
+	for _, name := range etNames {
+		def := et.Types[name]
 		if i > 0 {
 			sb.WriteString(", ")
 		}
@@ -83,6 +92,13 @@ func SeedCampaignEntityTypes(
 // type rows into the campaign-scoped relationship_types
 // table. This replaces the INSERT...SELECT from
 // relationship_type_templates.
+//
+// NOTE: With ~80 relationship types x 7 params each,
+// this produces ~560 parameters — well under
+// PostgreSQL's 65535 parameter limit. If the number
+// of relationship types grows significantly, this
+// function will need batching similar to
+// SeedCampaignConstraints.
 func SeedCampaignRelationshipTypes(
 	ctx context.Context,
 	db DBTX,
@@ -101,7 +117,15 @@ func SeedCampaignRelationshipTypes(
 
 	args := []interface{}{}
 	i := 0
-	for name, def := range rt.Types {
+
+	rtNames := make([]string, 0, len(rt.Types))
+	for name := range rt.Types {
+		rtNames = append(rtNames, name)
+	}
+	sort.Strings(rtNames)
+
+	for _, name := range rtNames {
+		def := rt.Types[name]
 		if i > 0 {
 			sb.WriteString(", ")
 		}
@@ -128,19 +152,29 @@ func SeedCampaignRelationshipTypes(
 	return nil
 }
 
-// SeedCampaignConstraints populates the
-// relationship_type_constraints table with
-// domain/range constraints. Abstract parent types are
-// resolved to concrete types using the entity type
-// hierarchy.
-func SeedCampaignConstraints(
+// constraintRow holds the parameters for a single
+// constraint INSERT row.
+type constraintRow struct {
+	campaignID  int64
+	relTypeName string
+	srcType     string
+	tgtType     string
+}
+
+// constraintBatchSize is the maximum number of rows
+// per INSERT statement when seeding constraints. This
+// keeps the parameter count well under PostgreSQL's
+// 65535 limit (50 rows x 4 params = 200 params).
+const constraintBatchSize = 50
+
+// execConstraintBatch builds and executes a single
+// batched INSERT for the given constraint rows.
+func execConstraintBatch(
 	ctx context.Context,
 	db DBTX,
-	campaignID int64,
-	constraints *ConstraintsFile,
-	entityTypes *EntityTypeFile,
+	rows []constraintRow,
 ) error {
-	if len(constraints.DomainRange) == 0 {
+	if len(rows) == 0 {
 		return nil
 	}
 
@@ -150,44 +184,26 @@ func SeedCampaignConstraints(
 		 target_entity_type)
 		VALUES `)
 
-	args := []interface{}{}
-	idx := 0
-
-	for relTypeName, dr := range constraints.DomainRange {
-		// Resolve domain types.
-		domainTypes := resolveTypes(
-			dr.Domain, entityTypes)
-		// Resolve range types.
-		rangeTypes := resolveTypes(
-			dr.Range, entityTypes)
-
-		for _, srcType := range domainTypes {
-			for _, tgtType := range rangeTypes {
-				if idx > 0 {
-					sb.WriteString(", ")
-				}
-				base := idx * 4
-				// Use a subquery to look up the
-				// relationship_type_id by name and
-				// campaign_id.
-				sb.WriteString(fmt.Sprintf(
-					`((SELECT id FROM relationship_types
-					   WHERE campaign_id = $%d
-					     AND name = $%d),
-					  $%d, $%d)`,
-					base+1, base+2, base+3, base+4,
-				))
-				args = append(args,
-					campaignID, relTypeName,
-					srcType, tgtType,
-				)
-				idx++
-			}
+	args := make([]interface{}, 0, len(rows)*4)
+	for i, row := range rows {
+		if i > 0 {
+			sb.WriteString(", ")
 		}
-	}
-
-	if idx == 0 {
-		return nil
+		base := i * 4
+		// Use a subquery to look up the
+		// relationship_type_id by name and
+		// campaign_id.
+		sb.WriteString(fmt.Sprintf(
+			`((SELECT id FROM relationship_types
+			   WHERE campaign_id = $%d
+			     AND name = $%d),
+			  $%d, $%d)`,
+			base+1, base+2, base+3, base+4,
+		))
+		args = append(args,
+			row.campaignID, row.relTypeName,
+			row.srcType, row.tgtType,
+		)
 	}
 
 	sb.WriteString(` ON CONFLICT
@@ -200,6 +216,69 @@ func SeedCampaignConstraints(
 			"seed campaign constraints: %w", err)
 	}
 	return nil
+}
+
+// SeedCampaignConstraints populates the
+// relationship_type_constraints table with
+// domain/range constraints. Abstract parent types are
+// resolved to concrete types using the entity type
+// hierarchy.
+//
+// Rows are inserted in batches of constraintBatchSize
+// to stay within PostgreSQL's 65535 parameter limit.
+// With "any"->"any" constraints, the O(N^2) expansion
+// can produce hundreds of rows.
+func SeedCampaignConstraints(
+	ctx context.Context,
+	db DBTX,
+	campaignID int64,
+	constraints *ConstraintsFile,
+	entityTypes *EntityTypeFile,
+) error {
+	if len(constraints.DomainRange) == 0 {
+		return nil
+	}
+
+	drNames := make([]string, 0, len(constraints.DomainRange))
+	for name := range constraints.DomainRange {
+		drNames = append(drNames, name)
+	}
+	sort.Strings(drNames)
+
+	batch := make([]constraintRow, 0, constraintBatchSize)
+
+	for _, relTypeName := range drNames {
+		dr := constraints.DomainRange[relTypeName]
+		// Resolve domain types.
+		domainTypes := resolveTypes(
+			dr.Domain, entityTypes)
+		// Resolve range types.
+		rangeTypes := resolveTypes(
+			dr.Range, entityTypes)
+
+		for _, srcType := range domainTypes {
+			for _, tgtType := range rangeTypes {
+				batch = append(batch, constraintRow{
+					campaignID:  campaignID,
+					relTypeName: relTypeName,
+					srcType:     srcType,
+					tgtType:     tgtType,
+				})
+				if len(batch) >= constraintBatchSize {
+					if err := execConstraintBatch(
+						ctx, db, batch,
+					); err != nil {
+						return err
+					}
+					batch = batch[:0]
+				}
+			}
+		}
+	}
+
+	// Flush any remaining rows in the final
+	// partial batch.
+	return execConstraintBatch(ctx, db, batch)
 }
 
 // resolveTypes expands abstract types to concrete
@@ -215,7 +294,13 @@ func resolveTypes(
 	for _, t := range types {
 		if t == "any" {
 			// Expand "any" to all concrete types.
-			for name, def := range entityTypes.Types {
+			anyNames := make([]string, 0, len(entityTypes.Types))
+			for name := range entityTypes.Types {
+				anyNames = append(anyNames, name)
+			}
+			sort.Strings(anyNames)
+			for _, name := range anyNames {
+				def := entityTypes.Types[name]
 				if !def.Abstract && !seen[name] {
 					result = append(result, name)
 					seen[name] = true
@@ -257,7 +342,14 @@ func SeedCampaignRequiredRelationships(
 	args := []interface{}{}
 	idx := 0
 
-	for entityType, relTypes := range constraints.Required {
+	reqNames := make([]string, 0, len(constraints.Required))
+	for name := range constraints.Required {
+		reqNames = append(reqNames, name)
+	}
+	sort.Strings(reqNames)
+
+	for _, entityType := range reqNames {
+		relTypes := constraints.Required[entityType]
 		for _, relType := range relTypes {
 			if idx > 0 {
 				sb.WriteString(", ")

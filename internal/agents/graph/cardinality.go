@@ -137,17 +137,7 @@ func CheckCardinality(
 	seen := make(map[string]bool)
 
 	for key, count := range counts {
-		var entityID int64
-		var typeName, direction string
-		_, err := fmt.Sscanf(key, "%d:%s", &entityID, &typeName)
-		if err != nil {
-			// Parse the key manually since Sscanf doesn't handle
-			// colons within the type name well.
-			continue
-		}
-
-		// Parse key manually for robustness.
-		entityID, typeName, direction = parseCountKey(key)
+		entityID, typeName, direction := parseCountKey(key)
 		if typeName == "" {
 			continue
 		}
