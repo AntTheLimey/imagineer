@@ -8,6 +8,53 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Ontology Schema for Campaign Knowledge Graphs
+  - YAML-based ontology schema replaces ad-hoc constraint
+    mechanisms with a formal, evolvable type system for
+    campaign knowledge graphs.
+  - `schemas/ontology/entity-types.yaml` defines ~50 entity
+    types with abstract parents (person, agent, place,
+    artifact, narrative) and concrete sub-types.
+  - `schemas/ontology/relationship-types.yaml` defines ~80
+    relationship types across 12 narrative categories with
+    domain/range constraints and genre tags.
+  - `schemas/ontology/constraints.yaml` defines domain/range
+    constraints, cardinality defaults, and required
+    relationships.
+  - Migration 006 creates `campaign_entity_types`, `eras`,
+    `relationship_archive`, `cardinality_constraints`,
+    `required_relationships`, and `constraint_overrides`
+    tables; adds `era_id` to relationships and entities;
+    drops the hardcoded `entity_type` CHECK constraint.
+  - Ontology loader package (`internal/ontology/`) with Go
+    structs, YAML parser, `ResolveConcreteTypes` helper, and
+    per-campaign database seeder for entity types,
+    relationship types, constraints, and a default era.
+  - Campaign creation seeds ontology tables from YAML
+    definitions with legacy template fallback; server loads
+    ontology at startup.
+  - Graph Expert cardinality violation detection
+    (`internal/agents/graph/cardinality.go`) warns when
+    relationships exceed configured limits.
+  - Graph Expert required relationship enforcement
+    (`internal/agents/graph/required.go`) flags entities
+    missing mandatory relationships.
+  - Graph Expert constraint override filtering
+    (`internal/agents/graph/overrides.go`) suppresses
+    future warnings when the GM acknowledges a violation.
+  - All Graph Expert enforcement modules wired into
+    `expert.go Run()` method with comprehensive test suites.
+  - Enrichment agent prompt now includes valid entity types
+    and relationship types from the ontology, passed through
+    `PipelineInput` → `EnrichmentInput` →
+    `buildSystemPrompt`.
+  - Seven ontology API endpoints in
+    `internal/api/ontology_handler.go`: ListEras, CreateEra,
+    UpdateEra, GetCurrentEra, ListConstraintOverrides,
+    CreateConstraintOverride, and ListEntityTypes; routes
+    registered under campaign scope.
+  - Updated all four graph-expert knowledge base files to
+    reflect ontology-driven validation.
 - Analysis Wizard (Phase Screens)
   - Replaced the monolithic 4,400-line AnalysisTriagePage
     with a step-by-step wizard where each analysis phase

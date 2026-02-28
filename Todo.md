@@ -103,7 +103,8 @@ analysis and triage workflow.
   — the `relationship_type_constraints` table (migration
   014) defines which relationship types are valid between
   which entity type pairs, and the Graph Expert enforces
-  these constraints during analysis.
+  these constraints during analysis. Superseded by the
+  full ontology schema (see Completed section).
 - [x] `[MVP-1]` LLM quota and rate limit error handling:
   `QuotaExceededError` distinguishes HTTP 402 from 429,
   `doWithRetry` fails immediately on quota errors,
@@ -700,6 +701,32 @@ Features planned for after the initial release.
   `agents.TruncateString`, shared `fetchSourceContent`,
   and `buildDefaultPipeline` factory (minus 198 net
   lines).
+
+### Ontology Schema for Knowledge Graphs
+
+- [x] `[MVP-2]` YAML ontology schema with ~50 entity types,
+  ~80 relationship types across 12 narrative categories,
+  and domain/range/cardinality constraints replacing ad-hoc
+  constraint mechanisms.
+- [x] `[MVP-2]` Migration 006 creating `campaign_entity_types`,
+  `eras`, `relationship_archive`, `cardinality_constraints`,
+  `required_relationships`, and `constraint_overrides` tables.
+- [x] `[MVP-2]` Ontology loader and seeder package
+  (`internal/ontology/`) with YAML parsing, concrete type
+  resolution, and per-campaign database seeding.
+- [x] `[MVP-2]` Campaign creation seeds ontology tables from
+  YAML with legacy template fallback; server loads ontology
+  at startup.
+- [x] `[MVP-2]` Graph Expert cardinality violation detection,
+  required relationship enforcement, and constraint override
+  filtering with comprehensive test suites.
+- [x] `[MVP-2]` Enrichment agent prompt includes valid entity
+  and relationship types from the ontology.
+- [x] `[MVP-2]` Seven ontology API endpoints (eras CRUD,
+  constraint overrides, entity type listing) under campaign
+  scope.
+- [x] `[MVP-2]` Updated graph-expert knowledge base files
+  for ontology-driven validation.
 
 ### Job Phases & Draft Lifecycle
 
