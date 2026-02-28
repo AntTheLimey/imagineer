@@ -284,6 +284,7 @@ export default function ChapterViewPage() {
      */
     const handleSave = useCallback(async (phases: PhaseSelection) => {
         if (!campaignId || !chapterId) return;
+        if (!editTitle.trim()) return;
 
         const hasAnyPhase = phases.identify || phases.revise || phases.enrich;
         const phaseKeys: string[] = [];
@@ -344,7 +345,7 @@ export default function ChapterViewPage() {
     /**
      * Delete the chapter and navigate back.
      */
-    const handleDelete = async () => {
+    const handleDelete = useCallback(async () => {
         if (!campaignId || !chapterId) return;
         try {
             await deleteChapter.mutateAsync({ campaignId, chapterId });
@@ -352,7 +353,7 @@ export default function ChapterViewPage() {
         } catch {
             // Error handled by mutation
         }
-    };
+    }, [campaignId, chapterId, deleteChapter, navigate]);
 
     // Loading state
     if (isLoading) {
@@ -421,24 +422,22 @@ export default function ChapterViewPage() {
                             disabledPhases={disabledPhases}
                         />
                     ) : (
-                        <>
-                            <Button
-                                variant="contained"
-                                startIcon={<EditIcon />}
-                                onClick={handleEdit}
-                            >
-                                Edit
-                            </Button>
-                            <Button
-                                variant="outlined"
-                                color="error"
-                                startIcon={<DeleteIcon />}
-                                onClick={() => setDeleteDialogOpen(true)}
-                            >
-                                Delete
-                            </Button>
-                        </>
+                        <Button
+                            variant="contained"
+                            startIcon={<EditIcon />}
+                            onClick={handleEdit}
+                        >
+                            Edit
+                        </Button>
                     )}
+                    <Button
+                        variant="outlined"
+                        color="error"
+                        startIcon={<DeleteIcon />}
+                        onClick={() => setDeleteDialogOpen(true)}
+                    >
+                        Delete
+                    </Button>
                 </Box>
             </Box>
 
@@ -454,6 +453,12 @@ export default function ChapterViewPage() {
                     >
                         Cancel
                     </Button>
+                </Alert>
+            )}
+
+            {updateChapter.error && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                    Failed to save chapter. Please try again.
                 </Alert>
             )}
 
