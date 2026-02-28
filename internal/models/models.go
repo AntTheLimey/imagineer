@@ -67,8 +67,13 @@ type UpdateCampaignRequest struct {
 }
 
 // EntityType represents the type of a campaign entity.
+// Validation is now dynamic against campaign_entity_types.
 type EntityType string
 
+// Convenience constants for common entity types.
+// These are retained for backward compatibility but are
+// not used for validation. Campaigns may define additional
+// types via the ontology schema.
 const (
 	EntityTypeNPC          EntityType = "npc"
 	EntityTypeLocation     EntityType = "location"
@@ -815,4 +820,64 @@ type SaveDraftRequest struct {
 	IsNew         bool            `json:"isNew"`
 	DraftData     json.RawMessage `json:"draftData"`
 	ServerVersion *int            `json:"serverVersion,omitempty"`
+}
+
+// CampaignEntityType represents a campaign-scoped entity
+// type from the ontology hierarchy.
+type CampaignEntityType struct {
+	ID          int64     `json:"id"`
+	CampaignID  int64     `json:"campaignId"`
+	Name        string    `json:"name"`
+	ParentName  *string   `json:"parentName,omitempty"`
+	Abstract    bool      `json:"abstract"`
+	Description *string   `json:"description,omitempty"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
+// Era represents a named period in the campaign's
+// fictional timeline.
+type Era struct {
+	ID          int64     `json:"id"`
+	CampaignID  int64     `json:"campaignId"`
+	Sequence    int       `json:"sequence"`
+	Name        string    `json:"name"`
+	Scale       string    `json:"scale"`
+	Description *string   `json:"description,omitempty"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+// CreateEraRequest is the request body for creating a
+// new era.
+type CreateEraRequest struct {
+	Sequence    int     `json:"sequence"`
+	Name        string  `json:"name"`
+	Scale       string  `json:"scale"`
+	Description *string `json:"description,omitempty"`
+}
+
+// UpdateEraRequest is the request body for updating an
+// existing era.
+type UpdateEraRequest struct {
+	Sequence    *int    `json:"sequence,omitempty"`
+	Name        *string `json:"name,omitempty"`
+	Scale       *string `json:"scale,omitempty"`
+	Description *string `json:"description,omitempty"`
+}
+
+// ConstraintOverride represents a GM acknowledgement
+// that overrides a specific constraint violation.
+type ConstraintOverride struct {
+	ID              int64     `json:"id"`
+	CampaignID      int64     `json:"campaignId"`
+	ConstraintType  string    `json:"constraintType"`
+	OverrideKey     string    `json:"overrideKey"`
+	AcknowledgedAt  time.Time `json:"acknowledgedAt"`
+}
+
+// CreateConstraintOverrideRequest is the request body
+// for acknowledging a constraint violation.
+type CreateConstraintOverrideRequest struct {
+	ConstraintType string `json:"constraintType"`
+	OverrideKey    string `json:"overrideKey"`
 }

@@ -1,0 +1,356 @@
+# Ontology Constraints
+#
+# All constraints are advisory (warn, not block).
+# Domain/range reference abstract parent types where
+# possible; the loader resolves to concrete children.
+
+domain_range:
+  # --- Meta-Game ---
+  plays:
+    domain: [player]
+    range: [pc]
+  formerly_played:
+    domain: [player]
+    range: [pc, npc]
+  narrates:
+    domain: [game_master]
+    range: [any]
+
+  # --- Kinship and Family ---
+  parent_of:
+    domain: [npc, creature]
+    range: [npc, creature]
+  sibling_of:
+    domain: [npc]
+    range: [npc]
+  spouse_of:
+    domain: [npc]
+    range: [npc]
+  betrothed_to:
+    domain: [npc]
+    range: [npc]
+  ancestor_of:
+    domain: [npc]
+    range: [npc]
+
+  # --- Social and Interpersonal ---
+  knows:
+    domain: [npc]
+    range: [npc]
+  friend_of:
+    domain: [npc]
+    range: [npc]
+  rival_of:
+    domain: [agent]
+    range: [agent]
+  lover_of:
+    domain: [npc]
+    range: [npc]
+  mentors:
+    domain: [npc]
+    range: [npc]
+  protects:
+    domain: [agent]
+    range: [agent, place]
+  trusts:
+    domain: [npc]
+    range: [npc]
+  betrayed:
+    domain: [npc]
+    range: [npc]
+
+  # --- Power and Authority ---
+  rules:
+    domain: [npc, faction]
+    range: [place, faction, organization]
+  commands:
+    domain: [npc]
+    range: [npc, agent]
+  employs:
+    domain: [agent]
+    range: [npc]
+  works_for:
+    domain: [npc]
+    range: [agent]
+  reports_to:
+    domain: [npc]
+    range: [npc]
+  serves:
+    domain: [npc]
+    range: [agent]
+  patron_of:
+    domain: [npc, organization]
+    range: [npc, organization]
+  vassal_of:
+    domain: [npc, faction]
+    range: [npc, faction]
+  imprisons:
+    domain: [agent, place]
+    range: [npc, creature]
+
+  # --- Spatial and Territorial ---
+  located_at:
+    domain: [agent, artifact, event]
+    range: [place]
+  headquartered_at:
+    domain: [faction, organization]
+    range: [place]
+  part_of:
+    domain: [any]
+    range: [any]
+  borders:
+    domain: [place]
+    range: [place]
+  connected_to:
+    domain: [place]
+    range: [place]
+  originated_from:
+    domain: [npc, creature, artifact]
+    range: [place]
+  guards:
+    domain: [agent]
+    range: [place, artifact]
+  haunts:
+    domain: [npc, creature]
+    range: [place]
+  controls:
+    domain: [agent]
+    range: [place]
+
+  # --- Possession and Creation ---
+  owns:
+    domain: [agent]
+    range: [artifact, place]
+  created:
+    domain: [agent]
+    range: [artifact, event]
+  wields:
+    domain: [npc, creature]
+    range: [item]
+  seeks:
+    domain: [agent]
+    range: [agent, artifact, place]
+  inherited_from:
+    domain: [npc]
+    range: [npc, artifact]
+
+  # --- Knowledge and Information ---
+  discovered:
+    domain: [npc]
+    range: [any]
+  conceals:
+    domain: [agent]
+    range: [any]
+  recorded_in:
+    domain: [any]
+    range: [document]
+  studies:
+    domain: [npc]
+    range: [any]
+
+  # --- Conflict and Alliance ---
+  enemy_of:
+    domain: [agent]
+    range: [agent]
+  allied_with:
+    domain: [agent]
+    range: [agent]
+  at_war_with:
+    domain: [agent]
+    range: [agent]
+  conspires_against:
+    domain: [agent]
+    range: [agent]
+  hunts:
+    domain: [agent]
+    range: [agent]
+  opposes:
+    domain: [agent]
+    range: [agent]
+
+  # --- Affiliation and Membership ---
+  member_of:
+    domain: [npc]
+    range: [faction, organization]
+  founded:
+    domain: [npc]
+    range: [faction, organization, place]
+  leads:
+    domain: [npc]
+    range: [agent]
+  defected_from:
+    domain: [npc]
+    range: [faction, organization]
+  infiltrates:
+    domain: [npc]
+    range: [faction, organization]
+
+  # --- Supernatural and Mystical ---
+  bound_to:
+    domain: [any]
+    range: [any]
+  cursed_by:
+    domain: [agent]
+    range: [any]
+  blessed_by:
+    domain: [agent]
+    range: [any]
+  summoned:
+    domain: [npc, creature]
+    range: [npc, creature]
+  worships:
+    domain: [npc]
+    range: [npc, creature]
+  prophesied:
+    domain: [npc, event]
+    range: [npc, document]
+  transformed_by:
+    domain: [npc, creature]
+    range: [npc, creature, artifact]
+  corrupted_by:
+    domain: [agent]
+    range: [any]
+
+  # --- Temporal and Causal ---
+  caused:
+    domain: [any]
+    range: [event]
+  triggered:
+    domain: [event]
+    range: [event]
+  participated_in:
+    domain: [agent]
+    range: [event]
+  witnessed:
+    domain: [npc]
+    range: [event]
+
+  # --- Economic ---
+  trades_with:
+    domain: [agent]
+    range: [agent]
+  supplies:
+    domain: [agent]
+    range: [agent]
+  finances:
+    domain: [agent]
+    range: [agent]
+  indebted_to:
+    domain: [agent]
+    range: [agent]
+
+  # --- Event Relationships ---
+  murdered:
+    domain: [agent]
+    range: [npc, creature]
+  poisoned:
+    domain: [agent]
+    range: [npc, creature]
+  wounded:
+    domain: [agent]
+    range: [npc, creature]
+  rescued:
+    domain: [agent]
+    range: [agent]
+  captured:
+    domain: [agent]
+    range: [agent]
+  freed:
+    domain: [agent]
+    range: [agent]
+  deceived:
+    domain: [agent]
+    range: [agent]
+  stole_from:
+    domain: [agent]
+    range: [agent]
+
+  # --- Sci-Fi and Cyberpunk ---
+  uploaded_to:
+    domain: [agent]
+    range: [artifact, place]
+  augmented_by:
+    domain: [artifact]
+    range: [npc, creature]
+  cloned_from:
+    domain: [npc, creature]
+    range: [npc, creature]
+  programmed_by:
+    domain: [npc]
+    range: [creature, artifact]
+  hacked:
+    domain: [agent]
+    range: [agent, artifact]
+
+  # --- Horror ---
+  possessed_by:
+    domain: [npc, creature]
+    range: [npc, creature]
+  infected_by:
+    domain: [agent]
+    range: [npc, creature]
+  fears:
+    domain: [npc]
+    range: [any]
+  feeds_on:
+    domain: [creature]
+    range: [npc, creature]
+
+  # --- Superhero ---
+  alter_ego_of:
+    domain: [npc]
+    range: [npc]
+  empowered_by:
+    domain: [any]
+    range: [npc, creature]
+  nemesis_of:
+    domain: [agent]
+    range: [agent]
+
+  # --- Historical and Political ---
+  conquered:
+    domain: [agent]
+    range: [agent, place]
+  exiled_from:
+    domain: [npc]
+    range: [place, faction, organization]
+  succeeded:
+    domain: [npc]
+    range: [npc]
+  negotiated_with:
+    domain: [agent]
+    range: [agent]
+
+  # --- Romance and Intrigue ---
+  courts:
+    domain: [npc]
+    range: [npc]
+  rejected:
+    domain: [npc]
+    range: [npc]
+  disguised_as:
+    domain: [npc]
+    range: [npc]
+  blackmails:
+    domain: [agent]
+    range: [agent]
+
+# Cardinality defaults (all many-to-many).
+# Campaigns can tighten these.
+cardinality: {}
+
+# Required relationships (advisory).
+# Every entity of the given type should have at least
+# one relationship of the named type.
+required:
+  npc:
+    - located_at
+  pc:
+    - played_by
+    - located_at
+  creature:
+    - located_at
+  faction:
+    - headquartered_at
+  organization:
+    - headquartered_at
