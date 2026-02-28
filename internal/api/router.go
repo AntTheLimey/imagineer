@@ -246,6 +246,23 @@ func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string)
 						r.Put("/items/{itemId}", contentAnalysisHandler.ResolveItem)
 						r.Put("/items/{itemId}/revert", contentAnalysisHandler.RevertItem)
 					})
+
+					// Eras
+					r.Route("/eras", func(r chi.Router) {
+						r.Get("/", h.ListEras)
+						r.Post("/", h.CreateEra)
+						r.Get("/current", h.GetCurrentEra)
+						r.Put("/{eraId}", h.UpdateEra)
+					})
+
+					// Entity types (ontology)
+					r.Get("/entity-types", h.ListEntityTypes)
+
+					// Constraint overrides
+					r.Route("/constraint-overrides", func(r chi.Router) {
+						r.Get("/", h.ListConstraintOverrides)
+						r.Post("/", h.CreateConstraintOverride)
+					})
 				})
 			})
 
