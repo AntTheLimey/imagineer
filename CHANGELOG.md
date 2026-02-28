@@ -77,9 +77,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     integration (Save & Go) matching the CampaignOverview
     pattern, MarkdownEditor for overview, entity management
     via EntityAutocomplete, and save error handling.
-  - `GET /chapters/:chapterId/relationships` backend endpoint
-    returning relationships scoped to a chapter's entity set
-    (entities + one hop via entity_relationships_view).
+  - `GET /campaigns/:id/chapters/:chapterId/relationships`
+    backend endpoint returning relationships scoped to a
+    chapter's entity set (entities + one hop via
+    entity_relationships_view).
   - `useChapterRelationships` React Query hook with cache
     invalidation on entity mutations.
   - 302 tests across 27 test files.

@@ -639,6 +639,7 @@ export default function ChapterViewPage() {
                                                             size="small"
                                                             onClick={() => handleRemoveEntity(ce.id)}
                                                             color="error"
+                                                            aria-label={`Remove ${ce.entity?.name ?? 'entity'}`}
                                                         >
                                                             <DeleteIcon fontSize="small" />
                                                         </IconButton>
@@ -685,7 +686,7 @@ export default function ChapterViewPage() {
                                         onClick={() => {
                                             if (campaignId) {
                                                 navigate(
-                                                    `/campaigns/${campaignId}/sessions/${session.id}`
+                                                    `/campaigns/${campaignId}/sessions/${session.id}/edit`
                                                 );
                                             }
                                         }}

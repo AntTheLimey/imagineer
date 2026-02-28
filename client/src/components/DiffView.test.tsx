@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /*-------------------------------------------------------------------------
  *
  * Imagineer - TTRPG Campaign Intelligence Platform

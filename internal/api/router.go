@@ -169,6 +169,7 @@ func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string)
 						r.Put("/", h.UpdateChapter)
 						r.Delete("/", h.DeleteChapter)
 						r.Get("/sessions", h.ListSessionsByChapter)
+						r.Get("/relationships", h.ListChapterRelationships)
 
 						// Chapter entity links
 						r.Get("/entities", h.ListChapterEntities)

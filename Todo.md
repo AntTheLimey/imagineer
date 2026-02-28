@@ -160,10 +160,6 @@ infrastructure.
 - [ ] `[MVP-1]` Three-panel layout for session views (basic
   campaign nav exists, but the full three-panel layout with AI
   panel does not).
-- [x] `[MVP-2]` Read-only chapter view page with inline
-  editing, PhaseStrip integration, entity management,
-  and relationship display.
-
 ### Evernote Import
 
 - [ ] `[MVP-1]` Fix and verify Evernote ENEX file import.
@@ -464,6 +460,12 @@ Features planned for after the initial release.
 ---
 
 ## Completed
+
+### Chapter Upgrades
+
+- [x] `[MVP-2]` Read-only chapter view page with inline
+  editing, PhaseStrip integration, entity management,
+  and relationship display.
 
 ### Session Workflows Phase 1
 

@@ -974,6 +974,54 @@ func (h *Handler) GetEntityRelationships(w http.ResponseWriter, r *http.Request)
 	respondJSON(w, http.StatusOK, relationships)
 }
 
+// ListChapterRelationships handles GET /api/campaigns/{id}/chapters/{chapterId}/relationships
+// Verifies the user owns the campaign and the chapter belongs to it before
+// listing relationships where at least one entity is linked to the chapter.
+func (h *Handler) ListChapterRelationships(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseInt64(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	// Verify the user owns this campaign
+	if _, ok := h.verifyCampaignOwnership(w, r, campaignID); !ok {
+		return
+	}
+
+	chapterID, err := parseInt64(r, "chapterId")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid chapter ID")
+		return
+	}
+
+	// Verify the chapter belongs to the specified campaign
+	chapter, err := h.db.GetChapter(r.Context(), chapterID)
+	if err != nil {
+		log.Printf("Error getting chapter: %v", err)
+		respondError(w, http.StatusNotFound, "Chapter not found")
+		return
+	}
+
+	if chapter.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Chapter not found")
+		return
+	}
+
+	relationships, err := h.db.ListChapterRelationships(r.Context(), campaignID, chapterID)
+	if err != nil {
+		log.Printf("Error listing chapter relationships: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to list chapter relationships")
+		return
+	}
+
+	if relationships == nil {
+		relationships = []models.Relationship{}
+	}
+
+	respondJSON(w, http.StatusOK, relationships)
+}
+
 // ListTimelineEvents handles GET /api/campaigns/:id/timeline
 // Verifies the user owns the campaign before listing timeline events.
 func (h *Handler) ListTimelineEvents(w http.ResponseWriter, r *http.Request) {
