@@ -128,6 +128,16 @@ export {
     chapterKeys,
 } from './useChapters';
 
+// Chapter entity hooks
+export {
+    useChapterEntities,
+    useChapterRelationships,
+    useCreateChapterEntity,
+    useUpdateChapterEntity,
+    useDeleteChapterEntity,
+    chapterEntityKeys,
+} from './useChapterEntities';
+
 // Session hooks
 export {
     useSessions,

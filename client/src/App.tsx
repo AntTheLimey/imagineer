@@ -27,6 +27,7 @@ import Entities from './pages/Entities';
 import EntityEditor from './pages/EntityEditor';
 import EntityView from './pages/EntityView';
 import ChapterEditorPage from './pages/ChapterEditorPage';
+import ChapterViewPage from './pages/ChapterViewPage';
 import SessionsManagement from './pages/SessionsManagement';
 import CampaignImport from './pages/CampaignImport';
 import Timeline from './pages/Timeline';
@@ -149,7 +150,7 @@ function FullScreenWrapper() {
  * Routes:
  * - Public: /login, /auth/callback
  * - Protected (requires authentication, rendered inside the AppShell): /, /campaigns (redirects to /), /campaigns/:id/overview, /campaigns/:id/entities, /campaigns/:id/sessions, /campaigns/:id/import, /campaigns/:id/timeline, /campaigns/:id/settings, and legacy /campaigns/:id/dashboard -> ../overview
- * - Full-screen (requires authentication, rendered outside the AppShell): /campaigns/new, /campaigns/:campaignId/entities/new, /campaigns/:campaignId/entities/:entityId/edit, /campaigns/:campaignId/chapters/new, /campaigns/:campaignId/chapters/:chapterId/edit
+ * - Full-screen (requires authentication, rendered outside the AppShell): /campaigns/new, /campaigns/:campaignId/entities/new, /campaigns/:campaignId/entities/:entityId/edit, /campaigns/:campaignId/chapters/new
  * - Account settings (full-screen, requires authentication): /settings
  * - Fallback: any other path redirects to /
  *
@@ -175,6 +176,7 @@ function AppRoutes() {
                     <Route path="/campaigns/:id/overview" element={<CampaignOverview />} />
                     <Route path="/campaigns/:id/entities" element={<Entities />} />
                     <Route path="/campaigns/:campaignId/entities/:entityId" element={<EntityView />} />
+                    <Route path="/campaigns/:campaignId/chapters/:chapterId" element={<ChapterViewPage />} />
                     <Route path="/campaigns/:id/sessions" element={<SessionsManagement />} />
                     <Route path="/campaigns/:id/import" element={<CampaignImport />} />
                     <Route path="/campaigns/:id/timeline" element={<Timeline />} />
@@ -207,11 +209,6 @@ function AppRoutes() {
                     {/* New chapter editor */}
                     <Route
                         path="/campaigns/:campaignId/chapters/new"
-                        element={<ChapterEditorPage />}
-                    />
-                    {/* Edit existing chapter */}
-                    <Route
-                        path="/campaigns/:campaignId/chapters/:chapterId/edit"
                         element={<ChapterEditorPage />}
                     />
                     {/* New session editor */}

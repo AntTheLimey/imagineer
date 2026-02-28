@@ -39,14 +39,15 @@ type finding struct {
 
 // validCategories lists the accepted finding categories.
 var validCategories = map[string]bool{
-	"pacing":          true,
-	"investigation":   true,
-	"spotlight":       true,
-	"npc_development": true,
-	"mechanics":       true,
-	"pc_agency":       true,
-	"continuity":      true,
-	"setting":         true,
+	"pacing":           true,
+	"investigation":    true,
+	"spotlight":        true,
+	"npc_development":  true,
+	"mechanics":        true,
+	"pc_agency":        true,
+	"continuity":       true,
+	"setting":          true,
+	"scenario_writing": true,
 }
 
 // validSeverities lists the accepted severity levels.
@@ -133,7 +134,7 @@ func categoryToDetectionType(category string) string {
 		return "investigation_gap"
 	case "mechanics":
 		return "mechanics_warning"
-	case "spotlight", "npc_development", "pc_agency", "continuity", "setting":
+	case "spotlight", "npc_development", "pc_agency", "continuity", "setting", "scenario_writing":
 		return "content_suggestion"
 	default:
 		return "content_suggestion"

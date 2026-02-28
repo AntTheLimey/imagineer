@@ -318,8 +318,7 @@ export default function CampaignDashboard() {
                                 setChapterEditorOpen(true);
                             }}
                             onEditChapter={(chapter) => {
-                                setEditingChapterId(chapter.id);
-                                setChapterEditorOpen(true);
+                                navigate(`/campaigns/${campaignId}/chapters/${chapter.id}`);
                             }}
                             onCreateSession={() => {
                                 setEditingSessionId(undefined);

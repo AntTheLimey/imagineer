@@ -66,6 +66,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     performs a global find-and-replace to insert
     [[wiki link]] tags for all occurrences of the
     entity name in the source content.
+- Chapter View Page
+  - New read-only chapter view at
+    `/campaigns/:id/chapters/:chapterId` showing chapter
+    overview with wiki-link navigation, entities grouped by
+    mention type (Featured, Linked, Mentioned), child sessions
+    with stage indicators, relationships between chapter
+    entities plus one hop, and metadata.
+  - Inline editing on the Chapter View page with PhaseStrip
+    integration (Save & Go) matching the CampaignOverview
+    pattern, MarkdownEditor for overview, entity management
+    via EntityAutocomplete, and save error handling.
+  - `GET /campaigns/:id/chapters/:chapterId/relationships`
+    backend endpoint returning relationships scoped to a
+    chapter's entity set (entities + one hop via
+    entity_relationships_view).
+  - `useChapterRelationships` React Query hook with cache
+    invalidation on entity mutations.
+  - 302 tests across 27 test files.
 - RAG Context for Enrichment and Revision Agents
   - The enrichment agent now performs a
     per-entity hybrid vector search and
@@ -632,6 +650,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Chapter navigation: clicking a chapter in the list
+  navigates to the View page instead of the full-screen
+  editor. ChapterEditorPage retained only for creating new
+  chapters.
+- ChapterList simplified: expand/collapse inline preview and
+  edit icon button removed; chapter title is now clickable
+  to navigate to the view page.
 - Replaced the monolithic AnalysisTriagePage (4,755 lines)
   with the AnalysisWizard component and three focused phase
   pages (IdentifyPhasePage, RevisePhasePage,

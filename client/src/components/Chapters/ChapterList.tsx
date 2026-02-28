@@ -12,10 +12,11 @@
  *
  * Features:
  * - List chapters in sort order
- * - Click to expand/select chapter
+ * - Click row to select chapter (shows sessions)
+ * - Click title to navigate to chapter view page
  * - Show sessions count per chapter
  * - Add new chapter button
- * - Edit/delete chapter actions
+ * - Delete chapter action
  */
 
 import type { MouseEvent } from 'react';
@@ -25,7 +26,6 @@ import {
     Box,
     Button,
     CircularProgress,
-    Collapse,
     IconButton,
     List,
     ListItem,
@@ -37,9 +37,6 @@ import {
 import {
     Add as AddIcon,
     Delete as DeleteIcon,
-    Edit as EditIcon,
-    ExpandLess as ExpandLessIcon,
-    ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { useChapters, useDeleteChapter } from '../../hooks/useChapters';
 import { useSessionsByChapter } from '../../hooks/useSessions';
@@ -73,13 +70,9 @@ interface ChapterListItemProps {
     campaignId: number;
     /** Whether this chapter is selected. */
     isSelected: boolean;
-    /** Whether this chapter is expanded. */
-    isExpanded: boolean;
     /** Callback fired when the chapter is clicked. */
     onSelect: () => void;
-    /** Callback fired when the expand button is clicked. */
-    onToggleExpand: () => void;
-    /** Callback fired when the edit button is clicked. */
+    /** Callback fired when the title is clicked (navigates to view page). */
     onEdit: () => void;
     /** Callback fired when the delete button is clicked. */
     onDelete: () => void;
@@ -90,25 +83,25 @@ interface ChapterListItemProps {
 }
 
 /**
- * Render a single chapter row with selection, expand/collapse, edit, and delete controls.
+ * Render a single chapter row with selection, title navigation, and delete control.
+ *
+ * Clicking the row selects the chapter (showing its sessions). Clicking the
+ * chapter title navigates to the chapter view page.
  *
  * @param chapter - The chapter to display.
  * @param campaignId - Campaign ID used to fetch this chapter's sessions for the displayed session count.
  * @param isSelected - Whether the chapter is currently selected.
- * @param isExpanded - Whether the chapter's overview is expanded.
  * @param onSelect - Callback invoked when the main list item is clicked.
- * @param onToggleExpand - Callback invoked to toggle the chapter overview expansion.
- * @param onEdit - Callback invoked when the edit action is triggered.
+ * @param onEdit - Callback invoked when the chapter title is clicked (navigates to view page).
  * @param onDelete - Callback invoked when the delete action is triggered.
  * @param isDeleting - True while a delete operation for this chapter is in progress (shows a spinner).
+ * @param hasDraft - Whether a draft exists for this chapter.
  */
 function ChapterListItem({
     chapter,
     campaignId,
     isSelected,
-    isExpanded,
     onSelect,
-    onToggleExpand,
     onEdit,
     onDelete,
     isDeleting,
@@ -117,123 +110,75 @@ function ChapterListItem({
     const { data: sessions } = useSessionsByChapter(campaignId, chapter.id);
     const sessionCount = sessions?.length ?? 0;
 
-    const handleExpandClick = (event: MouseEvent) => {
-        event.stopPropagation();
-        onToggleExpand();
-    };
-
-    const handleEditClick = (event: MouseEvent) => {
-        event.stopPropagation();
-        onEdit();
-    };
-
     const handleDeleteClick = (event: MouseEvent) => {
         event.stopPropagation();
         onDelete();
     };
 
     return (
-        <>
-            <ListItem
-                disablePadding
-                secondaryAction={
-                    <Box sx={{ display: 'flex', gap: 0.5 }}>
-                        <Tooltip title="Edit chapter">
-                            <IconButton
-                                edge="end"
-                                size="small"
-                                onClick={handleEditClick}
-                                aria-label="edit chapter"
-                            >
-                                <EditIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Delete chapter">
-                            <IconButton
-                                edge="end"
-                                size="small"
-                                onClick={handleDeleteClick}
-                                disabled={isDeleting}
-                                aria-label="delete chapter"
-                            >
-                                {isDeleting ? (
-                                    <CircularProgress size={18} />
-                                ) : (
-                                    <DeleteIcon fontSize="small" />
-                                )}
-                            </IconButton>
-                        </Tooltip>
-                    </Box>
-                }
-            >
-                <ListItemButton
-                    selected={isSelected}
-                    onClick={onSelect}
-                    sx={{ pr: 10 }}
-                >
+        <ListItem
+            disablePadding
+            secondaryAction={
+                <Tooltip title="Delete chapter">
                     <IconButton
+                        edge="end"
                         size="small"
-                        onClick={handleExpandClick}
-                        sx={{ mr: 1 }}
-                        aria-label={isExpanded ? 'collapse' : 'expand'}
+                        onClick={handleDeleteClick}
+                        disabled={isDeleting}
+                        aria-label="delete chapter"
                     >
-                        {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                        {isDeleting ? (
+                            <CircularProgress size={18} />
+                        ) : (
+                            <DeleteIcon fontSize="small" />
+                        )}
                     </IconButton>
-                    <ListItemText
-                        primary={
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                <Typography
-                                    component="span"
-                                    noWrap
-                                    fontWeight={isSelected ? 600 : 400}
-                                    sx={{ flexGrow: 1, minWidth: 0 }}
-                                >
-                                    {chapter.title}
-                                </Typography>
-                                <DraftIndicator hasDraft={hasDraft} />
-                            </Box>
-                        }
-                        secondary={`${sessionCount} session${sessionCount !== 1 ? 's' : ''}`}
-                        primaryTypographyProps={{
-                            component: 'div',
-                        }}
-                    />
-                </ListItemButton>
-            </ListItem>
-            <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                <Box sx={{ pl: 7, pr: 2, pb: 2 }}>
-                    {chapter.overview ? (
-                        <Typography
-                            variant="body2"
-                            color="text.secondary"
-                            sx={{
-                                whiteSpace: 'pre-wrap',
-                                maxHeight: 100,
-                                overflow: 'auto',
-                            }}
-                        >
-                            {chapter.overview}
-                        </Typography>
-                    ) : (
-                        <Typography
-                            variant="body2"
-                            color="text.secondary"
-                            fontStyle="italic"
-                        >
-                            No overview provided.
-                        </Typography>
-                    )}
-                </Box>
-            </Collapse>
-        </>
+                </Tooltip>
+            }
+        >
+            <ListItemButton
+                selected={isSelected}
+                onClick={onSelect}
+                sx={{ pr: 7 }}
+            >
+                <ListItemText
+                    primary={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <Typography
+                                component="span"
+                                noWrap
+                                fontWeight={isSelected ? 600 : 400}
+                                sx={{
+                                    flexGrow: 1,
+                                    minWidth: 0,
+                                    cursor: 'pointer',
+                                    '&:hover': { textDecoration: 'underline' },
+                                }}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onEdit();
+                                }}
+                            >
+                                {chapter.title}
+                            </Typography>
+                            <DraftIndicator hasDraft={hasDraft} />
+                        </Box>
+                    }
+                    secondary={`${sessionCount} session${sessionCount !== 1 ? 's' : ''}`}
+                    primaryTypographyProps={{
+                        component: 'div',
+                    }}
+                />
+            </ListItemButton>
+        </ListItem>
     );
 }
 
 /**
  * Component for displaying and managing a list of chapters.
  *
- * Provides chapter selection, inline expansion to view overview,
- * and actions for creating, editing, and deleting chapters.
+ * Provides chapter selection, clickable titles for navigation to the
+ * chapter view page, and actions for creating and deleting chapters.
  *
  * @param props - The component props.
  * @returns A React element containing the chapter list.
@@ -256,9 +201,6 @@ export default function ChapterList({
     onCreateChapter,
     onEditChapter,
 }: ChapterListProps) {
-    const [expandedChapterId, setExpandedChapterId] = useState<number | null>(
-        null
-    );
     const [deleteError, setDeleteError] = useState<string | null>(null);
     const { hasDraft } = useDraftIndicators(campaignId, 'chapters');
 
@@ -269,15 +211,6 @@ export default function ChapterList({
     } = useChapters(campaignId);
 
     const deleteChapterMutation = useDeleteChapter();
-
-    /**
-     * Handles toggling the expanded state of a chapter.
-     */
-    const handleToggleExpand = useCallback((chapterId: number) => {
-        setExpandedChapterId((prev) =>
-            prev === chapterId ? null : chapterId
-        );
-    }, []);
 
     /**
      * Handles deleting a chapter with confirmation.
@@ -387,12 +320,8 @@ export default function ChapterList({
                             chapter={chapter}
                             campaignId={campaignId}
                             isSelected={selectedChapterId === chapter.id}
-                            isExpanded={expandedChapterId === chapter.id}
                             hasDraft={hasDraft(chapter.id)}
                             onSelect={() => onSelectChapter(chapter.id)}
-                            onToggleExpand={() =>
-                                handleToggleExpand(chapter.id)
-                            }
                             onEdit={() => onEditChapter?.(chapter)}
                             onDelete={() => handleDeleteChapter(chapter)}
                             isDeleting={

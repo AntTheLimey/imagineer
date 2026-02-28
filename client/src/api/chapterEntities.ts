@@ -12,7 +12,7 @@
  */
 
 import { apiClient } from './client';
-import type { ChapterEntity, ChapterEntityMentionType } from '../types';
+import type { ChapterEntity, ChapterEntityMentionType, Relationship } from '../types';
 
 /**
  * Input for creating a chapter-entity link.
@@ -81,6 +81,18 @@ export const chapterEntitiesApi = {
     ): Promise<void> {
         return apiClient.delete<void>(
             `/campaigns/${campaignId}/chapters/${chapterId}/entities/${linkId}`
+        );
+    },
+
+    /**
+     * List relationships involving entities linked to a chapter.
+     */
+    listRelationships(
+        campaignId: number,
+        chapterId: number,
+    ): Promise<Relationship[]> {
+        return apiClient.get<Relationship[]>(
+            `/campaigns/${campaignId}/chapters/${chapterId}/relationships`,
         );
     },
 };

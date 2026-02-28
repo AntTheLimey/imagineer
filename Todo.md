@@ -160,9 +160,6 @@ infrastructure.
 - [ ] `[MVP-1]` Three-panel layout for session views (basic
   campaign nav exists, but the full three-panel layout with AI
   panel does not).
-- [ ] `[MVP-2]` Read-only chapter view page (view mode from
-  chapter list without entering editor).
-
 ### Evernote Import
 
 - [ ] `[MVP-1]` Fix and verify Evernote ENEX file import.
@@ -206,8 +203,8 @@ Expert agents, and RAG context assembly with token budgets.
   content in different styles (prose, bullet notes, narrative
   recap).
 - [ ] `[MVP-2]` Phase strip on other pages: roll out
-  `PhaseStrip` to ChapterEditor, SessionEditor, and
-  EntityEditor.
+  `PhaseStrip` to SessionEditor and EntityEditor
+  (ChapterViewPage now has PhaseStrip).
 - [ ] `[MVP-2]` Scope-aware RAG filtering: filter and weight
   RAG context results by scope level (currently the pipeline
   only adds scope metadata to prompts).
@@ -463,6 +460,12 @@ Features planned for after the initial release.
 ---
 
 ## Completed
+
+### Chapter Upgrades
+
+- [x] `[MVP-2]` Read-only chapter view page with inline
+  editing, PhaseStrip integration, entity management,
+  and relationship display.
 
 ### Session Workflows Phase 1
 

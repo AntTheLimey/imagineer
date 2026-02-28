@@ -53,6 +53,7 @@ interface DiffLine {
  * @param revised - The revised text.
  * @returns An array of line-pair objects with a changed flag.
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function diffLines(original: string, revised: string): DiffLine[] {
     const origLines = original.split('\n');
     const revLines = revised.split('\n');
