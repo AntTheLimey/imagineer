@@ -321,8 +321,8 @@ export default function ChapterEditorPage() {
                             });
                             return true;
                         }
-                        // Navigate to edit, show snackbar from there
-                        navigate(`/campaigns/${campaignId}/chapters/${newChapter.id}/edit`, {
+                        // Navigate to view page
+                        navigate(`/campaigns/${campaignId}/chapters/${newChapter.id}`, {
                             replace: true,
                         });
                         return true;
@@ -331,8 +331,8 @@ export default function ChapterEditorPage() {
 
                 await deleteDraftFromServer();
 
-                // Navigate to edit the newly created chapter
-                navigate(`/campaigns/${campaignId}/chapters/${newChapter.id}/edit`, {
+                // Navigate to view the newly created chapter
+                navigate(`/campaigns/${campaignId}/chapters/${newChapter.id}`, {
                     replace: true,
                 });
             } else if (chapterId) {

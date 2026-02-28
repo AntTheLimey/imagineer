@@ -47,8 +47,8 @@ export default function SessionsManagement() {
         navigate(`/campaigns/${campaignId}/chapters/new`);
     };
 
-    const handleEditChapter = (chapter: Chapter) => {
-        navigate(`/campaigns/${campaignId}/chapters/${chapter.id}/edit`);
+    const handleViewChapter = (chapter: Chapter) => {
+        navigate(`/campaigns/${campaignId}/chapters/${chapter.id}`);
     };
 
     const handleCreateSession = () => {
@@ -92,7 +92,7 @@ export default function SessionsManagement() {
                         selectedChapterId={selectedChapterId}
                         onSelectChapter={setSelectedChapterId}
                         onCreateChapter={handleCreateChapter}
-                        onEditChapter={handleEditChapter}
+                        onEditChapter={handleViewChapter}
                     />
                 </Box>
 
