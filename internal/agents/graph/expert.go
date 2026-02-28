@@ -16,6 +16,7 @@ package graph
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"time"
 
@@ -159,6 +160,59 @@ func (e *Expert) Run(
 					JobID:            input.JobID,
 					DetectionType:    "invalid_type_pair",
 					MatchedText:      v.RelationshipType,
+					Resolution:       "pending",
+					SuggestedContent: json.RawMessage(detail),
+					Phase:            "enrichment",
+					CreatedAt:        now,
+				})
+			}
+		}
+	}
+
+	// 1c. Cardinality check: verify that existing relationships plus
+	// proposed suggestions do not exceed per-type cardinality limits.
+	if e.db != nil {
+		cardViolations, err := CheckCardinality(
+			ctx, e.db, input.CampaignID,
+			relSuggestions, input.Relationships, input.Entities,
+		)
+		if err != nil {
+			log.Printf(
+				"graph-expert: cardinality check failed: %v", err,
+			)
+			// Continue with other checks; do not abort.
+		} else {
+			for _, v := range cardViolations {
+				detail, err := json.Marshal(map[string]interface{}{
+					"entityId":         v.EntityID,
+					"entityName":       v.EntityName,
+					"entityType":       v.EntityType,
+					"relationshipType": v.RelationshipType,
+					"direction":        v.Direction,
+					"currentCount":     v.CurrentCount,
+					"maxAllowed":       v.MaxAllowed,
+					"description": fmt.Sprintf(
+						"Entity %s would have %d %s relationships as %s, "+
+							"exceeding the limit of %d.",
+						v.EntityName, v.CurrentCount,
+						v.RelationshipType, v.Direction,
+						v.MaxAllowed,
+					),
+				})
+				if err != nil {
+					log.Printf(
+						"graph-expert: failed to marshal cardinality violation: %v",
+						err,
+					)
+					continue
+				}
+
+				entityID := v.EntityID
+				allItems = append(allItems, models.ContentAnalysisItem{
+					JobID:            input.JobID,
+					DetectionType:    "cardinality_violation",
+					MatchedText:      v.RelationshipType,
+					EntityID:         &entityID,
 					Resolution:       "pending",
 					SuggestedContent: json.RawMessage(detail),
 					Phase:            "enrichment",
