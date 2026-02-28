@@ -27,6 +27,8 @@ export const chapterEntityKeys = {
     lists: () => [...chapterEntityKeys.all, 'list'] as const,
     list: (campaignId: number, chapterId: number) =>
         [...chapterEntityKeys.lists(), campaignId, chapterId] as const,
+    relationships: (campaignId: number, chapterId: number) =>
+        [...chapterEntityKeys.all, 'relationships', campaignId, chapterId] as const,
 };
 
 /**
@@ -40,6 +42,21 @@ export function useChapterEntities(campaignId: number, chapterId: number) {
     return useQuery({
         queryKey: chapterEntityKeys.list(campaignId, chapterId),
         queryFn: () => chapterEntitiesApi.list(campaignId, chapterId),
+        enabled: !!campaignId && !!chapterId,
+    });
+}
+
+/**
+ * Fetches relationships involving entities linked to a chapter.
+ *
+ * @param campaignId - The campaign ID
+ * @param chapterId - The chapter ID
+ * @returns The query result containing the chapter's relationships
+ */
+export function useChapterRelationships(campaignId: number, chapterId: number) {
+    return useQuery({
+        queryKey: chapterEntityKeys.relationships(campaignId, chapterId),
+        queryFn: () => chapterEntitiesApi.listRelationships(campaignId, chapterId),
         enabled: !!campaignId && !!chapterId,
     });
 }
