@@ -260,3 +260,50 @@ func (db *DB) GetEntityRelationships(ctx context.Context, entityID int64) ([]mod
 
 	return relationships, nil
 }
+
+// ListChapterRelationships retrieves all relationships where at least one
+// entity is linked to the given chapter via the chapter_entities table.
+// It queries entity_relationships_view and uses DISTINCT ON to avoid
+// duplicates when both entities in a relationship belong to the chapter.
+func (db *DB) ListChapterRelationships(ctx context.Context, campaignID, chapterID int64) ([]models.Relationship, error) {
+	query := `
+		SELECT DISTINCT ON (erv.id, erv.direction)
+			erv.id, erv.campaign_id, erv.from_entity_id, erv.to_entity_id,
+			erv.relationship_type_id, erv.relationship_type, erv.display_label,
+			erv.tone, erv.description, erv.strength,
+			erv.created_at, erv.updated_at,
+			erv.from_entity_name, erv.from_entity_type,
+			erv.to_entity_name, erv.to_entity_type,
+			erv.direction
+		FROM entity_relationships_view erv
+		WHERE erv.campaign_id = $1
+		  AND (erv.from_entity_id IN (SELECT entity_id FROM chapter_entities WHERE chapter_id = $2)
+		    OR erv.to_entity_id IN (SELECT entity_id FROM chapter_entities WHERE chapter_id = $2))
+		ORDER BY erv.id, erv.direction, erv.relationship_type, erv.from_entity_name`
+
+	rows, err := db.Query(ctx, query, campaignID, chapterID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list chapter relationships: %w", err)
+	}
+	defer rows.Close()
+
+	var relationships []models.Relationship
+	for rows.Next() {
+		var r models.Relationship
+		err := rows.Scan(
+			&r.ID, &r.CampaignID, &r.SourceEntityID, &r.TargetEntityID,
+			&r.RelationshipTypeID, &r.RelationshipTypeName, &r.DisplayLabel,
+			&r.Tone, &r.Description, &r.Strength,
+			&r.CreatedAt, &r.UpdatedAt,
+			&r.SourceEntityName, &r.SourceEntityType,
+			&r.TargetEntityName, &r.TargetEntityType,
+			&r.Direction,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan chapter relationship: %w", err)
+		}
+		relationships = append(relationships, r)
+	}
+
+	return relationships, nil
+}
