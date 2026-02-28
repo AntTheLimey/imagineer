@@ -48,9 +48,8 @@ vi.mock('../components/Sessions/SessionStageIndicator', () => ({
     ),
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 vi.mock('../components/PhaseStrip', () => ({
-    PhaseStrip: ({ onSave }: { onSave: (p: any) => void }) => (
+    PhaseStrip: ({ onSave }: { onSave: (p: Record<string, boolean>) => void }) => (
         <button
             data-testid="phase-strip"
             onClick={() => onSave({ identify: false, revise: false, enrich: false })}
