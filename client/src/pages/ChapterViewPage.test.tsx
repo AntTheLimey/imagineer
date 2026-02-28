@@ -12,7 +12,8 @@
  *
  * Verifies rendering of chapter data in read-only mode, including the
  * overview with markdown, entity groupings, sessions, relationships,
- * metadata, and interactive elements (edit/delete buttons).
+ * metadata, and interactive elements (edit/delete buttons). Also tests
+ * inline edit mode with PhaseStrip, form fields, and cancel behaviour.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -25,10 +26,14 @@ import ChapterViewPage from './ChapterViewPage';
 vi.mock('../hooks', () => ({
     useChapter: vi.fn(),
     useDeleteChapter: vi.fn(),
+    useUpdateChapter: vi.fn(),
+    useUserSettings: vi.fn(),
     useEntities: vi.fn(),
     useSessionsByChapter: vi.fn(),
     useChapterEntities: vi.fn(),
     useChapterRelationships: vi.fn(),
+    useCreateChapterEntity: vi.fn(),
+    useDeleteChapterEntity: vi.fn(),
 }));
 
 vi.mock('../components/MarkdownRenderer', () => ({
@@ -43,13 +48,43 @@ vi.mock('../components/Sessions/SessionStageIndicator', () => ({
     ),
 }));
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+vi.mock('../components/PhaseStrip', () => ({
+    PhaseStrip: ({ onSave }: { onSave: (p: any) => void }) => (
+        <button
+            data-testid="phase-strip"
+            onClick={() => onSave({ identify: false, revise: false, enrich: false })}
+        >
+            Save &amp; Go
+        </button>
+    ),
+}));
+
+vi.mock('../components/MarkdownEditor', () => ({
+    MarkdownEditor: ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+        <textarea
+            data-testid="markdown-editor"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+        />
+    ),
+}));
+
+vi.mock('../components/EntityAutocomplete', () => ({
+    default: () => <div data-testid="entity-autocomplete" />,
+}));
+
 import {
     useChapter,
     useDeleteChapter,
+    useUpdateChapter,
+    useUserSettings,
     useEntities,
     useSessionsByChapter,
     useChapterEntities,
     useChapterRelationships,
+    useCreateChapterEntity,
+    useDeleteChapterEntity,
 } from '../hooks';
 import type { Mock } from 'vitest';
 
@@ -96,11 +131,31 @@ function setupDefaultMocks() {
     (useDeleteChapter as Mock).mockReturnValue({
         mutateAsync: vi.fn(),
     });
+    (useUpdateChapter as Mock).mockReturnValue({
+        mutateAsync: vi.fn().mockResolvedValue({}),
+        isPending: false,
+    });
+    (useUserSettings as Mock).mockReturnValue({ data: null });
     (useEntities as Mock).mockReturnValue({ data: undefined });
     (useSessionsByChapter as Mock).mockReturnValue({ data: undefined });
     (useChapterEntities as Mock).mockReturnValue({ data: undefined });
     (useChapterRelationships as Mock).mockReturnValue({ data: undefined });
+    (useCreateChapterEntity as Mock).mockReturnValue({ mutate: vi.fn() });
+    (useDeleteChapterEntity as Mock).mockReturnValue({ mutate: vi.fn() });
 }
+
+/**
+ * Chapter data fixture used across multiple tests.
+ */
+const CHAPTER_FIXTURE = {
+    id: 10,
+    campaignId: 1,
+    title: 'The Dark Beginning',
+    overview: 'A storm gathers over Arkham.',
+    sortOrder: 1,
+    createdAt: '2026-01-15T10:00:00Z',
+    updatedAt: '2026-02-01T12:00:00Z',
+};
 
 describe('ChapterViewPage', () => {
     beforeEach(() => {
@@ -148,15 +203,7 @@ describe('ChapterViewPage', () => {
 
     it('renders chapter title and overview', () => {
         (useChapter as Mock).mockReturnValue({
-            data: {
-                id: 10,
-                campaignId: 1,
-                title: 'The Dark Beginning',
-                overview: 'A storm gathers over Arkham.',
-                sortOrder: 1,
-                createdAt: '2026-01-15T10:00:00Z',
-                updatedAt: '2026-02-01T12:00:00Z',
-            },
+            data: CHAPTER_FIXTURE,
             isLoading: false,
             error: null,
         });
@@ -459,8 +506,9 @@ describe('ChapterViewPage', () => {
             screen.getByText(/are you sure you want to delete/i)
         ).toBeInTheDocument();
 
-        // Click Cancel
-        fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+        // Click Cancel in the dialog
+        const dialog = screen.getByRole('dialog');
+        fireEvent.click(within(dialog).getByRole('button', { name: /cancel/i }));
 
         // Dialog should close (wait for MUI transition to complete)
         await waitFor(() => {
@@ -508,6 +556,180 @@ describe('ChapterViewPage', () => {
                 campaignId: 1,
                 chapterId: 10,
             });
+        });
+    });
+
+    describe('edit mode', () => {
+        it('clicking Edit switches to edit mode', () => {
+            (useChapter as Mock).mockReturnValue({
+                data: CHAPTER_FIXTURE,
+                isLoading: false,
+                error: null,
+            });
+
+            renderPage();
+
+            // Click Edit
+            fireEvent.click(screen.getByRole('button', { name: /edit/i }));
+
+            // Title becomes a text input pre-filled with chapter title
+            const titleInput = screen.getByLabelText(/chapter title/i);
+            expect(titleInput).toBeInTheDocument();
+            expect(titleInput).toHaveValue('The Dark Beginning');
+
+            // PhaseStrip appears
+            expect(screen.getByTestId('phase-strip')).toBeInTheDocument();
+
+            // Edit and Delete buttons disappear
+            expect(
+                screen.queryByRole('button', { name: /^edit$/i })
+            ).not.toBeInTheDocument();
+            // The header Delete button is gone (only delete icons on
+            // entity rows may remain)
+        });
+
+        it('Cancel exits edit mode without saving', async () => {
+            const mockMutateAsync = vi.fn().mockResolvedValue({});
+            (useUpdateChapter as Mock).mockReturnValue({
+                mutateAsync: mockMutateAsync,
+                isPending: false,
+            });
+            (useChapter as Mock).mockReturnValue({
+                data: CHAPTER_FIXTURE,
+                isLoading: false,
+                error: null,
+            });
+
+            renderPage();
+
+            // Enter edit mode
+            fireEvent.click(screen.getByRole('button', { name: /edit/i }));
+            expect(screen.getByTestId('phase-strip')).toBeInTheDocument();
+
+            // Click Cancel
+            fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+
+            // Should be back in read mode
+            await waitFor(() => {
+                expect(screen.queryByTestId('phase-strip')).not.toBeInTheDocument();
+            });
+            expect(screen.getByText('The Dark Beginning')).toBeInTheDocument();
+
+            // Update mutation should not have been called
+            expect(mockMutateAsync).not.toHaveBeenCalled();
+        });
+
+        it('Save without phases exits edit mode', async () => {
+            const mockMutateAsync = vi.fn().mockResolvedValue({});
+            (useUpdateChapter as Mock).mockReturnValue({
+                mutateAsync: mockMutateAsync,
+                isPending: false,
+            });
+            (useChapter as Mock).mockReturnValue({
+                data: CHAPTER_FIXTURE,
+                isLoading: false,
+                error: null,
+            });
+
+            renderPage();
+
+            // Enter edit mode
+            fireEvent.click(screen.getByRole('button', { name: /edit/i }));
+
+            // Click Save & Go (mocked PhaseStrip fires with all phases false)
+            fireEvent.click(screen.getByTestId('phase-strip'));
+
+            await waitFor(() => {
+                expect(mockMutateAsync).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        campaignId: 1,
+                        chapterId: 10,
+                        input: expect.objectContaining({
+                            title: 'The Dark Beginning',
+                        }),
+                    })
+                );
+            });
+
+            // Should exit edit mode
+            await waitFor(() => {
+                expect(screen.queryByTestId('phase-strip')).not.toBeInTheDocument();
+            });
+        });
+
+        it('PhaseStrip renders in edit mode', () => {
+            (useChapter as Mock).mockReturnValue({
+                data: CHAPTER_FIXTURE,
+                isLoading: false,
+                error: null,
+            });
+
+            renderPage();
+
+            // PhaseStrip should not be visible initially
+            expect(screen.queryByTestId('phase-strip')).not.toBeInTheDocument();
+
+            // Enter edit mode
+            fireEvent.click(screen.getByRole('button', { name: /edit/i }));
+
+            // PhaseStrip should now be visible
+            expect(screen.getByTestId('phase-strip')).toBeInTheDocument();
+        });
+
+        it('shows MarkdownEditor in edit mode', () => {
+            (useChapter as Mock).mockReturnValue({
+                data: CHAPTER_FIXTURE,
+                isLoading: false,
+                error: null,
+            });
+
+            renderPage();
+
+            // Enter edit mode
+            fireEvent.click(screen.getByRole('button', { name: /edit/i }));
+
+            // MarkdownEditor should be visible
+            expect(screen.getByTestId('markdown-editor')).toBeInTheDocument();
+
+            // MarkdownRenderer should not be visible
+            expect(screen.queryByTestId('markdown')).not.toBeInTheDocument();
+        });
+
+        it('shows EntityAutocomplete in edit mode', () => {
+            (useChapter as Mock).mockReturnValue({
+                data: CHAPTER_FIXTURE,
+                isLoading: false,
+                error: null,
+            });
+
+            renderPage();
+
+            // EntityAutocomplete should not be visible initially
+            expect(screen.queryByTestId('entity-autocomplete')).not.toBeInTheDocument();
+
+            // Enter edit mode
+            fireEvent.click(screen.getByRole('button', { name: /edit/i }));
+
+            // EntityAutocomplete should now be visible
+            expect(screen.getByTestId('entity-autocomplete')).toBeInTheDocument();
+        });
+
+        it('shows edit mode info banner with Cancel button', () => {
+            (useChapter as Mock).mockReturnValue({
+                data: CHAPTER_FIXTURE,
+                isLoading: false,
+                error: null,
+            });
+
+            renderPage();
+
+            // Enter edit mode
+            fireEvent.click(screen.getByRole('button', { name: /edit/i }));
+
+            // Info banner should be visible
+            expect(
+                screen.getByText(/you are in edit mode/i)
+            ).toBeInTheDocument();
         });
     });
 });

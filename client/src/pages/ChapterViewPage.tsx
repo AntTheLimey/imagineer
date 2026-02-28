@@ -8,11 +8,12 @@
 // -------------------------------------------------------------------------
 
 /**
- * ChapterViewPage - Read-only chapter detail page.
+ * ChapterViewPage - Chapter detail page with inline editing.
  *
- * Displays chapter information in a readable format with navigation to the
- * chapter editor. Wiki links within the overview resolve to entity view
- * pages, enabling wiki-style browsing of campaign content.
+ * Displays chapter information in a readable format with wiki-link
+ * navigation. Supports an inline edit mode with PhaseStrip for
+ * Save & Analyze workflow, entity management, and a rich markdown
+ * editor for the overview field.
  */
 
 import { useState, useCallback, useMemo } from 'react';
@@ -30,7 +31,9 @@ import {
     DialogContentText,
     DialogTitle,
     Divider,
+    IconButton,
     Paper,
+    TextField,
     Typography,
 } from '@mui/material';
 import {
@@ -42,13 +45,21 @@ import {
 import {
     useChapter,
     useDeleteChapter,
+    useUpdateChapter,
+    useUserSettings,
     useEntities,
     useSessionsByChapter,
     useChapterEntities,
     useChapterRelationships,
+    useCreateChapterEntity,
+    useDeleteChapterEntity,
 } from '../hooks';
+import { PhaseStrip } from '../components/PhaseStrip';
+import type { PhaseSelection } from '../components/PhaseStrip';
+import { MarkdownEditor } from '../components/MarkdownEditor';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import type { WikiLinkEntity } from '../components/MarkdownRenderer';
+import EntityAutocomplete from '../components/EntityAutocomplete';
 import SessionStageIndicator from '../components/Sessions/SessionStageIndicator';
 import type {
     EntityType,
@@ -111,12 +122,15 @@ function formatDate(dateString: string): string {
 }
 
 /**
- * Read-only detail page for viewing a single campaign chapter.
+ * Chapter detail page with inline editing and Save & Analyze workflow.
  *
  * Loads chapter data along with associated entities, sessions, and
- * relationships. Renders the chapter overview with wiki-link navigation,
- * entity groupings by mention type, session listings with stage indicators,
- * relationship visualizations, and metadata.
+ * relationships. In read mode, renders the chapter overview with
+ * wiki-link navigation, entity groupings by mention type, session
+ * listings with stage indicators, relationship visualizations, and
+ * metadata. In edit mode, provides inline form fields, a rich
+ * markdown editor, entity management, and the PhaseStrip for
+ * triggering analysis phases on save.
  *
  * @returns The React element for the Chapter View page
  */
@@ -129,6 +143,11 @@ export default function ChapterViewPage() {
     // Local UI state
     const [isEditing, setIsEditing] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+    // Edit mode form data
+    const [editTitle, setEditTitle] = useState('');
+    const [editOverview, setEditOverview] = useState('');
+    const [editSortOrder, setEditSortOrder] = useState(0);
 
     // Fetch chapter data
     const {
@@ -162,6 +181,21 @@ export default function ChapterViewPage() {
 
     // Delete mutation
     const deleteChapter = useDeleteChapter();
+
+    // Update mutation
+    const updateChapter = useUpdateChapter();
+
+    // Chapter entity mutations
+    const createChapterEntity = useCreateChapterEntity();
+    const deleteChapterEntity = useDeleteChapterEntity();
+
+    // LLM availability check
+    const { data: userSettings } = useUserSettings();
+    const hasLLM = !!userSettings?.contentGenService && !!userSettings?.contentGenApiKey;
+    const disabledPhases = !hasLLM
+        ? { revise: 'Configure an LLM in Account Settings',
+            enrich: 'Configure an LLM in Account Settings' }
+        : undefined;
 
     // Group chapter entities by mention type
     const groupedEntities = useMemo(() => {
@@ -227,11 +261,85 @@ export default function ChapterViewPage() {
     }, [campaignId, navigate]);
 
     /**
-     * Enter edit mode (placeholder for future implementation).
+     * Enter edit mode and initialise form fields from current chapter data.
      */
     const handleEdit = useCallback(() => {
+        if (chapter) {
+            setEditTitle(chapter.title);
+            setEditOverview(chapter.overview ?? '');
+            setEditSortOrder(chapter.sortOrder);
+        }
         setIsEditing(true);
+    }, [chapter]);
+
+    /**
+     * Exit edit mode without saving changes.
+     */
+    const handleCancelEdit = useCallback(() => {
+        setIsEditing(false);
     }, []);
+
+    /**
+     * Save changes and optionally trigger analysis phases.
+     */
+    const handleSave = useCallback(async (phases: PhaseSelection) => {
+        if (!campaignId || !chapterId) return;
+
+        const hasAnyPhase = phases.identify || phases.revise || phases.enrich;
+        const phaseKeys: string[] = [];
+        if (phases.identify) phaseKeys.push('identify');
+        if (phases.revise) phaseKeys.push('revise');
+        if (phases.enrich) phaseKeys.push('enrich');
+
+        try {
+            const result = await updateChapter.mutateAsync({
+                campaignId,
+                chapterId,
+                input: {
+                    title: editTitle.trim(),
+                    overview: editOverview.trim() || undefined,
+                    sortOrder: editSortOrder,
+                },
+                options: {
+                    analyze: phases.identify || phases.revise,
+                    enrich: phases.enrich,
+                    phases: phaseKeys.length > 0 ? phaseKeys : undefined,
+                },
+            });
+
+            // Navigate to analysis wizard if phases selected
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const analysisResult = (result as any)?._analysis;
+            if (hasAnyPhase && analysisResult?.jobId) {
+                navigate(`/campaigns/${campaignId}/analysis/${analysisResult.jobId}`);
+                return;
+            }
+
+            setIsEditing(false);
+        } catch (error) {
+            console.error('Failed to save chapter:', error);
+        }
+    }, [campaignId, chapterId, editTitle, editOverview, editSortOrder, updateChapter, navigate]);
+
+    /**
+     * Add an entity link to the chapter.
+     */
+    const handleAddEntity = useCallback((entity: { id: number; name: string; entityType: string }) => {
+        if (!campaignId || !chapterId) return;
+        createChapterEntity.mutate({
+            campaignId,
+            chapterId,
+            input: { entityId: entity.id, mentionType: 'linked' },
+        });
+    }, [campaignId, chapterId, createChapterEntity]);
+
+    /**
+     * Remove an entity link from the chapter.
+     */
+    const handleRemoveEntity = useCallback((linkId: number) => {
+        if (!campaignId || !chapterId) return;
+        deleteChapterEntity.mutate({ campaignId, chapterId, linkId });
+    }, [campaignId, chapterId, deleteChapterEntity]);
 
     /**
      * Delete the chapter and navigate back.
@@ -245,10 +353,6 @@ export default function ChapterViewPage() {
             // Error handled by mutation
         }
     };
-
-    // Suppress unused variable warning — edit mode is set but not yet
-    // consumed because the editing UI will be added in a future commit.
-    void isEditing;
 
     // Loading state
     if (isLoading) {
@@ -308,34 +412,84 @@ export default function ChapterViewPage() {
                 >
                     Back
                 </Button>
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Button
-                        variant="contained"
-                        startIcon={<EditIcon />}
-                        onClick={handleEdit}
-                    >
-                        Edit
-                    </Button>
-                    <Button
-                        variant="outlined"
-                        color="error"
-                        startIcon={<DeleteIcon />}
-                        onClick={() => setDeleteDialogOpen(true)}
-                    >
-                        Delete
-                    </Button>
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                    {isEditing ? (
+                        <PhaseStrip
+                            onSave={handleSave}
+                            isDirty={isEditing}
+                            isSaving={updateChapter.isPending}
+                            disabledPhases={disabledPhases}
+                        />
+                    ) : (
+                        <>
+                            <Button
+                                variant="contained"
+                                startIcon={<EditIcon />}
+                                onClick={handleEdit}
+                            >
+                                Edit
+                            </Button>
+                            <Button
+                                variant="outlined"
+                                color="error"
+                                startIcon={<DeleteIcon />}
+                                onClick={() => setDeleteDialogOpen(true)}
+                            >
+                                Delete
+                            </Button>
+                        </>
+                    )}
                 </Box>
             </Box>
+
+            {/* Cancel banner in edit mode */}
+            {isEditing && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                    You are in edit mode. Make your changes and use Save &amp; Go to save.
+                    <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={handleCancelEdit}
+                        sx={{ ml: 2 }}
+                    >
+                        Cancel
+                    </Button>
+                </Alert>
+            )}
 
             <Paper sx={{ p: 3 }}>
                 {/* Title */}
                 <Box sx={{ mb: 3 }}>
-                    <Typography variant="h4" sx={{ fontFamily: 'Cinzel' }}>
-                        {chapter.title}
-                    </Typography>
+                    {isEditing ? (
+                        <TextField
+                            label="Chapter Title"
+                            fullWidth
+                            required
+                            value={editTitle}
+                            onChange={(e) => setEditTitle(e.target.value)}
+                        />
+                    ) : (
+                        <Typography variant="h4" sx={{ fontFamily: 'Cinzel' }}>
+                            {chapter.title}
+                        </Typography>
+                    )}
                 </Box>
 
                 <Divider sx={{ mb: 3 }} />
+
+                {/* Sort order (edit mode only) */}
+                {isEditing && (
+                    <Box sx={{ mb: 2 }}>
+                        <TextField
+                            label="Sort Order"
+                            type="number"
+                            value={editSortOrder}
+                            onChange={(e) => setEditSortOrder(Number(e.target.value))}
+                            size="small"
+                            sx={{ width: 120 }}
+                        />
+                    </Box>
+                )}
 
                 {/* Overview */}
                 <Box sx={{ mb: 3 }}>
@@ -346,26 +500,47 @@ export default function ChapterViewPage() {
                     >
                         Overview
                     </Typography>
-                    {chapter.overview ? (
-                        <Box
-                            sx={{
-                                '& p': { mt: 0, mb: 1 },
-                                '& p:last-child': { mb: 0 },
-                            }}
-                        >
-                            <MarkdownRenderer
-                                content={chapter.overview}
-                                onEntityClick={handleEntityClick}
-                                entities={wikiLinkEntities}
-                                onEntityNavigate={handleEntityNavigate}
-                            />
-                        </Box>
+                    {isEditing ? (
+                        <MarkdownEditor
+                            value={editOverview}
+                            onChange={setEditOverview}
+                            placeholder="Write chapter overview..."
+                            minHeight={200}
+                            campaignId={campaignId}
+                        />
                     ) : (
-                        <Typography color="text.secondary">
-                            No overview yet.
-                        </Typography>
+                        chapter.overview ? (
+                            <Box
+                                sx={{
+                                    '& p': { mt: 0, mb: 1 },
+                                    '& p:last-child': { mb: 0 },
+                                }}
+                            >
+                                <MarkdownRenderer
+                                    content={chapter.overview}
+                                    onEntityClick={handleEntityClick}
+                                    entities={wikiLinkEntities}
+                                    onEntityNavigate={handleEntityNavigate}
+                                />
+                            </Box>
+                        ) : (
+                            <Typography color="text.secondary">
+                                No overview yet.
+                            </Typography>
+                        )
                     )}
                 </Box>
+
+                {/* Entity autocomplete (edit mode only) */}
+                {isEditing && campaignId && (
+                    <Box sx={{ mb: 2 }}>
+                        <EntityAutocomplete
+                            campaignId={campaignId}
+                            onSelect={handleAddEntity}
+                            label="Add entity to chapter..."
+                        />
+                    </Box>
+                )}
 
                 {/* Entities */}
                 {chapterEntities && chapterEntities.length > 0 && (
@@ -454,6 +629,15 @@ export default function ChapterViewPage() {
                                                         size="small"
                                                         variant="outlined"
                                                     />
+                                                    {isEditing && (
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => handleRemoveEntity(ce.id)}
+                                                            color="error"
+                                                        >
+                                                            <DeleteIcon fontSize="small" />
+                                                        </IconButton>
+                                                    )}
                                                 </Box>
                                             ))}
                                         </Box>
