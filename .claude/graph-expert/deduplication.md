@@ -64,6 +64,39 @@ Resolution: remove the direct edge between Alice and Bob.
 The connection is discoverable via Faction X.
 ```
 
+### 4. Constraint Override Layer (Post-Processing)
+
+After all structural and semantic checks produce findings,
+`FilterOverriddenFindings` (`overrides.go`) removes findings
+that the GM has previously acknowledged via the
+`constraint_overrides` table.
+
+This layer operates on three overridable detection types:
+
+| Detection Type          | Override Key Format            |
+|-------------------------|--------------------------------|
+| `invalid_type_pair`     | `relType:srcType:tgtType`      |
+| `cardinality_violation` | `relType:entityId:direction`   |
+| `missing_required`      | `entityType:relType`           |
+
+Non-overridable types (`orphan_warning`, `redundant_edge`,
+`graph_warning`) always pass through to the GM.
+
+This prevents the system from repeatedly flagging violations
+that the GM has reviewed and accepted as intentional
+exceptions to the ontology rules.
+
+### 5. Era-Based Archiving
+
+When a relationship changes or ends, it is moved to the
+`relationship_archive` table rather than being deleted. The
+archive preserves era context, allowing the graph to show
+both the current state and its historical evolution.
+
+This is not deduplication per se, but it prevents stale
+relationships from accumulating in the active graph while
+retaining the historical record for timeline queries.
+
 ## Detection Heuristics
 
 ### Same-Pair Different-Type Redundancy

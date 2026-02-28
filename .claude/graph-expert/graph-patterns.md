@@ -12,7 +12,7 @@ The graph expert runs two categories of checks in sequence:
 
 These are deterministic and run regardless of LLM availability.
 
-**Orphaned Entity Detection** (`CheckOrphanedEntities`):
+**1a. Orphaned Entity Detection** (`CheckOrphanedEntities`):
 - Compares the entity list against the relationship list.
 - An entity that appears as neither source nor target in any
   relationship is flagged as `orphan_warning`.
@@ -23,7 +23,7 @@ These are deterministic and run regardless of LLM availability.
   run. This prevents false-positive orphan warnings for
   entities that have existing connections.
 
-**Type Pair Validation** (`ValidateTypePairs`):
+**1b. Type Pair Validation** (`ValidateTypePairs`):
 - Filters `PipelineInput.PriorResults` for items with
   `DetectionType == "relationship_suggestion"`.
 - Queries `relationship_type_constraints` for the campaign.
@@ -31,6 +31,23 @@ These are deterministic and run regardless of LLM availability.
   `invalid_type_pair`.
 - If no constraints exist for a relationship type, the
   suggestion is considered valid (constraints are optional).
+
+**1c. Cardinality Check** (`CheckCardinality`):
+- Queries `cardinality_constraints` for the campaign.
+- Counts existing relationships plus proposed suggestions
+  per (entity, relationship type, direction).
+- Flags entities that would exceed `max_source` or
+  `max_target` as `cardinality_violation`.
+- Returns nil early when no constraints exist for the
+  campaign (all types default to many-to-many).
+
+**1d. Required Relationships** (`CheckRequiredRelationships`):
+- Queries `required_relationships` for the campaign.
+- For each entity of a constrained type, verifies it has
+  at least one relationship of each required type.
+- Flags missing relationships as `missing_required`.
+- Skips rules whose relationship type is not found in the
+  campaign to avoid false positives.
 
 ### 2. Semantic Checks (LLM Required)
 
@@ -53,12 +70,31 @@ of meaning, not just structure.
 - Detection type: `redundant_edge` (mapped from `implied_edge`
   by `findingTypeToDetectionType` in `parser.go`).
 
+### 3. Post-Processing: Override Filtering
+
+After both structural and semantic checks complete,
+`FilterOverriddenFindings` (`overrides.go`) removes findings
+that match existing GM-acknowledged overrides in the
+`constraint_overrides` table.
+
+Overridable detection types:
+- `invalid_type_pair` (constraint type: `domain_range`)
+- `cardinality_violation` (constraint type: `cardinality`)
+- `missing_required` (constraint type: `required`)
+
+Non-overridable types (`orphan_warning`, `redundant_edge`,
+`graph_warning`) always pass through.
+
+On error querying overrides, the finding is kept to avoid
+silently dropping valid warnings.
+
 ### Graceful Degradation
 
 If structural checks succeed but the LLM call fails, the
 structural findings are still returned. The LLM error is logged
 but does not propagate as an error from `Run()`. This ensures
-orphan warnings and type pair violations are never lost due to
+orphan warnings, type pair violations, cardinality violations,
+and missing required relationships are never lost due to
 transient LLM failures.
 
 ## Good Patterns
@@ -207,6 +243,18 @@ The parser (`parser.go`) handles:
 - Nil `involvedEntities` arrays are normalised to empty slices.
 
 ### Detection Type Mapping
+
+**Structural checks** (no mapping needed — detection type is
+set directly by the Go function):
+
+| Check Function               | Detection Type          |
+|------------------------------|-------------------------|
+| `CheckOrphanedEntities`      | `orphan_warning`        |
+| `ValidateTypePairs`          | `invalid_type_pair`     |
+| `CheckCardinality`           | `cardinality_violation` |
+| `CheckRequiredRelationships` | `missing_required`      |
+
+**LLM semantic checks** (mapped in `parser.go`):
 
 | LLM Finding Type | Detection Type   |
 |-------------------|-----------------|

@@ -18,12 +18,14 @@ must stay in sync.
 
 ### Detection Types
 
-| Detection Type     | Source     | Description                    |
-|--------------------|------------|--------------------------------|
-| `orphan_warning`   | Structural | Entity has zero relationships  |
-| `invalid_type_pair`| Structural | Type applied to wrong pair     |
-| `redundant_edge`   | Semantic   | Duplicate or implied edge      |
-| `graph_warning`    | Semantic   | Unclassified LLM finding       |
+| Detection Type          | Source     | Description                   |
+|-------------------------|------------|-------------------------------|
+| `orphan_warning`        | Structural | Entity has zero relationships |
+| `invalid_type_pair`     | Structural | Type applied to wrong pair    |
+| `cardinality_violation` | Structural | Exceeds max relationship count|
+| `missing_required`      | Structural | Required relationship absent  |
+| `redundant_edge`        | Semantic   | Duplicate or implied edge     |
+| `graph_warning`         | Semantic   | Unclassified LLM finding      |
 
 ### Pipeline Position
 
@@ -37,13 +39,35 @@ must stay in sync.
 
 ### Key Implementation Files
 
-| File                                  | Purpose                  |
-|---------------------------------------|--------------------------|
-| `internal/agents/graph/expert.go`     | Pipeline agent entry     |
-| `internal/agents/graph/ontology.go`   | Type pair validation     |
-| `internal/agents/graph/prompts.go`    | LLM prompt construction  |
-| `internal/agents/graph/parser.go`     | LLM response parsing     |
-| `internal/agents/graph/expert_test.go`| Test suite               |
+| File                                       | Purpose                |
+|--------------------------------------------|------------------------|
+| `internal/agents/graph/expert.go`          | Pipeline agent entry   |
+| `internal/agents/graph/ontology.go`        | Type pair validation   |
+| `internal/agents/graph/cardinality.go`     | Cardinality checks     |
+| `internal/agents/graph/required.go`        | Required rel checks    |
+| `internal/agents/graph/overrides.go`       | Override filtering     |
+| `internal/agents/graph/prompts.go`         | LLM prompt construction|
+| `internal/agents/graph/parser.go`          | LLM response parsing   |
+| `internal/agents/graph/expert_test.go`     | Test suite             |
+| `internal/agents/graph/cardinality_test.go`| Cardinality tests      |
+| `internal/agents/graph/required_test.go`   | Required rel tests     |
+| `internal/agents/graph/overrides_test.go`  | Override tests         |
+
+### Ontology Source of Truth
+
+The ontology is defined in YAML files under `schemas/ontology/`:
+
+| File                    | Contents                          |
+|-------------------------|-----------------------------------|
+| `entity-types.yaml`    | Entity type hierarchy with        |
+|                         | abstract parents                  |
+| `relationship-types.yaml`| ~80 relationship types across   |
+|                         | narrative categories              |
+| `constraints.yaml`     | Domain/range constraints,         |
+|                         | cardinality, required rels        |
+
+These YAML files are the canonical definitions. Migrations
+seed the database from these files per-campaign.
 
 ## Synchronisation
 
@@ -53,7 +77,7 @@ When either changes, the other must be updated:
 
 - **New detection type added in Go** → update detection types
   table above and relevant document.
-- **New ontology rule added in migrations** → update
+- **New ontology rule added in YAML or migrations** → update
   `ontology.md` with the constraint.
 - **New pattern discovered during advisory work** → update
   `graph-patterns.md` and ensure the Go implementation can
