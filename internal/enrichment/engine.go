@@ -49,11 +49,11 @@ type EnrichmentInput struct {
 	SourceID        int64
 	Content         string // Source content (Markdown)
 	Entity          models.Entity
-	OtherEntities   []models.Entity        // Other entities mentioned in the same content
-	Relationships   []models.Relationship  // Existing relationships for this entity
-	CampaignResults []models.SearchResult  // RAG: campaign vector search results
-	GameSystemYAML  string                 // RAG: game system schema
-	Ontology        *ontology.Ontology     // Optional ontology for type/relationship guidance
+	OtherEntities   []models.Entity       // Other entities mentioned in the same content
+	Relationships   []models.Relationship // Existing relationships for this entity
+	CampaignResults []models.SearchResult // RAG: campaign vector search results
+	GameSystemYAML  string                // RAG: game system schema
+	Ontology        *ontology.Ontology    // Optional ontology for type/relationship guidance
 }
 
 // EnrichEntity sends content and entity state to the LLM and returns

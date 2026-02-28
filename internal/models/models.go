@@ -868,11 +868,11 @@ type UpdateEraRequest struct {
 // ConstraintOverride represents a GM acknowledgement
 // that overrides a specific constraint violation.
 type ConstraintOverride struct {
-	ID              int64     `json:"id"`
-	CampaignID      int64     `json:"campaignId"`
-	ConstraintType  string    `json:"constraintType"`
-	OverrideKey     string    `json:"overrideKey"`
-	AcknowledgedAt  time.Time `json:"acknowledgedAt"`
+	ID             int64     `json:"id"`
+	CampaignID     int64     `json:"campaignId"`
+	ConstraintType string    `json:"constraintType"`
+	OverrideKey    string    `json:"overrideKey"`
+	AcknowledgedAt time.Time `json:"acknowledgedAt"`
 }
 
 // CreateConstraintOverrideRequest is the request body

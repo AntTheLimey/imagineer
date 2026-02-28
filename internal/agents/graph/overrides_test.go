@@ -11,6 +11,7 @@
 package graph
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -30,7 +31,7 @@ func TestFilterOverriddenFindings_NilDB(t *testing.T) {
 	}
 
 	result := FilterOverriddenFindings(
-		nil, nil, 1, items,
+		context.TODO(), nil, 1, items,
 	)
 
 	assert.Equal(t, items, result,
@@ -39,7 +40,7 @@ func TestFilterOverriddenFindings_NilDB(t *testing.T) {
 
 func TestFilterOverriddenFindings_EmptyItems(t *testing.T) {
 	result := FilterOverriddenFindings(
-		nil, nil, 1, []models.ContentAnalysisItem{},
+		context.TODO(), nil, 1, []models.ContentAnalysisItem{},
 	)
 
 	assert.Empty(t, result,
@@ -48,7 +49,7 @@ func TestFilterOverriddenFindings_EmptyItems(t *testing.T) {
 
 func TestFilterOverriddenFindings_NilItems(t *testing.T) {
 	result := FilterOverriddenFindings(
-		nil, nil, 1, nil,
+		context.TODO(), nil, 1, nil,
 	)
 
 	assert.Nil(t, result,
@@ -360,7 +361,7 @@ func TestFilterOverriddenFindings_NonOverridablePassThrough(t *testing.T) {
 	}
 
 	result := FilterOverriddenFindings(
-		nil, nil, 1, items,
+		context.TODO(), nil, 1, items,
 	)
 
 	require.Len(t, result, 3)
