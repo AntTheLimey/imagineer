@@ -1596,6 +1596,7 @@ func (h *ContentAnalysisHandler) RunContentEnrichment(
 			Relationships: relationships,
 			GameSystemID:  gameSystemID,
 			Context:       ragCtx,
+			Ontology:      h.db.Ontology,
 		}
 
 		enrichItems, err := pipeline.Run(bgCtx, provider, input)
@@ -1806,6 +1807,7 @@ func (h *ContentAnalysisHandler) TryAutoEnrich(
 			Relationships: relationships,
 			GameSystemID:  gameSystemID,
 			Context:       ragCtx,
+			Ontology:      h.db.Ontology,
 		}
 
 		enrichItems, err := pipeline.Run(bgCtx, provider, input)

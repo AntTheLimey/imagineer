@@ -180,6 +180,7 @@ func (a *EnrichmentAgent) Run(
 			Relationships:   relationships,
 			CampaignResults: campaignResults,
 			GameSystemYAML:  gameSystemYAML,
+			Ontology:        input.Ontology,
 		}
 
 		items, err := a.engine.EnrichEntity(ctx, provider, enrichInput)
