@@ -18,7 +18,8 @@ import "time"
 // which runs on port 8080. This ensures both services can run
 // simultaneously during development.
 const (
-	DefaultPort       = "3001"
-	DefaultConfigPath = "config/db/db.json"
-	ShutdownTimeout   = 30 * time.Second
+	DefaultPort        = "3001"
+	DefaultConfigPath  = "config/db/db.json"
+	DefaultOntologyDir = "schemas/ontology"
+	ShutdownTimeout    = 30 * time.Second
 )

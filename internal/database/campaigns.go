@@ -17,6 +17,7 @@ import (
 	"fmt"
 
 	"github.com/antonypegg/imagineer/internal/models"
+	"github.com/antonypegg/imagineer/internal/ontology"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -305,20 +306,69 @@ func (db *DB) CreateCampaignWithOwner(ctx context.Context, req models.CreateCamp
 		c.Genre = &g
 	}
 
-	// Copy relationship type templates for the new campaign
-	err = db.Exec(ctx, `
-		INSERT INTO relationship_types
-			(campaign_id, name, inverse_name, is_symmetric,
-			 display_label, inverse_display_label, description)
-		SELECT $1, name, inverse_name, is_symmetric,
-			   display_label, inverse_display_label, description
-		FROM relationship_type_templates
-	`, c.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to seed relationship types: %w", err)
+	// Seed campaign from ontology YAML if available,
+	// otherwise fall back to legacy template copying.
+	if db.Ontology != nil {
+		if err := db.seedFromOntology(ctx, c.ID); err != nil {
+			return nil, fmt.Errorf(
+				"failed to seed campaign ontology: %w", err)
+		}
+	} else {
+		// Legacy: copy relationship type templates
+		err = db.Exec(ctx, `
+			INSERT INTO relationship_types
+				(campaign_id, name, inverse_name, is_symmetric,
+				 display_label, inverse_display_label, description)
+			SELECT $1, name, inverse_name, is_symmetric,
+				   display_label, inverse_display_label, description
+			FROM relationship_type_templates
+		`, c.ID)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"failed to seed relationship types: %w", err)
+		}
 	}
 
 	return &c, nil
+}
+
+// seedFromOntology seeds all campaign-scoped ontology
+// tables from the loaded YAML definitions.
+func (db *DB) seedFromOntology(
+	ctx context.Context, campaignID int64,
+) error {
+	ont := db.Ontology
+
+	if err := ontology.SeedCampaignEntityTypes(
+		ctx, db.Pool, campaignID,
+		ont.EntityTypes); err != nil {
+		return err
+	}
+
+	if err := ontology.SeedCampaignRelationshipTypes(
+		ctx, db.Pool, campaignID,
+		ont.RelationshipTypes); err != nil {
+		return err
+	}
+
+	if err := ontology.SeedCampaignConstraints(
+		ctx, db.Pool, campaignID,
+		ont.Constraints, ont.EntityTypes); err != nil {
+		return err
+	}
+
+	if err := ontology.SeedCampaignRequiredRelationships(
+		ctx, db.Pool, campaignID,
+		ont.Constraints); err != nil {
+		return err
+	}
+
+	if err := ontology.SeedDefaultEra(
+		ctx, db.Pool, campaignID); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // UpdateCampaign updates an existing campaign without ownership verification.

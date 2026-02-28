@@ -324,3 +324,66 @@ func scanEntities(rows pgx.Rows) ([]models.Entity, error) {
 
 	return entities, nil
 }
+
+// ValidateEntityType checks if the given entity type
+// is valid for the campaign (exists in
+// campaign_entity_types and is not abstract).
+func (db *DB) ValidateEntityType(
+	ctx context.Context,
+	campaignID int64,
+	entityType string,
+) (bool, error) {
+	query := `
+        SELECT EXISTS (
+            SELECT 1 FROM campaign_entity_types
+            WHERE campaign_id = $1
+              AND name = $2
+              AND abstract = false
+        )`
+	var valid bool
+	err := db.QueryRow(ctx, query,
+		campaignID, entityType).Scan(&valid)
+	return valid, err
+}
+
+// ListCampaignEntityTypes returns all entity types
+// for a campaign, ordered by name.
+func (db *DB) ListCampaignEntityTypes(
+	ctx context.Context,
+	campaignID int64,
+) ([]models.CampaignEntityType, error) {
+	query := `
+        SELECT id, campaign_id, name, parent_name,
+               abstract, description, created_at
+        FROM campaign_entity_types
+        WHERE campaign_id = $1
+        ORDER BY name`
+	rows, err := db.Query(ctx, query, campaignID)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to list entity types: %w", err)
+	}
+	defer rows.Close()
+
+	var types []models.CampaignEntityType
+	for rows.Next() {
+		var t models.CampaignEntityType
+		err := rows.Scan(
+			&t.ID, &t.CampaignID, &t.Name,
+			&t.ParentName, &t.Abstract,
+			&t.Description, &t.CreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"failed to scan entity type: %w", err)
+		}
+		types = append(types, t)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf(
+			"error iterating entity types: %w", err)
+	}
+
+	return types, nil
+}
