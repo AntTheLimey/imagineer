@@ -737,7 +737,7 @@ export default function ChapterViewPage() {
 
                                 return (
                                     <Box
-                                        key={rel.id}
+                                        key={`${rel.id}-${rel.direction ?? 'fwd'}`}
                                         sx={{
                                             display: 'flex',
                                             alignItems: 'center',
