@@ -16,7 +16,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ChapterViewPage from './ChapterViewPage';
@@ -408,5 +408,106 @@ describe('ChapterViewPage', () => {
         expect(
             screen.getByRole('button', { name: /delete/i })
         ).toBeInTheDocument();
+    });
+
+    it('clicking Delete opens the confirmation dialog', () => {
+        (useChapter as Mock).mockReturnValue({
+            data: {
+                id: 10,
+                campaignId: 1,
+                title: 'Doomed Chapter',
+                sortOrder: 1,
+                createdAt: '2026-01-15T10:00:00Z',
+                updatedAt: '2026-02-01T12:00:00Z',
+            },
+            isLoading: false,
+            error: null,
+        });
+
+        renderPage();
+
+        fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+
+        expect(
+            screen.getByText(/are you sure you want to delete/i)
+        ).toBeInTheDocument();
+    });
+
+    it('clicking Cancel closes the dialog without deleting', async () => {
+        const mockMutateAsync = vi.fn();
+        (useDeleteChapter as Mock).mockReturnValue({
+            mutateAsync: mockMutateAsync,
+        });
+        (useChapter as Mock).mockReturnValue({
+            data: {
+                id: 10,
+                campaignId: 1,
+                title: 'Safe Chapter',
+                sortOrder: 1,
+                createdAt: '2026-01-15T10:00:00Z',
+                updatedAt: '2026-02-01T12:00:00Z',
+            },
+            isLoading: false,
+            error: null,
+        });
+
+        renderPage();
+
+        // Open the delete dialog
+        fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+        expect(
+            screen.getByText(/are you sure you want to delete/i)
+        ).toBeInTheDocument();
+
+        // Click Cancel
+        fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+
+        // Dialog should close (wait for MUI transition to complete)
+        await waitFor(() => {
+            expect(
+                screen.queryByText(/are you sure you want to delete/i)
+            ).not.toBeInTheDocument();
+        });
+
+        // Delete mutation should not have been called
+        expect(mockMutateAsync).not.toHaveBeenCalled();
+    });
+
+    it('clicking Delete in the dialog calls the delete mutation', async () => {
+        const mockMutateAsync = vi.fn().mockResolvedValue(undefined);
+        (useDeleteChapter as Mock).mockReturnValue({
+            mutateAsync: mockMutateAsync,
+        });
+        (useChapter as Mock).mockReturnValue({
+            data: {
+                id: 10,
+                campaignId: 1,
+                title: 'Deleted Chapter',
+                sortOrder: 1,
+                createdAt: '2026-01-15T10:00:00Z',
+                updatedAt: '2026-02-01T12:00:00Z',
+            },
+            isLoading: false,
+            error: null,
+        });
+
+        renderPage();
+
+        // Open the delete dialog
+        fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+
+        // Find the dialog and click the Delete button within it
+        const dialog = screen.getByRole('dialog');
+        const dialogDeleteButton = within(dialog).getByRole('button', {
+            name: /delete/i,
+        });
+        fireEvent.click(dialogDeleteButton);
+
+        await waitFor(() => {
+            expect(mockMutateAsync).toHaveBeenCalledWith({
+                campaignId: 1,
+                chapterId: 10,
+            });
+        });
     });
 });
