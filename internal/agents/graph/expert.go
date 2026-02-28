@@ -222,6 +222,57 @@ func (e *Expert) Run(
 		}
 	}
 
+	// 1d. Required relationships: verify that every entity of a type
+	// with required relationship rules participates in at least one
+	// relationship of each required type.
+	if e.db != nil {
+		reqViolations, err := CheckRequiredRelationships(
+			ctx, e.db, input.CampaignID,
+			input.Entities, input.Relationships,
+		)
+		if err != nil {
+			log.Printf(
+				"graph-expert: required relationship check failed: %v",
+				err,
+			)
+			// Continue with other checks; do not abort.
+		} else {
+			for _, v := range reqViolations {
+				detail, err := json.Marshal(map[string]interface{}{
+					"entityId":                v.EntityID,
+					"entityName":              v.EntityName,
+					"entityType":              v.EntityType,
+					"missingRelationshipType": v.MissingRelationshipType,
+					"description": fmt.Sprintf(
+						"Entity %s (%s) is missing a required %s "+
+							"relationship.",
+						v.EntityName, v.EntityType,
+						v.MissingRelationshipType,
+					),
+				})
+				if err != nil {
+					log.Printf(
+						"graph-expert: failed to marshal required relationship violation: %v",
+						err,
+					)
+					continue
+				}
+
+				entityID := v.EntityID
+				allItems = append(allItems, models.ContentAnalysisItem{
+					JobID:            input.JobID,
+					DetectionType:    "missing_required",
+					MatchedText:      v.MissingRelationshipType,
+					EntityID:         &entityID,
+					Resolution:       "pending",
+					SuggestedContent: json.RawMessage(detail),
+					Phase:            "enrichment",
+					CreatedAt:        now,
+				})
+			}
+		}
+	}
+
 	// -----------------------------------------------------------------
 	// 2. Semantic checks (LLM required)
 	// -----------------------------------------------------------------
