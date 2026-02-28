@@ -292,6 +292,14 @@ func (e *Expert) Run(
 		allItems = []models.ContentAnalysisItem{}
 	}
 
+	// Filter out findings that match existing constraint overrides
+	// so that acknowledged violations are not re-reported.
+	if e.db != nil {
+		allItems = FilterOverriddenFindings(
+			ctx, e.db, input.CampaignID, allItems,
+		)
+	}
+
 	return allItems, nil
 }
 
