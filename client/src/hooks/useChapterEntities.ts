@@ -87,6 +87,13 @@ export function useCreateChapterEntity() {
                     variables.chapterId
                 ),
             });
+            // Invalidate chapter relationships (entity set changed)
+            queryClient.invalidateQueries({
+                queryKey: chapterEntityKeys.relationships(
+                    variables.campaignId,
+                    variables.chapterId
+                ),
+            });
         },
     });
 }
@@ -115,6 +122,13 @@ export function useUpdateChapterEntity() {
             // Invalidate chapter entities list
             queryClient.invalidateQueries({
                 queryKey: chapterEntityKeys.list(
+                    variables.campaignId,
+                    variables.chapterId
+                ),
+            });
+            // Invalidate chapter relationships (entity set changed)
+            queryClient.invalidateQueries({
+                queryKey: chapterEntityKeys.relationships(
                     variables.campaignId,
                     variables.chapterId
                 ),
@@ -148,6 +162,13 @@ export function useDeleteChapterEntity() {
             // Invalidate chapter entities list
             queryClient.invalidateQueries({
                 queryKey: chapterEntityKeys.list(
+                    variables.campaignId,
+                    variables.chapterId
+                ),
+            });
+            // Invalidate chapter relationships (entity set changed)
+            queryClient.invalidateQueries({
+                queryKey: chapterEntityKeys.relationships(
                     variables.campaignId,
                     variables.chapterId
                 ),
