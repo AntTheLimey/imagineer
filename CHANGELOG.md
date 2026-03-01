@@ -55,6 +55,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     registered under campaign scope.
   - Updated all four graph-expert knowledge base files to
     reflect ontology-driven validation.
+- Ontology Database Layer Enforcement
+  - Migration 007 (`007_ontology_database_layer.sql`) adds
+    B-tree indexes on all FK and query columns across
+    ontology tables, reducing query latency.
+  - Self-referential FK on `campaign_entity_types.parent_name`
+    with `DEFERRABLE INITIALLY DEFERRED` support for
+    cyclic type hierarchies.
+  - FK from `required_relationships.entity_type` to
+    `campaign_entity_types` for referential integrity.
+  - Era FK constraints changed from `SET NULL` to
+    `RESTRICT` preventing silent data loss on era deletions.
+  - Entity type validation trigger enforces type conformance
+    on entities table, with graceful fallback for legacy
+    campaigns without seeded ontologies.
+  - Relationship type pair advisory trigger (`RAISE WARNING`)
+    validates semantic consistency without blocking writes.
+  - PostgreSQL functions `check_required_relationships` and
+    `check_cardinality_violations` perform persistent
+    graph validation over the ontology.
+  - `cardinality_constraints_with_names` and
+    `orphaned_entities` views expose constraint metadata and
+    anomalies for diagnostic queries.
+  - Go code refactored to leverage database functions:
+    `required.go` replaces 3 round-trips with 1 DB call,
+    `cardinality.go` separates persisted checks from
+    proposed suggestions, `overrides.go` batch-loads all
+    overrides in 1 query (163 lines eliminated).
 - Analysis Wizard (Phase Screens)
   - Replaced the monolithic 4,400-line AnalysisTriagePage
     with a step-by-step wizard where each analysis phase

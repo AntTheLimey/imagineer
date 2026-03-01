@@ -727,6 +727,15 @@ Features planned for after the initial release.
   scope.
 - [x] `[MVP-2]` Updated graph-expert knowledge base files
   for ontology-driven validation.
+- [x] `[MVP-2]` Ontology database layer enforcement (migration
+  007): B-tree indexes on FK/query columns, self-referential
+  entity type hierarchy with deferred constraints, era FK
+  changes from SET NULL to RESTRICT, entity type validation
+  trigger with legacy fallback, relationship type pair
+  advisory trigger, PostgreSQL validation functions
+  (`check_required_relationships`, `check_cardinality_violations`),
+  diagnostic views, and Go code refactoring eliminating 163
+  lines by leveraging database functions.
 
 ### Job Phases & Draft Lifecycle
 
