@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/antonypegg/imagineer/internal/models"
 )
@@ -118,6 +119,16 @@ func (h *Handler) UpdateEra(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid request body")
 		return
+	}
+
+	if req.Scale != nil {
+		switch *req.Scale {
+		case "mythic", "ancient", "distant", "past", "recent", "now":
+			// valid
+		default:
+			respondError(w, http.StatusBadRequest, "Invalid scale value")
+			return
+		}
 	}
 
 	era, err := h.db.UpdateEra(r.Context(), eraID, campaignID, req)
@@ -252,7 +263,15 @@ func (h *Handler) DeleteEra(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.db.DeleteEra(r.Context(), eraID, campaignID); err != nil {
 		log.Printf("Error deleting era: %v", err)
-		respondError(w, http.StatusConflict, "Failed to delete era: "+err.Error())
+		msg := err.Error()
+		switch {
+		case strings.Contains(msg, "referenced"):
+			respondError(w, http.StatusConflict, msg)
+		case strings.Contains(msg, "not found"):
+			respondError(w, http.StatusNotFound, msg)
+		default:
+			respondError(w, http.StatusInternalServerError, "Failed to delete era")
+		}
 		return
 	}
 

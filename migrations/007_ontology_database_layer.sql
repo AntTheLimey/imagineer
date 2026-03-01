@@ -24,45 +24,67 @@
 -- campaign_entity_types
 CREATE INDEX idx_campaign_entity_types_campaign
     ON campaign_entity_types(campaign_id);
+COMMENT ON INDEX idx_campaign_entity_types_campaign IS
+    'Campaign lookup for entity type hierarchy';
 
 CREATE INDEX idx_campaign_entity_types_parent
     ON campaign_entity_types(campaign_id, parent_name)
     WHERE parent_name IS NOT NULL;
+COMMENT ON INDEX idx_campaign_entity_types_parent IS
+    'Parent type lookup for hierarchy traversal';
 
 -- eras
 CREATE INDEX idx_eras_campaign_id
     ON eras(campaign_id);
+COMMENT ON INDEX idx_eras_campaign_id IS
+    'Campaign lookup for era listing';
 
 -- relationship_archive
 CREATE INDEX idx_relationship_archive_campaign
     ON relationship_archive(campaign_id);
+COMMENT ON INDEX idx_relationship_archive_campaign IS
+    'Campaign lookup for archived relationships';
 
 CREATE INDEX idx_relationship_archive_era
     ON relationship_archive(era_id)
     WHERE era_id IS NOT NULL;
+COMMENT ON INDEX idx_relationship_archive_era IS
+    'Era lookup for era-scoped archive queries';
 
 CREATE INDEX idx_relationship_archive_source
     ON relationship_archive(source_entity_id);
+COMMENT ON INDEX idx_relationship_archive_source IS
+    'Source entity lookup in archive';
 
 CREATE INDEX idx_relationship_archive_target
     ON relationship_archive(target_entity_id);
+COMMENT ON INDEX idx_relationship_archive_target IS
+    'Target entity lookup in archive';
 
 -- cardinality_constraints
 CREATE INDEX idx_cardinality_constraints_rel_type
     ON cardinality_constraints(relationship_type_id);
+COMMENT ON INDEX idx_cardinality_constraints_rel_type IS
+    'Relationship type lookup for constraint checks';
 
 -- required_relationships
 CREATE INDEX idx_required_relationships_entity_type
     ON required_relationships(campaign_id, entity_type);
+COMMENT ON INDEX idx_required_relationships_entity_type IS
+    'Entity type lookup for required relationship rules';
 
 -- relationships.era_id and entities.era_id (added by 006)
 CREATE INDEX idx_relationships_era
     ON relationships(era_id)
     WHERE era_id IS NOT NULL;
+COMMENT ON INDEX idx_relationships_era IS
+    'Era lookup for era-scoped relationship queries';
 
 CREATE INDEX idx_entities_era
     ON entities(era_id)
     WHERE era_id IS NOT NULL;
+COMMENT ON INDEX idx_entities_era IS
+    'Era lookup for era-scoped entity queries';
 
 -- ============================================
 -- Section 2: Foreign Key Corrections
@@ -200,11 +222,10 @@ BEGIN
           AND name = NEW.entity_type
           AND abstract = false
     ) THEN
-        RAISE EXCEPTION
+        RAISE WARNING
             'entity_type "%" is not a valid concrete '
             'type for campaign %',
-            NEW.entity_type, NEW.campaign_id
-            USING ERRCODE = 'check_violation';
+            NEW.entity_type, NEW.campaign_id;
     END IF;
 
     RETURN NEW;
@@ -212,10 +233,11 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION validate_entity_type() IS
-    'Validates that an entity''s entity_type references '
-    'a concrete (non-abstract) type in '
-    'campaign_entity_types. Skips validation for legacy '
-    'campaigns with no seeded entity types.';
+    'Advisory check that an entity''s entity_type '
+    'references a concrete (non-abstract) type in '
+    'campaign_entity_types. Logs a warning but never '
+    'blocks. Skips validation for legacy campaigns '
+    'with no seeded entity types.';
 
 CREATE TRIGGER check_entity_type
     BEFORE INSERT OR UPDATE OF entity_type ON entities

@@ -149,11 +149,187 @@ func CheckCardinality(
 		return dbViolations, nil
 	}
 
-	// For each proposed count, query the current persisted count and
-	// check if adding proposals would exceed the limit. We need to
-	// query entity names/types for new violations. Use a single query
-	// to get all current counts for the relevant entities.
-	// For simplicity, check each proposal key against limits.
+	// --- Batch 1: Entity info lookup ---
+	// Collect all unique entity IDs from proposal counts.
+	entityIDSet := make(map[int64]bool)
+	for key := range proposalCounts {
+		entityIDSet[key.EntityID] = true
+	}
+
+	entityIDs := make([]int64, 0, len(entityIDSet))
+	for id := range entityIDSet {
+		entityIDs = append(entityIDs, id)
+	}
+
+	type entityInfo struct {
+		Name       string
+		EntityType string
+	}
+	entityInfoMap := make(map[int64]entityInfo, len(entityIDs))
+
+	entityInfoRows, err := db.Query(ctx,
+		`SELECT id, name, entity_type FROM entities WHERE id = ANY($1)`,
+		entityIDs,
+	)
+	if err != nil {
+		log.Printf(
+			"graph-expert: failed to batch-query entity info: %v", err,
+		)
+		// Populate fallback values so we can still report violations.
+		for _, id := range entityIDs {
+			entityInfoMap[id] = entityInfo{
+				Name:       fmt.Sprintf("entity-%d", id),
+				EntityType: "unknown",
+			}
+		}
+	} else {
+		defer entityInfoRows.Close()
+		for entityInfoRows.Next() {
+			var id int64
+			var info entityInfo
+			if err := entityInfoRows.Scan(
+				&id, &info.Name, &info.EntityType,
+			); err != nil {
+				log.Printf(
+					"graph-expert: failed to scan entity info row: %v",
+					err,
+				)
+				continue
+			}
+			entityInfoMap[id] = info
+		}
+		if err := entityInfoRows.Err(); err != nil {
+			log.Printf(
+				"graph-expert: error iterating entity info rows: %v",
+				err,
+			)
+		}
+		entityInfoRows.Close()
+	}
+
+	// Fill in fallback values for any entities not found.
+	for _, id := range entityIDs {
+		if _, ok := entityInfoMap[id]; !ok {
+			entityInfoMap[id] = entityInfo{
+				Name:       fmt.Sprintf("entity-%d", id),
+				EntityType: "unknown",
+			}
+		}
+	}
+
+	// --- Batch 2: Relationship type ID lookup ---
+	// Collect all unique relationship type names from proposal counts.
+	relTypeNameSet := make(map[string]bool)
+	for key := range proposalCounts {
+		relTypeNameSet[key.RelationshipType] = true
+	}
+
+	relTypeNames := make([]string, 0, len(relTypeNameSet))
+	for name := range relTypeNameSet {
+		relTypeNames = append(relTypeNames, name)
+	}
+
+	// Map relationship type name -> ID for the campaign.
+	relTypeIDByName := make(map[string]int64, len(relTypeNames))
+	relTypeIDs := make([]int64, 0, len(relTypeNames))
+
+	relTypeRows, err := db.Query(ctx,
+		`SELECT id, name FROM relationship_types
+		 WHERE name = ANY($1)
+		   AND (campaign_id = $2 OR campaign_id IS NULL)`,
+		relTypeNames, campaignID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to batch-query relationship type IDs: %w", err,
+		)
+	}
+	defer relTypeRows.Close()
+
+	for relTypeRows.Next() {
+		var id int64
+		var name string
+		if err := relTypeRows.Scan(&id, &name); err != nil {
+			return nil, fmt.Errorf(
+				"failed to scan relationship type row: %w", err,
+			)
+		}
+		relTypeIDByName[name] = id
+		relTypeIDs = append(relTypeIDs, id)
+	}
+	if err := relTypeRows.Err(); err != nil {
+		return nil, fmt.Errorf(
+			"error iterating relationship type rows: %w", err,
+		)
+	}
+	relTypeRows.Close()
+
+	// --- Batch 3: Relationship count lookup ---
+	// Count existing relationships per (entity, type_id, direction)
+	// for all relevant combinations in a single query.
+	type relCountKey struct {
+		EntityID           int64
+		RelationshipTypeID int64
+		Direction          string
+	}
+	existingCounts := make(map[relCountKey]int)
+
+	if len(relTypeIDs) > 0 {
+		countRows, err := db.Query(ctx,
+			`SELECT entity_id, relationship_type_id, direction, cnt
+			 FROM (
+			     SELECT source_entity_id AS entity_id,
+			            relationship_type_id,
+			            'source' AS direction,
+			            COUNT(*) AS cnt
+			     FROM relationships
+			     WHERE campaign_id = $1
+			       AND relationship_type_id = ANY($2)
+			       AND source_entity_id = ANY($3)
+			     GROUP BY source_entity_id, relationship_type_id
+			     UNION ALL
+			     SELECT target_entity_id AS entity_id,
+			            relationship_type_id,
+			            'target' AS direction,
+			            COUNT(*) AS cnt
+			     FROM relationships
+			     WHERE campaign_id = $1
+			       AND relationship_type_id = ANY($2)
+			       AND target_entity_id = ANY($3)
+			     GROUP BY target_entity_id, relationship_type_id
+			 ) sub`,
+			campaignID, relTypeIDs, entityIDs,
+		)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"failed to batch-query relationship counts: %w", err,
+			)
+		}
+		defer countRows.Close()
+
+		for countRows.Next() {
+			var eid int64
+			var rtid int64
+			var dir string
+			var cnt int
+			if err := countRows.Scan(
+				&eid, &rtid, &dir, &cnt,
+			); err != nil {
+				return nil, fmt.Errorf(
+					"failed to scan relationship count row: %w", err,
+				)
+			}
+			existingCounts[relCountKey{eid, rtid, dir}] = cnt
+		}
+		if err := countRows.Err(); err != nil {
+			return nil, fmt.Errorf(
+				"error iterating relationship count rows: %w", err,
+			)
+		}
+		countRows.Close()
+	}
+
+	// Check each proposal against the limits using the batched data.
 	violations := append([]CardinalityViolation{}, dbViolations...)
 
 	for key, proposalCount := range proposalCounts {
@@ -176,33 +352,25 @@ func CheckCardinality(
 			continue
 		}
 
-		// Query the current persisted count for this specific
-		// (entity, type, direction) combination.
-		currentCount, err := queryEntityRelCount(
-			ctx, db, campaignID,
-			key.EntityID, key.RelationshipType, key.Direction,
-		)
-		if err != nil {
-			log.Printf(
-				"graph-expert: failed to query entity rel count "+
-					"(entity=%d, type=%s, dir=%s): %v",
-				key.EntityID, key.RelationshipType,
-				key.Direction, err,
-			)
+		// Look up the current persisted count from the batched
+		// results using the relationship type ID.
+		rtID, ok := relTypeIDByName[key.RelationshipType]
+		if !ok {
+			// Relationship type not found; skip.
 			continue
 		}
 
+		currentCount := existingCounts[relCountKey{
+			key.EntityID, rtID, key.Direction,
+		}]
+
 		totalCount := currentCount + proposalCount
 		if totalCount > *maxAllowed {
-			// Query entity name/type for the violation report.
-			entityName, entityType := queryEntityInfo(
-				ctx, db, key.EntityID,
-			)
-
+			info := entityInfoMap[key.EntityID]
 			violations = append(violations, CardinalityViolation{
 				EntityID:         key.EntityID,
-				EntityName:       entityName,
-				EntityType:       entityType,
+				EntityName:       info.Name,
+				EntityType:       info.EntityType,
 				RelationshipType: key.RelationshipType,
 				Direction:        key.Direction,
 				CurrentCount:     totalCount,
@@ -294,63 +462,4 @@ func queryCardinalityLimits(
 	}
 
 	return limits, nil
-}
-
-// queryEntityRelCount queries the current persisted count of
-// relationships for a given entity, relationship type, and
-// direction within a campaign.
-func queryEntityRelCount(
-	ctx context.Context,
-	db *database.DB,
-	campaignID int64,
-	entityID int64,
-	relTypeName string,
-	direction string,
-) (int, error) {
-	var query string
-	if direction == "source" {
-		query = `
-			SELECT COUNT(*)
-			FROM relationships r
-			JOIN relationship_types rt ON r.relationship_type_id = rt.id
-			WHERE r.source_entity_id = $1
-			  AND rt.name = $2
-			  AND r.campaign_id = $3`
-	} else {
-		query = `
-			SELECT COUNT(*)
-			FROM relationships r
-			JOIN relationship_types rt ON r.relationship_type_id = rt.id
-			WHERE r.target_entity_id = $1
-			  AND rt.name = $2
-			  AND r.campaign_id = $3`
-	}
-
-	var count int
-	err := db.QueryRow(ctx, query, entityID, relTypeName, campaignID).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf(
-			"failed to count entity relationships: %w", err,
-		)
-	}
-
-	return count, nil
-}
-
-// queryEntityInfo retrieves the name and type for an entity by ID.
-// Returns fallback values if the query fails.
-func queryEntityInfo(
-	ctx context.Context,
-	db *database.DB,
-	entityID int64,
-) (string, string) {
-	query := `SELECT name, entity_type FROM entities WHERE id = $1`
-
-	var name, entityType string
-	err := db.QueryRow(ctx, query, entityID).Scan(&name, &entityType)
-	if err != nil {
-		return fmt.Sprintf("entity-%d", entityID), "unknown"
-	}
-
-	return name, entityType
 }

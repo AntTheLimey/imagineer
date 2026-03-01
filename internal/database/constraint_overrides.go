@@ -121,25 +121,3 @@ func (db *DB) DeleteConstraintOverride(
 
 	return nil
 }
-
-// HasConstraintOverride checks if a specific constraint
-// override exists for a campaign.
-func (db *DB) HasConstraintOverride(
-	ctx context.Context,
-	campaignID int64,
-	constraintType string,
-	overrideKey string,
-) (bool, error) {
-	query := `
-        SELECT EXISTS (
-            SELECT 1 FROM constraint_overrides
-            WHERE campaign_id = $1
-              AND constraint_type = $2
-              AND override_key = $3
-        )`
-	var exists bool
-	err := db.QueryRow(ctx, query,
-		campaignID, constraintType, overrideKey,
-	).Scan(&exists)
-	return exists, err
-}

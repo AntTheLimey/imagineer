@@ -12,7 +12,10 @@ package database
 
 import (
 	"context"
+	"errors"
 	"fmt"
+
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/antonypegg/imagineer/internal/models"
 )
@@ -160,40 +163,26 @@ func (db *DB) UpdateEra(
 
 // DeleteEra deletes an era by ID, scoped to the given
 // campaign. Returns an error if the era is still
-// referenced by relationships or relationship_archive.
+// referenced by relationships, relationship_archive,
+// or entities (enforced by ON DELETE RESTRICT).
 func (db *DB) DeleteEra(
 	ctx context.Context,
 	eraID int64,
 	campaignID int64,
 ) error {
-	// Check for references in relationships
-	var refCount int
-	checkQuery := `
-        SELECT COUNT(*) FROM (
-            SELECT 1 FROM relationships
-            WHERE era_id = $1
-            UNION ALL
-            SELECT 1 FROM relationship_archive
-            WHERE era_id = $1
-        ) refs`
-	err := db.QueryRow(ctx, checkQuery, eraID).Scan(
-		&refCount)
-	if err != nil {
-		return fmt.Errorf(
-			"failed to check era references: %w", err)
-	}
-	if refCount > 0 {
-		return fmt.Errorf(
-			"era is still referenced by %d "+
-				"relationship(s)", refCount)
-	}
-
 	query := `
         DELETE FROM eras
         WHERE id = $1 AND campaign_id = $2`
 	result, err := db.Pool.Exec(ctx, query,
 		eraID, campaignID)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) &&
+			pgErr.Code == "23503" {
+			return fmt.Errorf(
+				"era is still referenced by " +
+					"relationships or entities")
+		}
 		return fmt.Errorf(
 			"failed to delete era: %w", err)
 	}
