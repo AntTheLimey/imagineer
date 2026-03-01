@@ -55,11 +55,14 @@ func TestIntegration_CheckRequiredRelationships(t *testing.T) {
 	var relTypeID int64
 	err = db.QueryRow(ctx,
 		`INSERT INTO relationship_types
-		     (campaign_id, name, description)
-		 VALUES ($1, $2, $3)
+		     (campaign_id, name, inverse_name, display_label, inverse_display_label, description)
+		 VALUES ($1, $2, $3, $4, $5, $6)
 		 RETURNING id`,
 		campaignID,
 		relTypeName,
+		fmt.Sprintf("mentored-by-%d", suffix),
+		"Mentors",
+		"Mentored by",
 		"Test relationship type for required-relationship check",
 	).Scan(&relTypeID)
 	if err != nil {
@@ -195,16 +198,15 @@ func TestIntegration_CheckRequiredRelationships(t *testing.T) {
 		`INSERT INTO relationships
 		     (campaign_id, relationship_type_id,
 		      source_entity_id, target_entity_id,
-		      description, strength, source_confidence)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		      description, strength)
+		 VALUES ($1, $2, $3, $4, $5, $6)
 		 RETURNING id`,
 		campaignID,
 		relTypeID,
 		entityID,
 		targetEntityID,
 		"Test mentorship relationship",
-		"strong",
-		"AUTHORITATIVE",
+		8,
 	).Scan(&relID1)
 	if err != nil {
 		t.Fatalf("failed to create relationship: %v", err)
@@ -272,11 +274,14 @@ func TestIntegration_CheckCardinalityViolations(t *testing.T) {
 	var relTypeID int64
 	err := db.QueryRow(ctx,
 		`INSERT INTO relationship_types
-		     (campaign_id, name, description)
-		 VALUES ($1, $2, $3)
+		     (campaign_id, name, inverse_name, display_label, inverse_display_label, description)
+		 VALUES ($1, $2, $3, $4, $5, $6)
 		 RETURNING id`,
 		campaignID,
 		relTypeName,
+		fmt.Sprintf("guarded-by-%d", suffix),
+		"Guards",
+		"Guarded by",
 		"Test relationship type for cardinality check",
 	).Scan(&relTypeID)
 	if err != nil {
@@ -367,16 +372,15 @@ func TestIntegration_CheckCardinalityViolations(t *testing.T) {
 		`INSERT INTO relationships
 		     (campaign_id, relationship_type_id,
 		      source_entity_id, target_entity_id,
-		      description, strength, source_confidence)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		      description, strength)
+		 VALUES ($1, $2, $3, $4, $5, $6)
 		 RETURNING id`,
 		campaignID,
 		relTypeID,
 		entityID,
 		targetEntityID1,
 		"First guard relationship",
-		"strong",
-		"AUTHORITATIVE",
+		8,
 	).Scan(&relID1)
 	if err != nil {
 		t.Fatalf("failed to create first relationship: %v", err)
@@ -446,16 +450,15 @@ func TestIntegration_CheckCardinalityViolations(t *testing.T) {
 		`INSERT INTO relationships
 		     (campaign_id, relationship_type_id,
 		      source_entity_id, target_entity_id,
-		      description, strength, source_confidence)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		      description, strength)
+		 VALUES ($1, $2, $3, $4, $5, $6)
 		 RETURNING id`,
 		campaignID,
 		relTypeID,
 		entityID,
 		targetEntityID2,
 		"Second guard relationship (violates cardinality)",
-		"moderate",
-		"AUTHORITATIVE",
+		5,
 	).Scan(&relID2)
 	if err != nil {
 		t.Fatalf("failed to create second relationship: %v", err)
