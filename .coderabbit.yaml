@@ -10,16 +10,16 @@ reviews:
   review_status: true
   commit_status: true
   fail_commit_status: false
-  collapse_walkthrough: false
-  changed_files_summary: true
-  sequence_diagrams: true
-  estimate_code_review_effort: true
-  assess_linked_issues: true
-  related_issues: true
-  related_prs: true
-  suggested_labels: true
+  collapse_walkthrough: true
+  changed_files_summary: false
+  sequence_diagrams: false
+  estimate_code_review_effort: false
+  assess_linked_issues: false
+  related_issues: false
+  related_prs: false
+  suggested_labels: false
   auto_apply_labels: false
-  suggested_reviewers: true
+  suggested_reviewers: false
   auto_assign_reviewers: false
   path_filters: []
   path_instructions: []
