@@ -46,7 +46,15 @@ func (db *DB) ArchiveRelationship(
              original_created_at)
         SELECT campaign_id, source_entity_id,
                target_entity_id, relationship_type_id,
-               COALESCE($2, era_id), tone, description,
+               CASE WHEN $2 IS NOT NULL
+                    AND EXISTS (
+                        SELECT 1 FROM eras
+                        WHERE id = $2
+                          AND campaign_id = archived.campaign_id
+                    )
+                    THEN $2
+                    ELSE era_id
+               END, tone, description,
                strength, created_at
         FROM archived`
 

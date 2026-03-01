@@ -11,12 +11,21 @@
 package ontology
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
+
+// unmarshalStrict decodes YAML with KnownFields
+// enabled, rejecting any unrecognised keys.
+func unmarshalStrict(data []byte, out any) error {
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	return dec.Decode(out)
+}
 
 // LoadEntityTypes parses the entity types YAML file.
 func LoadEntityTypes(path string) (
@@ -28,7 +37,7 @@ func LoadEntityTypes(path string) (
 			"read entity types: %w", err)
 	}
 	var f EntityTypeFile
-	if err := yaml.Unmarshal(data, &f); err != nil {
+	if err := unmarshalStrict(data, &f); err != nil {
 		return nil, fmt.Errorf(
 			"parse entity types: %w", err)
 	}
@@ -46,7 +55,7 @@ func LoadRelationshipTypes(path string) (
 			"read relationship types: %w", err)
 	}
 	var f RelationshipTypeFile
-	if err := yaml.Unmarshal(data, &f); err != nil {
+	if err := unmarshalStrict(data, &f); err != nil {
 		return nil, fmt.Errorf(
 			"parse relationship types: %w", err)
 	}
@@ -63,7 +72,7 @@ func LoadConstraints(path string) (
 			"read constraints: %w", err)
 	}
 	var f ConstraintsFile
-	if err := yaml.Unmarshal(data, &f); err != nil {
+	if err := unmarshalStrict(data, &f); err != nil {
 		return nil, fmt.Errorf(
 			"parse constraints: %w", err)
 	}

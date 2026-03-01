@@ -21,12 +21,18 @@ CREATE TABLE campaign_entity_types (
     abstract    BOOLEAN NOT NULL DEFAULT false,
     description TEXT,
     created_at  TIMESTAMPTZ DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(campaign_id, name)
 );
 
 COMMENT ON TABLE campaign_entity_types IS
     'Campaign-scoped entity type hierarchy seeded '
     'from schemas/ontology/entity-types.yaml';
+
+CREATE TRIGGER update_campaign_entity_types_updated_at
+    BEFORE UPDATE ON campaign_entity_types
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================
 -- Eras Table

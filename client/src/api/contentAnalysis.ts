@@ -64,7 +64,9 @@ export interface ContentAnalysisItem {
         | 'graph_warning'
         | 'redundant_edge'
         | 'invalid_type_pair'
-        | 'orphan_warning';
+        | 'orphan_warning'
+        | 'cardinality_violation'
+        | 'missing_required';
     matchedText: string;
     entityId?: number;
     similarity?: number;

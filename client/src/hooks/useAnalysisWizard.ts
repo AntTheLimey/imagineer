@@ -61,6 +61,8 @@ export const ENRICHMENT_GROUPS = [
     'redundant_edge',
     'invalid_type_pair',
     'orphan_warning',
+    'cardinality_violation',
+    'missing_required',
 ] as const;
 
 /** Phase key to route segment mapping. */

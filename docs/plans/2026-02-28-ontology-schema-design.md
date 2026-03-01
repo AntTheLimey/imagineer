@@ -118,7 +118,7 @@ or abstract parent.
 Abstract types are not instantiated directly. They exist to
 group concrete types and enable constraint inheritance.
 
-```
+```text
 person (abstract)
   Description: A real-world participant in the game.
   Children: player, game_master, character
@@ -510,7 +510,7 @@ ordered by a sequence number within their campaign and carry
 no absolute duration. The system derives relative time
 distance from era position.
 
-```
+```text
 Sequence  Name                       Scale
 1         The Old Empire             mythic
 2         The Interregnum            ancient
@@ -558,7 +558,7 @@ difference between eras 3 and 4.
 
 The global ontology lives in `schemas/ontology/`:
 
-```
+```text
 schemas/ontology/
   entity-types.yaml     Type hierarchy with abstract parents
   relationship-types.yaml   All relationship type definitions

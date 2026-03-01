@@ -84,6 +84,8 @@ const ENRICH_GROUPS = [
     { key: 'redundant_edge', label: 'Redundant Edges', color: '#ff6f00' },
     { key: 'invalid_type_pair', label: 'Invalid Type Pairs', color: '#ad1457' },
     { key: 'orphan_warning', label: 'Orphan Warnings', color: '#00838f' },
+    { key: 'cardinality_violation', label: 'Cardinality Violations', color: '#4527a0' },
+    { key: 'missing_required', label: 'Missing Required Relationships', color: '#bf360c' },
 ] as const;
 
 /** Detection types that belong to the graph health summary section. */
@@ -92,6 +94,8 @@ const GRAPH_TYPES = [
     'redundant_edge',
     'invalid_type_pair',
     'orphan_warning',
+    'cardinality_violation',
+    'missing_required',
 ] as const;
 
 /** Map graph detection types to human-readable labels. */
@@ -100,6 +104,8 @@ const GRAPH_TYPE_LABELS: Record<string, string> = {
     redundant_edge: 'Redundant Edge',
     invalid_type_pair: 'Invalid Type Pair',
     orphan_warning: 'Orphan Warning',
+    cardinality_violation: 'Cardinality Violation',
+    missing_required: 'Missing Required Relationship',
 };
 
 // ---------------------------------------------------------------------------
