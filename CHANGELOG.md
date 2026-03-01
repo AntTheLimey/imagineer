@@ -721,6 +721,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Dark theme fixes across EnrichPhasePage and RevisePhasePage
   replacing hardcoded `bgcolor: 'grey.50'` with theme-aware
   `'action.hover'` on Paper components.
+- Ontology database layer (second code review):
+  - `DeleteEra` handler now relies on the database `ON DELETE
+    RESTRICT` constraint, parsing `pgconn.PgError` FK violations
+    instead of Go-side TOCTOU reference checks.
+  - `UpdateEra` handler now validates the `scale` field before
+    persisting changes.
+  - Entity type validation trigger changed from `RAISE EXCEPTION`
+    to `RAISE WARNING` for advisory-only enforcement, consistent
+    with the relationship type pair trigger.
+  - Replaced N+1 queries in cardinality proposal checking with
+    three batched queries (entity info, relationship type IDs,
+    relationship counts), eliminating per-proposal round-trips.
+  - Removed dead `HasConstraintOverride` code.
+  - Added `COMMENT ON` annotations for all 11 migration indexes.
+  - Added integration tests for `check_required_relationships()`
+    and `check_cardinality_violations()` PostgreSQL functions.
 
 ### Changed
 

@@ -728,14 +728,20 @@ Features planned for after the initial release.
 - [x] `[MVP-2]` Updated graph-expert knowledge base files
   for ontology-driven validation.
 - [x] `[MVP-2]` Ontology database layer enforcement (migration
-  007): B-tree indexes on FK/query columns, self-referential
-  entity type hierarchy with deferred constraints, era FK
-  changes from SET NULL to RESTRICT, entity type validation
-  trigger with legacy fallback, relationship type pair
-  advisory trigger, PostgreSQL validation functions
-  (`check_required_relationships`, `check_cardinality_violations`),
-  diagnostic views, and Go code refactoring eliminating 163
-  lines by leveraging database functions.
+  007): B-tree indexes with `COMMENT ON` annotations on all
+  11 indexes, self-referential entity type hierarchy with
+  deferred constraints, era FK changes from SET NULL to
+  RESTRICT with `DeleteEra` relying on DB constraints and
+  `pgconn.PgError` parsing, scale validation on `UpdateEra`,
+  entity type validation trigger (advisory `RAISE WARNING`
+  with legacy fallback), relationship type pair advisory
+  trigger, PostgreSQL validation functions
+  (`check_required_relationships`,
+  `check_cardinality_violations`) with integration tests,
+  diagnostic views, and Go code refactoring: batched
+  cardinality proposal queries replacing N+1 pattern, dead
+  `HasConstraintOverride` code removed, 163 lines eliminated
+  by leveraging database functions.
 
 ### Job Phases & Draft Lifecycle
 
