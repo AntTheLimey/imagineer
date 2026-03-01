@@ -43,21 +43,36 @@ type cardinalityLimit struct {
 
 // CheckCardinality validates that existing relationships plus
 // proposed new suggestions don't exceed cardinality limits defined
-// in the cardinality_constraints table. If no constraints exist for
-// the campaign, it returns nil early.
+// in the cardinality_constraints table. Persisted data is checked
+// by the database function check_cardinality_violations(). If
+// suggestions are present, Go-side logic adds proposed counts and
+// checks whether any new violations would be created.
 func CheckCardinality(
 	ctx context.Context,
 	db *database.DB,
 	campaignID int64,
 	suggestions []models.ContentAnalysisItem,
-	relationships []models.Relationship,
-	entities []models.Entity,
 ) ([]CardinalityViolation, error) {
 	if db == nil {
 		return nil, nil
 	}
 
-	// Query cardinality constraints for this campaign.
+	// Query persisted violations from the database function.
+	dbViolations, err := queryPersistedViolations(ctx, db, campaignID)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to call check_cardinality_violations: %w", err,
+		)
+	}
+
+	// If there are no suggestions, the DB results are the final answer.
+	if len(suggestions) == 0 {
+		return dbViolations, nil
+	}
+
+	// There are suggestions, so we need to check whether proposed
+	// relationships would create additional violations. Query limits
+	// from the view.
 	limits, err := queryCardinalityLimits(ctx, db, campaignID)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -66,7 +81,8 @@ func CheckCardinality(
 	}
 
 	if len(limits) == 0 {
-		return nil, nil
+		// No constraints defined; DB violations should also be empty.
+		return dbViolations, nil
 	}
 
 	// Build a lookup of limits by relationship type name.
@@ -75,30 +91,31 @@ func CheckCardinality(
 		limitByType[l.RelationshipType] = l
 	}
 
-	// Build entity lookup for name/type resolution.
-	entityByID := make(map[int64]models.Entity, len(entities))
-	for _, e := range entities {
-		entityByID[e.ID] = e
+	// Build a set of already-reported violations from the DB so we
+	// don't duplicate them.
+	type violationKey struct {
+		EntityID         int64
+		RelationshipType string
+		Direction        string
+	}
+	dbViolationSet := make(map[violationKey]bool, len(dbViolations))
+	for _, v := range dbViolations {
+		dbViolationSet[violationKey{
+			EntityID:         v.EntityID,
+			RelationshipType: v.RelationshipType,
+			Direction:        v.Direction,
+		}] = true
 	}
 
-	// Count existing relationships per (entity, relationship_type, direction).
-	// Key format: "entityID:relationshipType:direction"
-	counts := make(map[string]int)
-	for _, r := range relationships {
-		typeName := r.RelationshipTypeName
-		if typeName == "" {
-			continue
-		}
-		if _, hasLimit := limitByType[typeName]; !hasLimit {
-			continue
-		}
-		sourceKey := fmt.Sprintf("%d:%s:source", r.SourceEntityID, typeName)
-		targetKey := fmt.Sprintf("%d:%s:target", r.TargetEntityID, typeName)
-		counts[sourceKey]++
-		counts[targetKey]++
+	// Count proposed suggestion relationships per
+	// (entity, relationship_type, direction).
+	type countKey struct {
+		EntityID         int64
+		RelationshipType string
+		Direction        string
 	}
+	proposalCounts := make(map[countKey]int)
 
-	// Parse suggestions and add proposed counts.
 	for _, item := range suggestions {
 		if item.DetectionType != "relationship_suggestion" {
 			continue
@@ -124,31 +141,26 @@ func CheckCardinality(
 			continue
 		}
 
-		sourceKey := fmt.Sprintf("%d:%s:source", rs.SourceEntityID, typeName)
-		targetKey := fmt.Sprintf("%d:%s:target", rs.TargetEntityID, typeName)
-		counts[sourceKey]++
-		counts[targetKey]++
+		proposalCounts[countKey{rs.SourceEntityID, typeName, "source"}]++
+		proposalCounts[countKey{rs.TargetEntityID, typeName, "target"}]++
 	}
 
-	// Compare totals against limits and collect violations.
-	var violations []CardinalityViolation
-	// Use a set to avoid duplicate violations for the same
-	// (entity, type, direction) combination.
-	seen := make(map[string]bool)
+	if len(proposalCounts) == 0 {
+		return dbViolations, nil
+	}
 
-	for key, count := range counts {
-		entityID, typeName, direction := parseCountKey(key)
-		if typeName == "" {
-			continue
-		}
+	// For each proposed count, query the current persisted count and
+	// check if adding proposals would exceed the limit. We need to
+	// query entity names/types for new violations. Use a single query
+	// to get all current counts for the relevant entities.
+	// For simplicity, check each proposal key against limits.
+	violations := append([]CardinalityViolation{}, dbViolations...)
 
-		limit, ok := limitByType[typeName]
-		if !ok {
-			continue
-		}
+	for key, proposalCount := range proposalCounts {
+		limit := limitByType[key.RelationshipType]
 
 		var maxAllowed *int
-		if direction == "source" {
+		if key.Direction == "source" {
 			maxAllowed = limit.MaxSource
 		} else {
 			maxAllowed = limit.MaxTarget
@@ -158,30 +170,42 @@ func CheckCardinality(
 			continue
 		}
 
-		if count > *maxAllowed {
-			violationKey := fmt.Sprintf(
-				"%d:%s:%s", entityID, typeName, direction,
-			)
-			if seen[violationKey] {
-				continue
-			}
-			seen[violationKey] = true
+		// Skip if the DB already reported this as a violation.
+		vk := violationKey(key)
+		if dbViolationSet[vk] {
+			continue
+		}
 
-			entity, ok := entityByID[entityID]
-			entityName := fmt.Sprintf("entity-%d", entityID)
-			entityType := "unknown"
-			if ok {
-				entityName = entity.Name
-				entityType = string(entity.EntityType)
-			}
+		// Query the current persisted count for this specific
+		// (entity, type, direction) combination.
+		currentCount, err := queryEntityRelCount(
+			ctx, db, campaignID,
+			key.EntityID, key.RelationshipType, key.Direction,
+		)
+		if err != nil {
+			log.Printf(
+				"graph-expert: failed to query entity rel count "+
+					"(entity=%d, type=%s, dir=%s): %v",
+				key.EntityID, key.RelationshipType,
+				key.Direction, err,
+			)
+			continue
+		}
+
+		totalCount := currentCount + proposalCount
+		if totalCount > *maxAllowed {
+			// Query entity name/type for the violation report.
+			entityName, entityType := queryEntityInfo(
+				ctx, db, key.EntityID,
+			)
 
 			violations = append(violations, CardinalityViolation{
-				EntityID:         entityID,
+				EntityID:         key.EntityID,
 				EntityName:       entityName,
 				EntityType:       entityType,
-				RelationshipType: typeName,
-				Direction:        direction,
-				CurrentCount:     count,
+				RelationshipType: key.RelationshipType,
+				Direction:        key.Direction,
+				CurrentCount:     totalCount,
 				MaxAllowed:       *maxAllowed,
 			})
 		}
@@ -190,58 +214,57 @@ func CheckCardinality(
 	return violations, nil
 }
 
-// parseCountKey extracts (entityID, typeName, direction) from a
-// count map key of the form "entityID:typeName:direction".
-func parseCountKey(key string) (int64, string, string) {
-	// Find the first colon to extract entityID.
-	firstColon := -1
-	for i, ch := range key {
-		if ch == ':' {
-			firstColon = i
-			break
-		}
-	}
-	if firstColon < 0 || firstColon >= len(key)-1 {
-		return 0, "", ""
-	}
+// queryPersistedViolations calls the database function
+// check_cardinality_violations() to get all violations from
+// persisted data.
+func queryPersistedViolations(
+	ctx context.Context,
+	db *database.DB,
+	campaignID int64,
+) ([]CardinalityViolation, error) {
+	query := `SELECT * FROM check_cardinality_violations($1)`
 
-	var entityID int64
-	_, err := fmt.Sscanf(key[:firstColon], "%d", &entityID)
+	rows, err := db.Query(ctx, query, campaignID)
 	if err != nil {
-		return 0, "", ""
+		return nil, err
 	}
+	defer rows.Close()
 
-	// Find the last colon to extract direction.
-	lastColon := -1
-	for i := len(key) - 1; i > firstColon; i-- {
-		if key[i] == ':' {
-			lastColon = i
-			break
+	var violations []CardinalityViolation
+	for rows.Next() {
+		var v CardinalityViolation
+		if err := rows.Scan(
+			&v.EntityID, &v.EntityName, &v.EntityType,
+			&v.RelationshipType, &v.Direction,
+			&v.CurrentCount, &v.MaxAllowed,
+		); err != nil {
+			return nil, fmt.Errorf(
+				"failed to scan cardinality violation row: %w", err,
+			)
 		}
-	}
-	if lastColon < 0 || lastColon >= len(key)-1 {
-		return 0, "", ""
+		violations = append(violations, v)
 	}
 
-	typeName := key[firstColon+1 : lastColon]
-	direction := key[lastColon+1:]
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf(
+			"error iterating cardinality violation rows: %w", err,
+		)
+	}
 
-	return entityID, typeName, direction
+	return violations, nil
 }
 
 // queryCardinalityLimits retrieves cardinality constraints for
-// a campaign by joining with relationship_types to resolve
-// type names.
+// a campaign using the cardinality_constraints_with_names view.
 func queryCardinalityLimits(
 	ctx context.Context,
 	db *database.DB,
 	campaignID int64,
 ) ([]cardinalityLimit, error) {
 	query := `
-		SELECT rt.name, cc.max_source, cc.max_target
-		FROM cardinality_constraints cc
-		JOIN relationship_types rt ON cc.relationship_type_id = rt.id
-		WHERE cc.campaign_id = $1`
+		SELECT relationship_type_name, max_source, max_target
+		FROM cardinality_constraints_with_names
+		WHERE campaign_id = $1`
 
 	rows, err := db.Query(ctx, query, campaignID)
 	if err != nil {
@@ -271,4 +294,63 @@ func queryCardinalityLimits(
 	}
 
 	return limits, nil
+}
+
+// queryEntityRelCount queries the current persisted count of
+// relationships for a given entity, relationship type, and
+// direction within a campaign.
+func queryEntityRelCount(
+	ctx context.Context,
+	db *database.DB,
+	campaignID int64,
+	entityID int64,
+	relTypeName string,
+	direction string,
+) (int, error) {
+	var query string
+	if direction == "source" {
+		query = `
+			SELECT COUNT(*)
+			FROM relationships r
+			JOIN relationship_types rt ON r.relationship_type_id = rt.id
+			WHERE r.source_entity_id = $1
+			  AND rt.name = $2
+			  AND r.campaign_id = $3`
+	} else {
+		query = `
+			SELECT COUNT(*)
+			FROM relationships r
+			JOIN relationship_types rt ON r.relationship_type_id = rt.id
+			WHERE r.target_entity_id = $1
+			  AND rt.name = $2
+			  AND r.campaign_id = $3`
+	}
+
+	var count int
+	err := db.QueryRow(ctx, query, entityID, relTypeName, campaignID).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf(
+			"failed to count entity relationships: %w", err,
+		)
+	}
+
+	return count, nil
+}
+
+// queryEntityInfo retrieves the name and type for an entity by ID.
+// Returns fallback values if the query fails.
+func queryEntityInfo(
+	ctx context.Context,
+	db *database.DB,
+	entityID int64,
+) (string, string) {
+	query := `SELECT name, entity_type FROM entities WHERE id = $1`
+
+	var name, entityType string
+	err := db.QueryRow(ctx, query, entityID).Scan(&name, &entityType)
+	if err != nil {
+		return fmt.Sprintf("entity-%d", entityID), "unknown"
+	}
+
+	return name, entityType
 }

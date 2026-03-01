@@ -32,6 +32,9 @@ type overrideKeyInfo struct {
 // match existing constraint overrides for the campaign. Items
 // with detection types that are not overridable (orphan_warning,
 // redundant_edge, graph_warning) pass through unchanged.
+//
+// All overrides for the campaign are loaded in a single query
+// and checked in-memory, replacing per-item database round-trips.
 func FilterOverriddenFindings(
 	ctx context.Context,
 	db *database.DB,
@@ -39,6 +42,17 @@ func FilterOverriddenFindings(
 	items []models.ContentAnalysisItem,
 ) []models.ContentAnalysisItem {
 	if db == nil || len(items) == 0 {
+		return items
+	}
+
+	// Load all constraint overrides for the campaign in one query.
+	overrideSet, err := loadOverrideSet(ctx, db, campaignID)
+	if err != nil {
+		log.Printf(
+			"graph-expert: failed to load constraint overrides "+
+				"for campaign %d, returning items unfiltered: %v",
+			campaignID, err,
+		)
 		return items
 	}
 
@@ -53,23 +67,8 @@ func FilterOverriddenFindings(
 			continue
 		}
 
-		exists, err := db.HasConstraintOverride(
-			ctx, campaignID,
-			info.constraintType, info.overrideKey,
-		)
-		if err != nil {
-			// On error, keep the item to avoid silently
-			// dropping findings.
-			log.Printf(
-				"graph-expert: error checking constraint override "+
-					"(type=%s, key=%s): %v",
-				info.constraintType, info.overrideKey, err,
-			)
-			filtered = append(filtered, item)
-			continue
-		}
-
-		if exists {
+		lookupKey := info.constraintType + ":" + info.overrideKey
+		if overrideSet[lookupKey] {
 			log.Printf(
 				"graph-expert: filtering overridden finding "+
 					"(type=%s, key=%s)",
@@ -82,6 +81,47 @@ func FilterOverriddenFindings(
 	}
 
 	return filtered
+}
+
+// loadOverrideSet queries all constraint overrides for a campaign
+// and returns a set of "constraintType:overrideKey" strings for
+// fast in-memory lookup.
+func loadOverrideSet(
+	ctx context.Context,
+	db *database.DB,
+	campaignID int64,
+) (map[string]bool, error) {
+	query := `
+		SELECT constraint_type, override_key
+		FROM constraint_overrides
+		WHERE campaign_id = $1`
+
+	rows, err := db.Query(ctx, query, campaignID)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to query constraint overrides: %w", err,
+		)
+	}
+	defer rows.Close()
+
+	overrides := make(map[string]bool)
+	for rows.Next() {
+		var constraintType, overrideKey string
+		if err := rows.Scan(&constraintType, &overrideKey); err != nil {
+			return nil, fmt.Errorf(
+				"failed to scan constraint override row: %w", err,
+			)
+		}
+		overrides[constraintType+":"+overrideKey] = true
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf(
+			"error iterating constraint override rows: %w", err,
+		)
+	}
+
+	return overrides, nil
 }
 
 // extractOverrideKey determines the constraint_type and

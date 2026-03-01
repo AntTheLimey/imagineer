@@ -174,7 +174,7 @@ func (e *Expert) Run(
 	if e.db != nil {
 		cardViolations, err := CheckCardinality(
 			ctx, e.db, input.CampaignID,
-			relSuggestions, input.Relationships, input.Entities,
+			relSuggestions,
 		)
 		if err != nil {
 			log.Printf(
@@ -228,7 +228,6 @@ func (e *Expert) Run(
 	if e.db != nil {
 		reqViolations, err := CheckRequiredRelationships(
 			ctx, e.db, input.CampaignID,
-			input.Entities, input.Relationships,
 		)
 		if err != nil {
 			log.Printf(
