@@ -8,6 +8,80 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Ontology Schema for Campaign Knowledge Graphs
+  - YAML-based ontology schema replaces ad hoc constraint
+    mechanisms with a formal, evolvable type system for
+    campaign knowledge graphs.
+  - `schemas/ontology/entity-types.yaml` defines ~50 entity
+    types with abstract parents (person, agent, place,
+    artifact, narrative) and concrete sub-types.
+  - `schemas/ontology/relationship-types.yaml` defines ~80
+    relationship types across 12 narrative categories with
+    domain/range constraints and genre tags.
+  - `schemas/ontology/constraints.yaml` defines domain/range
+    constraints, cardinality defaults, and required
+    relationships.
+  - Migration 006 creates `campaign_entity_types`, `eras`,
+    `relationship_archive`, `cardinality_constraints`,
+    `required_relationships`, and `constraint_overrides`
+    tables; adds `era_id` to relationships and entities;
+    drops the hardcoded `entity_type` CHECK constraint.
+  - Ontology loader package (`internal/ontology/`) with Go
+    structs, YAML parser, `ResolveConcreteTypes` helper, and
+    per-campaign database seeder for entity types,
+    relationship types, constraints, and a default era.
+  - Campaign creation seeds ontology tables from YAML
+    definitions with legacy template fallback; server loads
+    ontology at startup.
+  - Graph Expert cardinality violation detection
+    (`internal/agents/graph/cardinality.go`) warns when
+    relationships exceed configured limits.
+  - Graph Expert required relationship enforcement
+    (`internal/agents/graph/required.go`) flags entities
+    missing mandatory relationships.
+  - Graph Expert constraint override filtering
+    (`internal/agents/graph/overrides.go`) suppresses
+    future warnings when the GM acknowledges a violation.
+  - All Graph Expert enforcement modules wired into
+    `expert.go Run()` method with comprehensive test suites.
+  - Enrichment agent prompt now includes valid entity types
+    and relationship types from the ontology, passed through
+    `PipelineInput` → `EnrichmentInput` →
+    `buildSystemPrompt`.
+  - Seven ontology API endpoints in
+    `internal/api/ontology_handler.go`: ListEras, CreateEra,
+    UpdateEra, GetCurrentEra, ListConstraintOverrides,
+    CreateConstraintOverride, and ListEntityTypes; routes
+    registered under campaign scope.
+  - Updated all four graph-expert knowledge base files to
+    reflect ontology-driven validation.
+- Ontology Database Layer Enforcement
+  - Migration 007 (`007_ontology_database_layer.sql`) adds
+    B-tree indexes on all FK and query columns across
+    ontology tables, reducing query latency.
+  - Self-referential FK on `campaign_entity_types.parent_name`
+    with `DEFERRABLE INITIALLY DEFERRED` support for
+    cyclic type hierarchies.
+  - FK from `required_relationships.entity_type` to
+    `campaign_entity_types` for referential integrity.
+  - Era FK constraints changed from `SET NULL` to
+    `RESTRICT` preventing silent data loss on era deletions.
+  - Entity type validation trigger enforces type conformance
+    on entities table, with graceful fallback for legacy
+    campaigns without seeded ontologies.
+  - Relationship type pair advisory trigger (`RAISE WARNING`)
+    validates semantic consistency without blocking writes.
+  - PostgreSQL functions `check_required_relationships` and
+    `check_cardinality_violations` perform persistent
+    graph validation over the ontology.
+  - `cardinality_constraints_with_names` and
+    `orphaned_entities` views expose constraint metadata and
+    anomalies for diagnostic queries.
+  - Go code refactored to leverage database functions:
+    `required.go` replaces 3 round-trips with 1 DB call,
+    `cardinality.go` separates persisted checks from
+    proposed suggestions, `overrides.go` batch-loads all
+    overrides in 1 query (163 lines eliminated).
 - Analysis Wizard (Phase Screens)
   - Replaced the monolithic 4,400-line AnalysisTriagePage
     with a step-by-step wizard where each analysis phase
@@ -496,6 +570,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Server configuration with testable constants (`cmd/server/config.go`)
 - Database entity tests for array handling (`entities_test.go`)
 - Client environment example file (`client/.env.example`)
+- PhaseStrip on the CreateCampaign page with Revise and
+  Enrich phase selection. Identify is always disabled on
+  create because no entities exist to match against yet.
+  After creation with phases selected, the backend triggers
+  the analysis pipeline and the frontend navigates to the
+  analysis wizard. Backend `POST /api/campaigns` now
+  supports `analyze`, `enrich`, and `phases` query
+  parameters.
 
 ### Fixed
 
@@ -647,6 +729,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Dark theme fixes across EnrichPhasePage and RevisePhasePage
   replacing hardcoded `bgcolor: 'grey.50'` with theme-aware
   `'action.hover'` on Paper components.
+- Ontology database layer (second code review):
+  - `DeleteEra` handler now relies on the database `ON DELETE
+    RESTRICT` constraint, parsing `pgconn.PgError` FK violations
+    instead of Go-side TOCTOU reference checks.
+  - `UpdateEra` handler now validates the `scale` field before
+    persisting changes.
+  - Entity type validation trigger changed from `RAISE EXCEPTION`
+    to `RAISE WARNING` for advisory-only enforcement, consistent
+    with the relationship type pair trigger.
+  - Replaced N+1 queries in cardinality proposal checking with
+    three batched queries (entity info, relationship type IDs,
+    relationship counts), eliminating per-proposal round-trips.
+  - Removed dead `HasConstraintOverride` code.
+  - Added `COMMENT ON` annotations for all 11 migration indexes.
+  - Added integration tests for `check_required_relationships()`
+    and `check_cardinality_violations()` PostgreSQL functions.
+- Strict YAML field validation in ontology loader using
+  `Decoder.KnownFields(true)` to catch unknown field typos
+  at startup.
+- Cross-campaign era assignment vulnerability in
+  relationship archive: `eraID` is now validated against
+  the archived row's campaign before applying.
+- Added `cardinality_violation` and `missing_required`
+  detection types to client type definitions,
+  EnrichPhasePage filter/labels, and useAnalysisWizard
+  enrichment groups.
+- Added `updated_at` column and update trigger to
+  `campaign_entity_types` table (migration 006).
 
 ### Changed
 
@@ -698,6 +808,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - pg_trgm, vector, pgedge_vectorizer, pg_tokenizer, vchord_bm25,
     vectorize, pgmq, pg_cron
 - Added `make test-db` to verify database extensions are installed
+- Ontology YAML files converted to four-space indentation
+  per project coding guidelines.
+- Added `text` language identifiers to fenced code blocks
+  in ontology design document.
 
 ### Added
 

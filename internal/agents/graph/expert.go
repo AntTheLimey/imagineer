@@ -16,6 +16,7 @@ package graph
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"time"
 
@@ -168,6 +169,109 @@ func (e *Expert) Run(
 		}
 	}
 
+	// 1c. Cardinality check: verify that existing relationships plus
+	// proposed suggestions do not exceed per-type cardinality limits.
+	if e.db != nil {
+		cardViolations, err := CheckCardinality(
+			ctx, e.db, input.CampaignID,
+			relSuggestions,
+		)
+		if err != nil {
+			log.Printf(
+				"graph-expert: cardinality check failed: %v", err,
+			)
+			// Continue with other checks; do not abort.
+		} else {
+			for _, v := range cardViolations {
+				detail, err := json.Marshal(map[string]interface{}{
+					"entityId":         v.EntityID,
+					"entityName":       v.EntityName,
+					"entityType":       v.EntityType,
+					"relationshipType": v.RelationshipType,
+					"direction":        v.Direction,
+					"currentCount":     v.CurrentCount,
+					"maxAllowed":       v.MaxAllowed,
+					"description": fmt.Sprintf(
+						"Entity %s would have %d %s relationships as %s, "+
+							"exceeding the limit of %d.",
+						v.EntityName, v.CurrentCount,
+						v.RelationshipType, v.Direction,
+						v.MaxAllowed,
+					),
+				})
+				if err != nil {
+					log.Printf(
+						"graph-expert: failed to marshal cardinality violation: %v",
+						err,
+					)
+					continue
+				}
+
+				entityID := v.EntityID
+				allItems = append(allItems, models.ContentAnalysisItem{
+					JobID:            input.JobID,
+					DetectionType:    "cardinality_violation",
+					MatchedText:      v.RelationshipType,
+					EntityID:         &entityID,
+					Resolution:       "pending",
+					SuggestedContent: json.RawMessage(detail),
+					Phase:            "enrichment",
+					CreatedAt:        now,
+				})
+			}
+		}
+	}
+
+	// 1d. Required relationships: verify that every entity of a type
+	// with required relationship rules participates in at least one
+	// relationship of each required type.
+	if e.db != nil {
+		reqViolations, err := CheckRequiredRelationships(
+			ctx, e.db, input.CampaignID,
+		)
+		if err != nil {
+			log.Printf(
+				"graph-expert: required relationship check failed: %v",
+				err,
+			)
+			// Continue with other checks; do not abort.
+		} else {
+			for _, v := range reqViolations {
+				detail, err := json.Marshal(map[string]interface{}{
+					"entityId":                v.EntityID,
+					"entityName":              v.EntityName,
+					"entityType":              v.EntityType,
+					"missingRelationshipType": v.MissingRelationshipType,
+					"description": fmt.Sprintf(
+						"Entity %s (%s) is missing a required %s "+
+							"relationship.",
+						v.EntityName, v.EntityType,
+						v.MissingRelationshipType,
+					),
+				})
+				if err != nil {
+					log.Printf(
+						"graph-expert: failed to marshal required relationship violation: %v",
+						err,
+					)
+					continue
+				}
+
+				entityID := v.EntityID
+				allItems = append(allItems, models.ContentAnalysisItem{
+					JobID:            input.JobID,
+					DetectionType:    "missing_required",
+					MatchedText:      v.MissingRelationshipType,
+					EntityID:         &entityID,
+					Resolution:       "pending",
+					SuggestedContent: json.RawMessage(detail),
+					Phase:            "enrichment",
+					CreatedAt:        now,
+				})
+			}
+		}
+	}
+
 	// -----------------------------------------------------------------
 	// 2. Semantic checks (LLM required)
 	// -----------------------------------------------------------------
@@ -185,6 +289,14 @@ func (e *Expert) Run(
 
 	if allItems == nil {
 		allItems = []models.ContentAnalysisItem{}
+	}
+
+	// Filter out findings that match existing constraint overrides
+	// so that acknowledged violations are not re-reported.
+	if e.db != nil {
+		allItems = FilterOverriddenFindings(
+			ctx, e.db, input.CampaignID, allItems,
+		)
 	}
 
 	return allItems, nil

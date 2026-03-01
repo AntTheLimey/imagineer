@@ -18,6 +18,7 @@ import (
 	"github.com/antonypegg/imagineer/internal/database"
 	"github.com/antonypegg/imagineer/internal/llm"
 	"github.com/antonypegg/imagineer/internal/models"
+	"github.com/antonypegg/imagineer/internal/ontology"
 )
 
 // SourceScope indicates the level of content being analysed, allowing
@@ -66,6 +67,7 @@ type PipelineInput struct {
 	Relationships []models.Relationship
 	GameSystemID  *int64
 	Context       *RAGContext
+	Ontology      *ontology.Ontology
 
 	// PriorResults holds items produced by agents that ran in
 	// earlier pipeline stages. The pipeline populates this field

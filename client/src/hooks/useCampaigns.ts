@@ -60,7 +60,13 @@ export function useCreateCampaign() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: (input: CreateCampaignInput) => campaignsApi.create(input),
+        mutationFn: ({
+            input,
+            options,
+        }: {
+            input: CreateCampaignInput;
+            options?: AnalysisOptions;
+        }) => campaignsApi.create(input, options),
         onSuccess: () => {
             // Invalidate campaign lists to refetch
             queryClient.invalidateQueries({ queryKey: campaignKeys.lists() });

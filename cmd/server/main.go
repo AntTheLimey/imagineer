@@ -26,6 +26,7 @@ import (
 	"github.com/antonypegg/imagineer/internal/auth"
 	"github.com/antonypegg/imagineer/internal/crypto"
 	"github.com/antonypegg/imagineer/internal/database"
+	"github.com/antonypegg/imagineer/internal/ontology"
 	"github.com/joho/godotenv"
 )
 
@@ -72,6 +73,21 @@ func main() {
 	defer db.Close()
 
 	log.Println("Connected to database")
+
+	// Load ontology schema from YAML files
+	ontologyDir := os.Getenv("ONTOLOGY_DIR")
+	if ontologyDir == "" {
+		ontologyDir = DefaultOntologyDir
+	}
+	ont, err := ontology.LoadOntology(ontologyDir)
+	if err != nil {
+		log.Printf("Ontology schema not loaded: %v (using legacy template seeding)", err)
+	} else {
+		db.Ontology = ont
+		log.Printf("Ontology schema loaded: %d entity types, %d relationship types",
+			len(ont.EntityTypes.Types),
+			len(ont.RelationshipTypes.Types))
+	}
 
 	// Configure API key encryption if ENCRYPTION_KEY is set
 	if encKeyHex := os.Getenv("ENCRYPTION_KEY"); encKeyHex != "" {

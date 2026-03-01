@@ -23,6 +23,7 @@ import (
 	"github.com/antonypegg/imagineer/internal/database"
 	"github.com/antonypegg/imagineer/internal/llm"
 	"github.com/antonypegg/imagineer/internal/models"
+	"github.com/antonypegg/imagineer/internal/ontology"
 )
 
 // Engine orchestrates LLM-based entity enrichment. It builds prompts
@@ -52,6 +53,7 @@ type EnrichmentInput struct {
 	Relationships   []models.Relationship // Existing relationships for this entity
 	CampaignResults []models.SearchResult // RAG: campaign vector search results
 	GameSystemYAML  string                // RAG: game system schema
+	Ontology        *ontology.Ontology    // Optional ontology for type/relationship guidance
 }
 
 // EnrichEntity sends content and entity state to the LLM and returns
@@ -75,7 +77,7 @@ func (e *Engine) EnrichEntity(
 		return []models.ContentAnalysisItem{}, nil
 	}
 
-	systemPrompt := buildSystemPrompt()
+	systemPrompt := buildSystemPrompt(input.Ontology)
 	userPrompt := buildUserPrompt(input)
 
 	resp, err := provider.Complete(ctx, llm.CompletionRequest{

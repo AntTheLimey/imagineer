@@ -1,0 +1,1142 @@
+# Relationship Type Definitions
+#
+# Each type defines forward name, inverse name, symmetry,
+# display labels, domain/range constraints, genre tags,
+# and description. Approximately 80 types organised by
+# narrative category.
+
+types:
+    # ================================================
+    # Meta-Game
+    # ================================================
+    plays:
+        inverse: played_by
+        symmetric: false
+        display_label: Plays
+        inverse_display_label: Played by
+        domain: [player]
+        range: [pc]
+        genre: [universal]
+        description: >-
+            Active player-character bond.
+
+    formerly_played:
+        inverse: formerly_played_by
+        symmetric: false
+        display_label: Formerly played
+        inverse_display_label: Formerly played by
+        domain: [player]
+        range: [pc, npc]
+        genre: [universal]
+        description: >-
+            Historical player-character bond after death or
+            retirement.
+
+    narrates:
+        inverse: narrated_by
+        symmetric: false
+        display_label: Narrates
+        inverse_display_label: Narrated by
+        domain: [game_master]
+        range: [any]
+        genre: [universal]
+        description: >-
+            GM narrative control over game elements.
+
+    # ================================================
+    # Kinship and Family (Universal)
+    # ================================================
+    parent_of:
+        inverse: child_of
+        symmetric: false
+        display_label: Parent of
+        inverse_display_label: Child of
+        domain: [npc, creature]
+        range: [npc, creature]
+        genre: [universal]
+        description: >-
+            Biological or adoptive parent-child bond.
+
+    sibling_of:
+        inverse: sibling_of
+        symmetric: true
+        display_label: Sibling of
+        inverse_display_label: Sibling of
+        domain: [npc]
+        range: [npc]
+        genre: [universal]
+        description: >-
+            Brother or sister relationship.
+
+    spouse_of:
+        inverse: spouse_of
+        symmetric: true
+        display_label: Spouse of
+        inverse_display_label: Spouse of
+        domain: [npc]
+        range: [npc]
+        genre: [universal]
+        description: >-
+            Married or life-partner bond.
+
+    betrothed_to:
+        inverse: betrothed_to
+        symmetric: true
+        display_label: Betrothed to
+        inverse_display_label: Betrothed to
+        domain: [npc]
+        range: [npc]
+        genre: [universal]
+        description: >-
+            Engaged or promised in marriage.
+
+    ancestor_of:
+        inverse: descendant_of
+        symmetric: false
+        display_label: Ancestor of
+        inverse_display_label: Descendant of
+        domain: [npc]
+        range: [npc]
+        genre: [universal]
+        description: >-
+            Multi-generational lineage connection.
+
+    # ================================================
+    # Social and Interpersonal (Universal)
+    # ================================================
+    knows:
+        inverse: knows
+        symmetric: true
+        display_label: Knows
+        inverse_display_label: Knows
+        domain: [npc]
+        range: [npc]
+        genre: [universal]
+        description: >-
+            Mutual awareness or acquaintance.
+
+    friend_of:
+        inverse: friend_of
+        symmetric: true
+        display_label: Friend of
+        inverse_display_label: Friend of
+        domain: [npc]
+        range: [npc]
+        genre: [universal]
+        description: >-
+            Positive personal relationship.
+
+    rival_of:
+        inverse: rival_of
+        symmetric: true
+        display_label: Rival of
+        inverse_display_label: Rival of
+        domain: [agent]
+        range: [agent]
+        genre: [universal]
+        description: >-
+            Competitive opposition.
+
+    lover_of:
+        inverse: lover_of
+        symmetric: true
+        display_label: Lover of
+        inverse_display_label: Lover of
+        domain: [npc]
+        range: [npc]
+        genre: [universal]
+        description: >-
+            Romantic or intimate relationship.
+
+    mentors:
+        inverse: mentored_by
+        symmetric: false
+        display_label: Mentors
+        inverse_display_label: Mentored by
+        domain: [npc]
+        range: [npc]
+        genre: [universal]
+        description: >-
+            Teacher-student or guide relationship.
+
+    protects:
+        inverse: protected_by
+        symmetric: false
+        display_label: Protects
+        inverse_display_label: Protected by
+        domain: [agent]
+        range: [agent, place]
+        genre: [universal]
+        description: >-
+            Guardian or defensive relationship.
+
+    trusts:
+        inverse: trusted_by
+        symmetric: false
+        display_label: Trusts
+        inverse_display_label: Trusted by
+        domain: [npc]
+        range: [npc]
+        genre: [universal]
+        description: >-
+            Confidence or faith in another.
+
+    betrayed:
+        inverse: betrayed_by
+        symmetric: false
+        display_label: Betrayed
+        inverse_display_label: Betrayed by
+        domain: [npc]
+        range: [npc]
+        genre: [universal]
+        description: >-
+            Past act of treachery or broken trust.
+
+    # ================================================
+    # Power and Authority (Universal)
+    # ================================================
+    rules:
+        inverse: ruled_by
+        symmetric: false
+        display_label: Rules
+        inverse_display_label: Ruled by
+        domain: [npc, faction]
+        range: [place, faction, organization]
+        genre: [universal]
+        description: >-
+            Sovereign or governmental authority.
+
+    commands:
+        inverse: commanded_by
+        symmetric: false
+        display_label: Commands
+        inverse_display_label: Commanded by
+        domain: [npc]
+        range: [npc, agent]
+        genre: [universal]
+        description: >-
+            Military or hierarchical command.
+
+    employs:
+        inverse: employed_by
+        symmetric: false
+        display_label: Employs
+        inverse_display_label: Employed by
+        domain: [agent]
+        range: [npc]
+        genre: [universal]
+        description: >-
+            Employment or service arrangement.
+
+    works_for:
+        inverse: employs
+        symmetric: false
+        display_label: Works for
+        inverse_display_label: Employs
+        domain: [npc]
+        range: [agent]
+        genre: [universal]
+        description: >-
+            Alias for employed_by relationship. Retained for
+            backward compatibility with existing templates.
+
+    reports_to:
+        inverse: manages
+        symmetric: false
+        display_label: Reports to
+        inverse_display_label: Manages
+        domain: [npc]
+        range: [npc]
+        genre: [universal]
+        description: >-
+            Organisational reporting line.
+
+    serves:
+        inverse: served_by
+        symmetric: false
+        display_label: Serves
+        inverse_display_label: Served by
+        domain: [npc]
+        range: [agent]
+        genre: [universal]
+        description: >-
+            Voluntary or obligated service.
+
+    patron_of:
+        inverse: client_of
+        symmetric: false
+        display_label: Patron of
+        inverse_display_label: Client of
+        domain: [npc, organization]
+        range: [npc, organization]
+        genre: [universal]
+        description: >-
+            Sponsorship or patronage arrangement.
+
+    vassal_of:
+        inverse: liege_of
+        symmetric: false
+        display_label: Vassal of
+        inverse_display_label: Liege of
+        domain: [npc, faction]
+        range: [npc, faction]
+        genre: [universal]
+        description: >-
+            Feudal or hierarchical subordination.
+
+    imprisons:
+        inverse: imprisoned_by
+        symmetric: false
+        display_label: Imprisons
+        inverse_display_label: Imprisoned by
+        domain: [agent, place]
+        range: [npc, creature]
+        genre: [universal]
+        description: >-
+            Captivity or confinement.
+
+    # ================================================
+    # Spatial and Territorial (Universal)
+    # ================================================
+    located_at:
+        inverse: contains
+        symmetric: false
+        display_label: Located at
+        inverse_display_label: Contains
+        domain: [agent, artifact, event]
+        range: [place]
+        genre: [universal]
+        description: >-
+            Physical or conceptual presence at a place.
+
+    headquartered_at:
+        inverse: headquarters_of
+        symmetric: false
+        display_label: Headquartered at
+        inverse_display_label: Headquarters of
+        domain: [faction, organization]
+        range: [place]
+        genre: [universal]
+        description: >-
+            Primary base of operations.
+
+    part_of:
+        inverse: has_part
+        symmetric: false
+        display_label: Part of
+        inverse_display_label: Has part
+        domain: [any]
+        range: [any]
+        genre: [universal]
+        description: >-
+            Structural containment — location nesting,
+            organisational divisions, document chapters.
+
+    borders:
+        inverse: borders
+        symmetric: true
+        display_label: Borders
+        inverse_display_label: Borders
+        domain: [place]
+        range: [place]
+        genre: [universal]
+        description: >-
+            Geographic adjacency.
+
+    connected_to:
+        inverse: connected_to
+        symmetric: true
+        display_label: Connected to
+        inverse_display_label: Connected to
+        domain: [place]
+        range: [place]
+        genre: [universal]
+        description: >-
+            Path, portal, or route between places.
+
+    originated_from:
+        inverse: origin_of
+        symmetric: false
+        display_label: Originated from
+        inverse_display_label: Origin of
+        domain: [npc, creature, artifact]
+        range: [place]
+        genre: [universal]
+        description: >-
+            Place of birth, creation, or manufacture.
+
+    guards:
+        inverse: guarded_by
+        symmetric: false
+        display_label: Guards
+        inverse_display_label: Guarded by
+        domain: [agent]
+        range: [place, artifact]
+        genre: [universal]
+        description: >-
+            Active defence or watch over something.
+
+    haunts:
+        inverse: haunted_by
+        symmetric: false
+        display_label: Haunts
+        inverse_display_label: Haunted by
+        domain: [npc, creature]
+        range: [place]
+        genre: [universal]
+        description: >-
+            Persistent supernatural or menacing presence.
+
+    controls:
+        inverse: controlled_by
+        symmetric: false
+        display_label: Controls
+        inverse_display_label: Controlled by
+        domain: [agent]
+        range: [place]
+        genre: [universal]
+        description: >-
+            Territorial or political dominion.
+
+    # ================================================
+    # Possession and Creation (Universal)
+    # ================================================
+    owns:
+        inverse: owned_by
+        symmetric: false
+        display_label: Owns
+        inverse_display_label: Owned by
+        domain: [agent]
+        range: [artifact, place]
+        genre: [universal]
+        description: >-
+            Legal or claimed ownership.
+
+    created:
+        inverse: created_by
+        symmetric: false
+        display_label: Created
+        inverse_display_label: Created by
+        domain: [agent]
+        range: [artifact, event]
+        genre: [universal]
+        description: >-
+            Authorship, crafting, or causation.
+
+    wields:
+        inverse: wielded_by
+        symmetric: false
+        display_label: Wields
+        inverse_display_label: Wielded by
+        domain: [npc, creature]
+        range: [item]
+        genre: [universal]
+        description: >-
+            Active use of a weapon or tool.
+
+    seeks:
+        inverse: sought_by
+        symmetric: false
+        display_label: Seeks
+        inverse_display_label: Sought by
+        domain: [agent]
+        range: [agent, artifact, place]
+        genre: [universal]
+        description: >-
+            Active pursuit or quest for something.
+
+    inherited_from:
+        inverse: bequeathed_to
+        symmetric: false
+        display_label: Inherited from
+        inverse_display_label: Bequeathed to
+        domain: [npc]
+        range: [npc, artifact]
+        genre: [universal]
+        description: >-
+            Legacy or inheritance chain.
+
+    # ================================================
+    # Knowledge and Information (Universal)
+    # ================================================
+    discovered:
+        inverse: discovered_by
+        symmetric: false
+        display_label: Discovered
+        inverse_display_label: Discovered by
+        domain: [npc]
+        range: [any]
+        genre: [universal]
+        description: >-
+            Finding or uncovering of something hidden.
+
+    conceals:
+        inverse: concealed_by
+        symmetric: false
+        display_label: Conceals
+        inverse_display_label: Concealed by
+        domain: [agent]
+        range: [any]
+        genre: [universal]
+        description: >-
+            Actively hiding information or entities.
+
+    recorded_in:
+        inverse: records
+        symmetric: false
+        display_label: Recorded in
+        inverse_display_label: Records
+        domain: [any]
+        range: [document]
+        genre: [universal]
+        description: >-
+            Documentation or written record of something.
+
+    studies:
+        inverse: studied_by
+        symmetric: false
+        display_label: Studies
+        inverse_display_label: Studied by
+        domain: [npc]
+        range: [any]
+        genre: [universal]
+        description: >-
+            Academic or investigative focus.
+
+    # ================================================
+    # Conflict and Alliance (Universal)
+    # ================================================
+    enemy_of:
+        inverse: enemy_of
+        symmetric: true
+        display_label: Enemy of
+        inverse_display_label: Enemy of
+        domain: [agent]
+        range: [agent]
+        genre: [universal]
+        description: >-
+            Active hostility or enmity.
+
+    allied_with:
+        inverse: allied_with
+        symmetric: true
+        display_label: Allied with
+        inverse_display_label: Allied with
+        domain: [agent]
+        range: [agent]
+        genre: [universal]
+        description: >-
+            Formal or informal alliance.
+
+    at_war_with:
+        inverse: at_war_with
+        symmetric: true
+        display_label: At war with
+        inverse_display_label: At war with
+        domain: [agent]
+        range: [agent]
+        genre: [universal]
+        description: >-
+            Open armed conflict.
+
+    conspires_against:
+        inverse: target_of
+        symmetric: false
+        display_label: Conspires against
+        inverse_display_label: Target of
+        domain: [agent]
+        range: [agent]
+        genre: [universal]
+        description: >-
+            Secret plotting or scheming.
+
+    hunts:
+        inverse: hunted_by
+        symmetric: false
+        display_label: Hunts
+        inverse_display_label: Hunted by
+        domain: [agent]
+        range: [agent]
+        genre: [universal]
+        description: >-
+            Active pursuit with intent to capture or kill.
+
+    opposes:
+        inverse: opposed_by
+        symmetric: false
+        display_label: Opposes
+        inverse_display_label: Opposed by
+        domain: [agent]
+        range: [agent]
+        genre: [universal]
+        description: >-
+            Active resistance or obstruction.
+
+    # ================================================
+    # Affiliation and Membership (Universal)
+    # ================================================
+    member_of:
+        inverse: has_member
+        symmetric: false
+        display_label: Member of
+        inverse_display_label: Has member
+        domain: [npc]
+        range: [faction, organization]
+        genre: [universal]
+        description: >-
+            Group membership or belonging.
+
+    founded:
+        inverse: founded_by
+        symmetric: false
+        display_label: Founded
+        inverse_display_label: Founded by
+        domain: [npc]
+        range: [faction, organization, place]
+        genre: [universal]
+        description: >-
+            Establishment or creation of a group or place.
+
+    leads:
+        inverse: led_by
+        symmetric: false
+        display_label: Leads
+        inverse_display_label: Led by
+        domain: [npc]
+        range: [agent]
+        genre: [universal]
+        description: >-
+            Leadership or directorial role.
+
+    defected_from:
+        inverse: lost_member
+        symmetric: false
+        display_label: Defected from
+        inverse_display_label: Lost member
+        domain: [npc]
+        range: [faction, organization]
+        genre: [universal]
+        description: >-
+            Abandonment or switching allegiance.
+
+    infiltrates:
+        inverse: infiltrated_by
+        symmetric: false
+        display_label: Infiltrates
+        inverse_display_label: Infiltrated by
+        domain: [npc]
+        range: [faction, organization]
+        genre: [universal]
+        description: >-
+            Covert penetration of a group.
+
+    # ================================================
+    # Supernatural and Mystical (Fantasy, Horror, Sci-Fi)
+    # ================================================
+    bound_to:
+        inverse: bound_to
+        symmetric: true
+        display_label: Bound to
+        inverse_display_label: Bound to
+        domain: [any]
+        range: [any]
+        genre: [fantasy, horror, scifi]
+        description: >-
+            Magical, spiritual, or contractual binding.
+
+    cursed_by:
+        inverse: cursed
+        symmetric: false
+        display_label: Cursed by
+        inverse_display_label: Cursed
+        domain: [agent]
+        range: [any]
+        genre: [fantasy, horror]
+        description: >-
+            Afflicted by a supernatural curse.
+
+    blessed_by:
+        inverse: blessed
+        symmetric: false
+        display_label: Blessed by
+        inverse_display_label: Blessed
+        domain: [agent]
+        range: [any]
+        genre: [fantasy]
+        description: >-
+            Received divine or supernatural favour.
+
+    summoned:
+        inverse: summoned_by
+        symmetric: false
+        display_label: Summoned
+        inverse_display_label: Summoned by
+        domain: [npc, creature]
+        range: [npc, creature]
+        genre: [fantasy, horror]
+        description: >-
+            Called forth through ritual or magic.
+
+    worships:
+        inverse: worshipped_by
+        symmetric: false
+        display_label: Worships
+        inverse_display_label: Worshipped by
+        domain: [npc]
+        range: [npc, creature]
+        genre: [fantasy, horror]
+        description: >-
+            Religious or cultic devotion.
+
+    prophesied:
+        inverse: prophesied_by
+        symmetric: false
+        display_label: Prophesied
+        inverse_display_label: Prophesied by
+        domain: [npc, event]
+        range: [npc, document]
+        genre: [fantasy]
+        description: >-
+            Subject of a prophecy or prediction.
+
+    transformed_by:
+        inverse: transformed
+        symmetric: false
+        display_label: Transformed by
+        inverse_display_label: Transformed
+        domain: [npc, creature]
+        range: [npc, creature, artifact]
+        genre: [fantasy, horror, scifi]
+        description: >-
+            Physically or spiritually altered.
+
+    corrupted_by:
+        inverse: corrupted
+        symmetric: false
+        display_label: Corrupted by
+        inverse_display_label: Corrupted
+        domain: [agent]
+        range: [any]
+        genre: [fantasy, horror]
+        description: >-
+            Moral or physical degradation by influence.
+
+    # ================================================
+    # Temporal and Causal (Universal)
+    # ================================================
+    caused:
+        inverse: caused_by
+        symmetric: false
+        display_label: Caused
+        inverse_display_label: Caused by
+        domain: [any]
+        range: [event]
+        genre: [universal]
+        description: >-
+            Direct causation of an event.
+
+    triggered:
+        inverse: triggered_by
+        symmetric: false
+        display_label: Triggered
+        inverse_display_label: Triggered by
+        domain: [event]
+        range: [event]
+        genre: [universal]
+        description: >-
+            Chain of events where one triggers another.
+
+    participated_in:
+        inverse: involved
+        symmetric: false
+        display_label: Participated in
+        inverse_display_label: Involved
+        domain: [agent]
+        range: [event]
+        genre: [universal]
+        description: >-
+            Active involvement in an event.
+
+    witnessed:
+        inverse: witnessed_by
+        symmetric: false
+        display_label: Witnessed
+        inverse_display_label: Witnessed by
+        domain: [npc]
+        range: [event]
+        genre: [universal]
+        description: >-
+            Observed an event firsthand.
+
+    # ================================================
+    # Economic (Universal)
+    # ================================================
+    trades_with:
+        inverse: trades_with
+        symmetric: true
+        display_label: Trades with
+        inverse_display_label: Trades with
+        domain: [agent]
+        range: [agent]
+        genre: [universal]
+        description: >-
+            Commercial exchange relationship.
+
+    supplies:
+        inverse: supplied_by
+        symmetric: false
+        display_label: Supplies
+        inverse_display_label: Supplied by
+        domain: [agent]
+        range: [agent]
+        genre: [universal]
+        description: >-
+            Provision of goods or resources.
+
+    finances:
+        inverse: financed_by
+        symmetric: false
+        display_label: Finances
+        inverse_display_label: Financed by
+        domain: [agent]
+        range: [agent]
+        genre: [universal]
+        description: >-
+            Financial backing or investment.
+
+    indebted_to:
+        inverse: creditor_of
+        symmetric: false
+        display_label: Indebted to
+        inverse_display_label: Creditor of
+        domain: [agent]
+        range: [agent]
+        genre: [universal]
+        description: >-
+            Financial or moral obligation.
+
+    # ================================================
+    # Event Relationships (Universal)
+    # ================================================
+    murdered:
+        inverse: murdered_by
+        symmetric: false
+        display_label: Murdered
+        inverse_display_label: Murdered by
+        domain: [agent]
+        range: [npc, creature]
+        genre: [universal]
+        description: >-
+            Deliberate killing.
+
+    poisoned:
+        inverse: poisoned_by
+        symmetric: false
+        display_label: Poisoned
+        inverse_display_label: Poisoned by
+        domain: [agent]
+        range: [npc, creature]
+        genre: [universal]
+        description: >-
+            Administered poison or toxin.
+
+    wounded:
+        inverse: wounded_by
+        symmetric: false
+        display_label: Wounded
+        inverse_display_label: Wounded by
+        domain: [agent]
+        range: [npc, creature]
+        genre: [universal]
+        description: >-
+            Inflicted injury.
+
+    rescued:
+        inverse: rescued_by
+        symmetric: false
+        display_label: Rescued
+        inverse_display_label: Rescued by
+        domain: [agent]
+        range: [agent]
+        genre: [universal]
+        description: >-
+            Saved from danger or captivity.
+
+    captured:
+        inverse: captured_by
+        symmetric: false
+        display_label: Captured
+        inverse_display_label: Captured by
+        domain: [agent]
+        range: [agent]
+        genre: [universal]
+        description: >-
+            Took prisoner or seized.
+
+    freed:
+        inverse: freed_by
+        symmetric: false
+        display_label: Freed
+        inverse_display_label: Freed by
+        domain: [agent]
+        range: [agent]
+        genre: [universal]
+        description: >-
+            Released from captivity or bondage.
+
+    deceived:
+        inverse: deceived_by
+        symmetric: false
+        display_label: Deceived
+        inverse_display_label: Deceived by
+        domain: [agent]
+        range: [agent]
+        genre: [universal]
+        description: >-
+            Misled through lies or trickery.
+
+    stole_from:
+        inverse: robbed_by
+        symmetric: false
+        display_label: Stole from
+        inverse_display_label: Robbed by
+        domain: [agent]
+        range: [agent]
+        genre: [universal]
+        description: >-
+            Theft or robbery.
+
+    # ================================================
+    # Genre: Sci-Fi and Cyberpunk
+    # ================================================
+    uploaded_to:
+        inverse: hosts
+        symmetric: false
+        display_label: Uploaded to
+        inverse_display_label: Hosts
+        domain: [agent]
+        range: [artifact, place]
+        genre: [scifi]
+        description: >-
+            Digital consciousness transfer.
+
+    augmented_by:
+        inverse: augments
+        symmetric: false
+        display_label: Augmented by
+        inverse_display_label: Augments
+        domain: [artifact]
+        range: [npc, creature]
+        genre: [scifi]
+        description: >-
+            Cybernetic or biological enhancement.
+
+    cloned_from:
+        inverse: clone_of
+        symmetric: false
+        display_label: Cloned from
+        inverse_display_label: Clone of
+        domain: [npc, creature]
+        range: [npc, creature]
+        genre: [scifi]
+        description: >-
+            Genetic duplication origin.
+
+    programmed_by:
+        inverse: programmed
+        symmetric: false
+        display_label: Programmed by
+        inverse_display_label: Programmed
+        domain: [npc]
+        range: [creature, artifact]
+        genre: [scifi]
+        description: >-
+            Software or behavioural programming.
+
+    hacked:
+        inverse: hacked_by
+        symmetric: false
+        display_label: Hacked
+        inverse_display_label: Hacked by
+        domain: [agent]
+        range: [agent, artifact]
+        genre: [scifi]
+        description: >-
+            Unauthorised digital intrusion.
+
+    # ================================================
+    # Genre: Horror
+    # ================================================
+    possessed_by:
+        inverse: possesses_spirit
+        symmetric: false
+        display_label: Possessed by
+        inverse_display_label: Possesses (spirit)
+        domain: [npc, creature]
+        range: [npc, creature]
+        genre: [horror]
+        description: >-
+            Supernatural possession or inhabitation.
+
+    infected_by:
+        inverse: infected
+        symmetric: false
+        display_label: Infected by
+        inverse_display_label: Infected
+        domain: [agent]
+        range: [npc, creature]
+        genre: [horror]
+        description: >-
+            Disease, parasite, or supernatural contagion.
+
+    fears:
+        inverse: feared_by
+        symmetric: false
+        display_label: Fears
+        inverse_display_label: Feared by
+        domain: [npc]
+        range: [any]
+        genre: [horror]
+        description: >-
+            Deep dread or phobia.
+
+    feeds_on:
+        inverse: preyed_upon_by
+        symmetric: false
+        display_label: Feeds on
+        inverse_display_label: Preyed upon by
+        domain: [creature]
+        range: [npc, creature]
+        genre: [horror]
+        description: >-
+            Predatory feeding relationship.
+
+    # ================================================
+    # Genre: Superhero
+    # ================================================
+    alter_ego_of:
+        inverse: alter_ego_of
+        symmetric: true
+        display_label: Alter ego of
+        inverse_display_label: Alter ego of
+        domain: [npc]
+        range: [npc]
+        genre: [superhero]
+        description: >-
+            Secret identity connection.
+
+    empowered_by:
+        inverse: empowers
+        symmetric: false
+        display_label: Empowered by
+        inverse_display_label: Empowers
+        domain: [any]
+        range: [npc, creature]
+        genre: [superhero]
+        description: >-
+            Source of supernatural abilities.
+
+    nemesis_of:
+        inverse: nemesis_of
+        symmetric: true
+        display_label: Nemesis of
+        inverse_display_label: Nemesis of
+        domain: [agent]
+        range: [agent]
+        genre: [superhero]
+        description: >-
+            Arch-enemy or destined opponent.
+
+    # ================================================
+    # Genre: Historical and Political
+    # ================================================
+    conquered:
+        inverse: conquered_by
+        symmetric: false
+        display_label: Conquered
+        inverse_display_label: Conquered by
+        domain: [agent]
+        range: [agent, place]
+        genre: [historical]
+        description: >-
+            Military subjugation or territorial seizure.
+
+    exiled_from:
+        inverse: exiled
+        symmetric: false
+        display_label: Exiled from
+        inverse_display_label: Exiled
+        domain: [npc]
+        range: [place, faction, organization]
+        genre: [historical]
+        description: >-
+            Forced removal or banishment.
+
+    succeeded:
+        inverse: predecessor_of
+        symmetric: false
+        display_label: Succeeded
+        inverse_display_label: Predecessor of
+        domain: [npc]
+        range: [npc]
+        genre: [historical]
+        description: >-
+            Succession in a role or title.
+
+    negotiated_with:
+        inverse: negotiated_with
+        symmetric: true
+        display_label: Negotiated with
+        inverse_display_label: Negotiated with
+        domain: [agent]
+        range: [agent]
+        genre: [historical]
+        description: >-
+            Diplomatic engagement or treaty talks.
+
+    # ================================================
+    # Genre: Romance and Intrigue
+    # ================================================
+    courts:
+        inverse: courted_by
+        symmetric: false
+        display_label: Courts
+        inverse_display_label: Courted by
+        domain: [npc]
+        range: [npc]
+        genre: [romance]
+        description: >-
+            Romantic pursuit or wooing.
+
+    rejected:
+        inverse: rejected_by
+        symmetric: false
+        display_label: Rejected
+        inverse_display_label: Rejected by
+        domain: [npc]
+        range: [npc]
+        genre: [romance]
+        description: >-
+            Romantic or social refusal.
+
+    disguised_as:
+        inverse: impersonated_by
+        symmetric: false
+        display_label: Disguised as
+        inverse_display_label: Impersonated by
+        domain: [npc]
+        range: [npc]
+        genre: [romance]
+        description: >-
+            Identity concealment through disguise.
+
+    blackmails:
+        inverse: blackmailed_by
+        symmetric: false
+        display_label: Blackmails
+        inverse_display_label: Blackmailed by
+        domain: [agent]
+        range: [agent]
+        genre: [romance]
+        description: >-
+            Coercion through threatened exposure.

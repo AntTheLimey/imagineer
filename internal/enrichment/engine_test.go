@@ -19,6 +19,7 @@ import (
 
 	"github.com/antonypegg/imagineer/internal/llm"
 	"github.com/antonypegg/imagineer/internal/models"
+	"github.com/antonypegg/imagineer/internal/ontology"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1209,4 +1210,244 @@ func TestBuildUserPrompt_NoRAGContext(t *testing.T) {
 
 	assert.NotContains(t, prompt, "## Campaign Context")
 	assert.NotContains(t, prompt, "## Game System Schema")
+}
+
+// ---------------------------------------------------------------------------
+// Ontology system prompt tests
+// ---------------------------------------------------------------------------
+
+func TestBuildSystemPrompt_NilOntology(t *testing.T) {
+	prompt := buildSystemPrompt(nil)
+
+	assert.Contains(t, prompt, "TTRPG campaign analyst")
+	assert.NotContains(t, prompt, "## Valid Entity Types")
+	assert.NotContains(t, prompt, "## Valid Relationship Types")
+}
+
+func TestBuildSystemPrompt_EmptyOntology(t *testing.T) {
+	ont := &ontology.Ontology{}
+
+	prompt := buildSystemPrompt(ont)
+
+	assert.Contains(t, prompt, "TTRPG campaign analyst")
+	assert.NotContains(t, prompt, "## Valid Entity Types")
+	assert.NotContains(t, prompt, "## Valid Relationship Types")
+}
+
+func TestBuildSystemPrompt_WithEntityTypes(t *testing.T) {
+	ont := &ontology.Ontology{
+		EntityTypes: &ontology.EntityTypeFile{
+			Types: map[string]ontology.EntityTypeDef{
+				"entity": {Abstract: true, Description: "Root type"},
+				"agent":  {Abstract: true, Parent: "entity"},
+				"npc":    {Abstract: false, Parent: "agent"},
+				"pc":     {Abstract: false, Parent: "agent"},
+				"place":  {Abstract: true, Parent: "entity"},
+				"location": {
+					Abstract: false,
+					Parent:   "place",
+				},
+				"item": {Abstract: false, Parent: "entity"},
+			},
+		},
+	}
+
+	prompt := buildSystemPrompt(ont)
+
+	assert.Contains(t, prompt, "## Valid Entity Types")
+	assert.Contains(t, prompt, "item")
+	assert.Contains(t, prompt, "location")
+	assert.Contains(t, prompt, "npc")
+	assert.Contains(t, prompt, "pc")
+	// Abstract types should not appear in the list.
+	// Check that they don't appear after "Only suggest entities with these types:"
+	idx := strings.Index(prompt, "Only suggest entities with these types:")
+	require.Greater(t, idx, 0)
+	entityTypeLine := prompt[idx:]
+	assert.NotContains(t, entityTypeLine, "entity,")
+	assert.NotContains(t, entityTypeLine, "agent,")
+	assert.NotContains(t, entityTypeLine, "place,")
+}
+
+func TestBuildSystemPrompt_WithRelationshipTypes(t *testing.T) {
+	ont := &ontology.Ontology{
+		RelationshipTypes: &ontology.RelationshipTypeFile{
+			Types: map[string]ontology.RelationshipTypeDef{
+				"located_at": {
+					Domain: []string{"agent", "artifact"},
+					Range:  []string{"place"},
+				},
+				"member_of": {
+					Domain: []string{"npc"},
+					Range:  []string{"faction", "organization"},
+				},
+				"knows": {
+					Domain: []string{},
+					Range:  []string{},
+				},
+			},
+		},
+	}
+
+	prompt := buildSystemPrompt(ont)
+
+	assert.Contains(t, prompt, "## Valid Relationship Types")
+	assert.Contains(t, prompt, "located_at: agent, artifact -> place")
+	assert.Contains(t, prompt, "member_of: npc -> faction, organization")
+	assert.Contains(t, prompt, "knows")
+	assert.Contains(t, prompt, "Do not invent new relationship types")
+}
+
+func TestBuildSystemPrompt_WithFullOntology(t *testing.T) {
+	ont := &ontology.Ontology{
+		EntityTypes: &ontology.EntityTypeFile{
+			Types: map[string]ontology.EntityTypeDef{
+				"npc":      {Abstract: false},
+				"location": {Abstract: false},
+				"item":     {Abstract: false},
+			},
+		},
+		RelationshipTypes: &ontology.RelationshipTypeFile{
+			Types: map[string]ontology.RelationshipTypeDef{
+				"owns": {
+					Domain: []string{"npc"},
+					Range:  []string{"item"},
+				},
+			},
+		},
+	}
+
+	prompt := buildSystemPrompt(ont)
+
+	// Both sections should be present.
+	assert.Contains(t, prompt, "## Valid Entity Types")
+	assert.Contains(t, prompt, "## Valid Relationship Types")
+	// Base prompt should still be present.
+	assert.Contains(t, prompt, "TTRPG campaign analyst")
+	assert.Contains(t, prompt, "descriptionUpdates")
+}
+
+func TestBuildSystemPrompt_RelTypesNoDomainRange(t *testing.T) {
+	ont := &ontology.Ontology{
+		RelationshipTypes: &ontology.RelationshipTypeFile{
+			Types: map[string]ontology.RelationshipTypeDef{
+				"ally_of":  {},
+				"enemy_of": {},
+			},
+		},
+	}
+
+	prompt := buildSystemPrompt(ont)
+
+	assert.Contains(t, prompt, "## Valid Relationship Types")
+	assert.Contains(t, prompt, "- ally_of")
+	assert.Contains(t, prompt, "- enemy_of")
+	// Without domain/range, lines should not have ": ... -> ..."
+	assert.NotContains(t, prompt, "ally_of:")
+	assert.NotContains(t, prompt, "enemy_of:")
+}
+
+func TestBuildSystemPrompt_OnlyAbstractEntityTypes(t *testing.T) {
+	ont := &ontology.Ontology{
+		EntityTypes: &ontology.EntityTypeFile{
+			Types: map[string]ontology.EntityTypeDef{
+				"entity": {Abstract: true},
+				"agent":  {Abstract: true},
+			},
+		},
+	}
+
+	prompt := buildSystemPrompt(ont)
+
+	// No concrete types means no entity types section.
+	assert.NotContains(t, prompt, "## Valid Entity Types")
+}
+
+func TestEnrichEntity_OntologyThreadedToPrompt(t *testing.T) {
+	// Verify that when ontology is set on EnrichmentInput, the
+	// system prompt includes ontology information.
+	var captured llm.CompletionRequest
+	provider := &mockProvider{
+		response: `{"descriptionUpdates":[],"logEntries":[],"relationships":[]}`,
+	}
+	captureProvider := &capturingProvider{
+		inner:    provider,
+		captured: &captured,
+	}
+	engine := NewEngine(nil)
+
+	ont := &ontology.Ontology{
+		EntityTypes: &ontology.EntityTypeFile{
+			Types: map[string]ontology.EntityTypeDef{
+				"npc":      {Abstract: false},
+				"location": {Abstract: false},
+			},
+		},
+		RelationshipTypes: &ontology.RelationshipTypeFile{
+			Types: map[string]ontology.RelationshipTypeDef{
+				"located_at": {
+					Domain: []string{"npc"},
+					Range:  []string{"location"},
+				},
+			},
+		},
+	}
+
+	input := EnrichmentInput{
+		CampaignID: 1,
+		JobID:      42,
+		Content:    "Kael is at the docks.",
+		Entity: models.Entity{
+			ID:         1,
+			EntityType: models.EntityTypeNPC,
+			Name:       "Kael",
+		},
+		Ontology: ont,
+	}
+
+	_, err := engine.EnrichEntity(
+		context.Background(), captureProvider, input,
+	)
+	require.NoError(t, err)
+
+	assert.Contains(t, captured.SystemPrompt, "## Valid Entity Types")
+	assert.Contains(t, captured.SystemPrompt, "npc")
+	assert.Contains(t, captured.SystemPrompt, "location")
+	assert.Contains(t, captured.SystemPrompt, "## Valid Relationship Types")
+	assert.Contains(t, captured.SystemPrompt, "located_at: npc -> location")
+}
+
+func TestEnrichEntity_NilOntologyBackwardCompatible(t *testing.T) {
+	// Verify that with nil ontology, the prompt is unchanged from
+	// the base prompt (backward compatibility).
+	var captured llm.CompletionRequest
+	provider := &mockProvider{
+		response: `{"descriptionUpdates":[],"logEntries":[],"relationships":[]}`,
+	}
+	captureProvider := &capturingProvider{
+		inner:    provider,
+		captured: &captured,
+	}
+	engine := NewEngine(nil)
+
+	input := EnrichmentInput{
+		CampaignID: 1,
+		JobID:      42,
+		Content:    "Kael is at the docks.",
+		Entity: models.Entity{
+			ID:         1,
+			EntityType: models.EntityTypeNPC,
+			Name:       "Kael",
+		},
+		Ontology: nil,
+	}
+
+	_, err := engine.EnrichEntity(
+		context.Background(), captureProvider, input,
+	)
+	require.NoError(t, err)
+
+	assert.Contains(t, captured.SystemPrompt, "TTRPG campaign analyst")
+	assert.NotContains(t, captured.SystemPrompt, "## Valid Entity Types")
+	assert.NotContains(t, captured.SystemPrompt, "## Valid Relationship Types")
 }

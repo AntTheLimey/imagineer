@@ -72,9 +72,11 @@ export default function Campaigns() {
 
         try {
             await createCampaign.mutateAsync({
-                name: newCampaign.name,
-                systemId: Number(newCampaign.systemId),
-                description: newCampaign.description || undefined,
+                input: {
+                    name: newCampaign.name,
+                    systemId: Number(newCampaign.systemId),
+                    description: newCampaign.description || undefined,
+                },
             });
             setOpen(false);
             setNewCampaign({ name: '', systemId: '', description: '' });

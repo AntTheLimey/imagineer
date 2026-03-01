@@ -12,9 +12,11 @@ package enrichment
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/antonypegg/imagineer/internal/models"
+	"github.com/antonypegg/imagineer/internal/ontology"
 )
 
 // maxContentChars is the default maximum number of characters to include
@@ -23,9 +25,11 @@ const maxContentChars = 4000
 
 // buildSystemPrompt returns the system prompt for the enrichment LLM
 // call. It instructs the model to act as a TTRPG campaign analyst and
-// return structured JSON.
-func buildSystemPrompt() string {
-	return `You are a TTRPG campaign analyst assistant. Your job is to analyse
+// return structured JSON. When an ontology is provided, the prompt
+// includes valid entity types and relationship type constraints to
+// guide the LLM towards ontology-compliant suggestions.
+func buildSystemPrompt(ont *ontology.Ontology) string {
+	base := `You are a TTRPG campaign analyst assistant. Your job is to analyse
 session notes, chapter content, and other campaign writing to suggest
 enrichments for campaign entities (NPCs, locations, items, factions, etc.).
 
@@ -81,6 +85,102 @@ Response format:
     }
   ]
 }`
+
+	ontologySection := buildOntologySection(ont)
+	if ontologySection != "" {
+		return base + "\n\n" + ontologySection
+	}
+	return base
+}
+
+// buildOntologySection generates a prompt section listing valid entity
+// types and relationship types with domain/range constraints from the
+// ontology. Returns an empty string when the ontology is nil or has no
+// usable data.
+func buildOntologySection(ont *ontology.Ontology) string {
+	if ont == nil {
+		return ""
+	}
+
+	var b strings.Builder
+
+	// Valid entity types (concrete only).
+	if ont.EntityTypes != nil && len(ont.EntityTypes.Types) > 0 {
+		var concreteTypes []string
+		for name, def := range ont.EntityTypes.Types {
+			if !def.Abstract {
+				concreteTypes = append(concreteTypes, name)
+			}
+		}
+		sort.Strings(concreteTypes)
+
+		if len(concreteTypes) > 0 {
+			b.WriteString("## Valid Entity Types\n\n")
+			b.WriteString("Only suggest entities with these types: ")
+			b.WriteString(strings.Join(concreteTypes, ", "))
+			b.WriteString("\n")
+		}
+	}
+
+	// Valid relationship types with domain -> range constraints.
+	if ont.RelationshipTypes != nil && len(ont.RelationshipTypes.Types) > 0 {
+		var relNames []string
+		for name := range ont.RelationshipTypes.Types {
+			relNames = append(relNames, name)
+		}
+		sort.Strings(relNames)
+
+		if len(relNames) > 0 {
+			if b.Len() > 0 {
+				b.WriteString("\n")
+			}
+			b.WriteString("## Valid Relationship Types\n\n")
+			b.WriteString("Use only these relationship types")
+
+			hasDomainRange := false
+			for _, name := range relNames {
+				def := ont.RelationshipTypes.Types[name]
+				if len(def.Domain) > 0 || len(def.Range) > 0 {
+					hasDomainRange = true
+					break
+				}
+			}
+
+			if hasDomainRange {
+				b.WriteString(" (domain -> range):\n")
+			} else {
+				b.WriteString(":\n")
+			}
+
+			for _, name := range relNames {
+				def := ont.RelationshipTypes.Types[name]
+				b.WriteString("- ")
+				b.WriteString(name)
+
+				if len(def.Domain) > 0 || len(def.Range) > 0 {
+					b.WriteString(": ")
+					if len(def.Domain) > 0 {
+						b.WriteString(strings.Join(def.Domain, ", "))
+					} else {
+						b.WriteString("any")
+					}
+					b.WriteString(" -> ")
+					if len(def.Range) > 0 {
+						b.WriteString(strings.Join(def.Range, ", "))
+					} else {
+						b.WriteString("any")
+					}
+				}
+
+				b.WriteString("\n")
+			}
+
+			b.WriteString("\nDo not invent new relationship types ")
+			b.WriteString("unless none of the above fit.")
+		}
+	}
+
+	return b.String()
 }
 
 // buildUserPrompt constructs the user prompt from the enrichment input.

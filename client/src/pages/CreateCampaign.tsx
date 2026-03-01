@@ -32,7 +32,9 @@ import {
 } from '@mui/material';
 import { FullScreenLayout } from '../layouts';
 import { MarkdownEditor } from '../components/MarkdownEditor';
-import { useCreateCampaign, useGameSystems } from '../hooks';
+import { PhaseStrip } from '../components/PhaseStrip';
+import type { PhaseSelection } from '../components/PhaseStrip';
+import { useCreateCampaign, useGameSystems, useUserSettings } from '../hooks';
 import { useCampaignContext } from '../contexts/CampaignContext';
 
 /**
@@ -103,6 +105,18 @@ export default function CreateCampaign() {
     // Create campaign mutation
     const createCampaign = useCreateCampaign();
 
+    const { data: userSettings } = useUserSettings();
+    const hasLLM = !!userSettings?.contentGenService
+                && !!userSettings?.contentGenApiKey;
+
+    const disabledPhases: Record<string, string> = {
+        identify: 'Not needed for new campaigns',
+        ...(!hasLLM ? {
+            revise: 'Configure an LLM in Account Settings',
+            enrich: 'Configure an LLM in Account Settings',
+        } : {}),
+    };
+
     /**
      * Check if the form has been modified.
      */
@@ -153,25 +167,48 @@ export default function CreateCampaign() {
     /**
      * Handle form submission.
      */
-    const handleSave = useCallback(async () => {
+    const handleSave = useCallback(async (phases: PhaseSelection) => {
         if (!validateForm()) {
             return;
         }
 
+        const hasAnyPhase = phases.identify || phases.revise || phases.enrich;
+
+        // Build phases array from selection
+        const phaseKeys: string[] = [];
+        if (phases.identify) phaseKeys.push('identify');
+        if (phases.revise) phaseKeys.push('revise');
+        if (phases.enrich) phaseKeys.push('enrich');
+
         try {
             const created = await createCampaign.mutateAsync({
-                name: formData.name.trim(),
-                systemId: Number(formData.systemId),
-                description: formData.description.trim() || undefined,
-                settings: {
-                    genre: formData.genre || undefined,
-                    imageStylePrompt: formData.imageStylePrompt.trim() || undefined,
+                input: {
+                    name: formData.name.trim(),
+                    systemId: Number(formData.systemId),
+                    description: formData.description.trim() || undefined,
+                    settings: {
+                        genre: formData.genre || undefined,
+                        imageStylePrompt: formData.imageStylePrompt.trim() || undefined,
+                    },
                 },
+                options: hasAnyPhase ? {
+                    analyze: phases.identify || phases.revise,
+                    enrich: phases.enrich,
+                    phases: phaseKeys.length > 0 ? phaseKeys : undefined,
+                } : undefined,
             });
 
-            // Set as current campaign and navigate to overview
+            // Set as current campaign
             setCurrentCampaignId(created.id);
-            navigate(`/campaigns/${created.id}/overview`);
+
+            // Navigate to analysis wizard if phases selected, otherwise overview
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const analysisResult = (created as any)?._analysis;
+            if (hasAnyPhase && analysisResult?.jobId) {
+                navigate(`/campaigns/${created.id}/analysis/${analysisResult.jobId}`);
+            } else {
+                navigate(`/campaigns/${created.id}/overview`);
+            }
         } catch (error) {
             console.error('Failed to create campaign:', error);
         }
@@ -201,8 +238,14 @@ export default function CreateCampaign() {
             breadcrumbs={breadcrumbs}
             isDirty={isDirty}
             isSaving={createCampaign.isPending}
-            onSave={handleSave}
-            onSaveAndClose={handleSave}
+            renderSaveButtons={() => (
+                <PhaseStrip
+                    onSave={handleSave}
+                    isDirty={isDirty}
+                    isSaving={createCampaign.isPending}
+                    disabledPhases={disabledPhases}
+                />
+            )}
             onBack={handleCancel}
             backPath="/"
         >

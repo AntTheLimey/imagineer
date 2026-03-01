@@ -1,0 +1,327 @@
+# Entity Type Hierarchy
+#
+# Abstract types group concrete types for constraint
+# inheritance. Campaigns can add sub-types under any
+# type.
+
+types:
+    # --- Meta-game (outside the fiction) ---
+    person:
+        abstract: true
+        description: >-
+            A real-world participant in the game.
+        children:
+            - player
+            - game_master
+            - character
+
+    player:
+        parent: person
+        abstract: false
+        description: >-
+            A real person at the table.
+
+    game_master:
+        parent: person
+        abstract: false
+        description: >-
+            The narrator or GM.
+
+    # --- Characters (bridge real and fictional) ---
+    character:
+        parent: person
+        abstract: true
+        description: >-
+            An in-world persona.
+        children:
+            - pc
+            - npc
+
+    pc:
+        parent: character
+        abstract: false
+        description: >-
+            Player character — a protagonist played by a player.
+
+    npc:
+        parent: character
+        abstract: false
+        description: >-
+            Non-player character — controlled by the GM.
+
+    # --- Agents (can act in the fiction) ---
+    agent:
+        abstract: true
+        description: >-
+            An entity that can act, decide, or exert influence.
+        children:
+            - character
+            - creature
+            - faction
+            - organization
+
+    creature:
+        parent: agent
+        abstract: false
+        description: >-
+            A monster or non-human entity.
+        children:
+            - beast
+            - undead
+            - construct
+            - spirit
+            - deity
+            - aberration
+
+    beast:
+        parent: creature
+        abstract: false
+        description: Natural animal or monster.
+
+    undead:
+        parent: creature
+        abstract: false
+        description: Animated dead — vampire, zombie, lich.
+
+    construct:
+        parent: creature
+        abstract: false
+        description: Artificial being — golem, android.
+
+    spirit:
+        parent: creature
+        abstract: false
+        description: Incorporeal entity — ghost, elemental, fey.
+
+    deity:
+        parent: creature
+        abstract: false
+        description: God, demigod, or cosmic entity.
+
+    aberration:
+        parent: creature
+        abstract: false
+        description: Alien or eldritch being.
+
+    faction:
+        parent: agent
+        abstract: false
+        description: >-
+            A group with shared goals.
+
+    organization:
+        parent: agent
+        abstract: false
+        description: >-
+            A formal institution.
+        children:
+            - government
+            - corporation
+            - cult
+            - guild
+            - military
+            - criminal
+
+    government:
+        parent: organization
+        abstract: false
+        description: State or sovereign body.
+
+    corporation:
+        parent: organization
+        abstract: false
+        description: Commercial enterprise.
+
+    cult:
+        parent: organization
+        abstract: false
+        description: Secretive religious or ideological group.
+
+    guild:
+        parent: organization
+        abstract: false
+        description: Professional or trade association.
+
+    military:
+        parent: organization
+        abstract: false
+        description: Armed force or regiment.
+
+    criminal:
+        parent: organization
+        abstract: false
+        description: Organised crime syndicate or gang.
+
+    # --- Places ---
+    place:
+        abstract: true
+        description: >-
+            A physical or conceptual location.
+        children:
+            - location
+
+    location:
+        parent: place
+        abstract: false
+        description: >-
+            A physical or conceptual place. Locations nest
+            via the part_of relationship.
+
+    # --- Artifacts ---
+    artifact:
+        abstract: true
+        description: >-
+            A tangible object or record.
+        children:
+            - item
+            - document
+
+    item:
+        parent: artifact
+        abstract: false
+        description: >-
+            A physical object or tool.
+        children:
+            - weapon
+            - armor
+            - vehicle
+            - treasure
+            - relic
+            - tool
+            - consumable
+
+    weapon:
+        parent: item
+        abstract: false
+        description: Instrument of harm.
+
+    armor:
+        parent: item
+        abstract: false
+        description: Protective equipment.
+
+    vehicle:
+        parent: item
+        abstract: false
+        description: Conveyance — ship, cart, starship.
+
+    treasure:
+        parent: item
+        abstract: false
+        description: Valuable hoard or cache.
+
+    relic:
+        parent: item
+        abstract: false
+        description: Significant artifact or magical item.
+
+    tool:
+        parent: item
+        abstract: false
+        description: Practical device or instrument.
+
+    consumable:
+        parent: item
+        abstract: false
+        description: Single-use item — potion, scroll, ration.
+
+    document:
+        parent: artifact
+        abstract: false
+        description: >-
+            A written record or text.
+        children:
+            - spell
+            - map
+            - letter
+            - prophecy
+            - contract
+            - journal
+
+    spell:
+        parent: document
+        abstract: false
+        description: Magical text or ritual instructions.
+
+    map:
+        parent: document
+        abstract: false
+        description: Cartographic record.
+
+    letter:
+        parent: document
+        abstract: false
+        description: Correspondence or message.
+
+    prophecy:
+        parent: document
+        abstract: false
+        description: Prediction or vision record.
+
+    contract:
+        parent: document
+        abstract: false
+        description: Binding agreement or deed.
+
+    journal:
+        parent: document
+        abstract: false
+        description: Personal diary or log.
+
+    # --- Narrative ---
+    narrative:
+        abstract: true
+        description: >-
+            A story element that connects other entities.
+        children:
+            - event
+            - clue
+
+    event:
+        parent: narrative
+        abstract: false
+        description: >-
+            A notable occurrence.
+        children:
+            - battle
+            - ritual
+            - disaster
+            - discovery
+            - betrayal_event
+            - celebration
+
+    battle:
+        parent: event
+        abstract: false
+        description: Armed conflict or skirmish.
+
+    ritual:
+        parent: event
+        abstract: false
+        description: Ceremony, summoning, or formal rite.
+
+    disaster:
+        parent: event
+        abstract: false
+        description: Catastrophe — natural or caused.
+
+    discovery:
+        parent: event
+        abstract: false
+        description: Finding or revelation.
+
+    betrayal_event:
+        parent: event
+        abstract: false
+        description: Act of treachery or broken faith.
+
+    celebration:
+        parent: event
+        abstract: false
+        description: Festival, feast, or victory.
+
+    clue:
+        parent: narrative
+        abstract: false
+        description: >-
+            A piece of evidence or information.

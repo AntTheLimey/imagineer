@@ -308,7 +308,46 @@ func (h *Handler) CreateCampaign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusCreated, campaign)
+	shouldAnalyze := r.URL.Query().Get("analyze") == "true"
+	shouldEnrich := r.URL.Query().Get("enrich") == "true"
+	phases := parsePhases(r)
+
+	response := CampaignWithAnalysis{Campaign: campaign}
+	if req.Description != nil {
+		content := *req.Description
+		if shouldAnalyze {
+			job, _, analyzeErr := h.analyzer.AnalyzeContent(
+				r.Context(), campaign.ID,
+				"campaigns", "description", campaign.ID,
+				content,
+				phases,
+			)
+			if analyzeErr != nil {
+				log.Printf("Content analysis failed for campaign %d: %v", campaign.ID, analyzeErr)
+			} else {
+				response.Analysis = &models.AnalysisSummary{
+					JobID:        job.ID,
+					PendingCount: job.TotalItems,
+				}
+				if shouldEnrich && h.caHandler != nil {
+					h.caHandler.RunContentEnrichment(
+						r.Context(), job.ID, campaign.ID, content, userID)
+				}
+			}
+		} else if shouldEnrich && h.caHandler != nil {
+			job := h.createEnrichmentJob(
+				r.Context(), campaign.ID, "campaigns", "description", campaign.ID)
+			if job != nil {
+				response.Analysis = &models.AnalysisSummary{
+					JobID:        job.ID,
+					PendingCount: 0,
+				}
+				h.caHandler.RunContentEnrichment(
+					r.Context(), job.ID, campaign.ID, content, userID)
+			}
+		}
+	}
+	respondJSON(w, http.StatusCreated, response)
 }
 
 // GetCampaign handles GET /api/campaigns/:id
