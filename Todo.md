@@ -706,8 +706,8 @@ Features planned for after the initial release.
 ### Ontology Schema for Knowledge Graphs
 
 - [x] `[MVP-2]` YAML ontology schema with ~50 entity types,
-  ~80 relationship types across 12 narrative categories,
-  and domain/range/cardinality constraints replacing ad-hoc
+  ~100 relationship types across 12 narrative categories,
+  and domain/range/cardinality constraints replacing ad hoc
   constraint mechanisms.
 - [x] `[MVP-2]` Migration 006 creating `campaign_entity_types`,
   `eras`, `relationship_archive`, `cardinality_constraints`,

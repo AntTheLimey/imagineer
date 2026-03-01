@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - Ontology Schema for Campaign Knowledge Graphs
-  - YAML-based ontology schema replaces ad-hoc constraint
+  - YAML-based ontology schema replaces ad hoc constraint
     mechanisms with a formal, evolvable type system for
     campaign knowledge graphs.
   - `schemas/ontology/entity-types.yaml` defines ~50 entity

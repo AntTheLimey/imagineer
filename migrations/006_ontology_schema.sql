@@ -117,12 +117,18 @@ CREATE TABLE cardinality_constraints (
     max_source           INT,
     max_target           INT,
     created_at           TIMESTAMPTZ DEFAULT NOW(),
+    updated_at           TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(campaign_id, relationship_type_id)
 );
 
 COMMENT ON TABLE cardinality_constraints IS
     'Campaign-scoped cardinality limits per '
     'relationship type';
+
+CREATE TRIGGER update_cardinality_constraints_updated_at
+    BEFORE UPDATE ON cardinality_constraints
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================
 -- Required Relationships Table
@@ -135,6 +141,7 @@ CREATE TABLE required_relationships (
     entity_type            TEXT NOT NULL,
     relationship_type_name TEXT NOT NULL,
     created_at             TIMESTAMPTZ DEFAULT NOW(),
+    updated_at             TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(campaign_id, entity_type,
            relationship_type_name)
 );
@@ -142,6 +149,11 @@ CREATE TABLE required_relationships (
 COMMENT ON TABLE required_relationships IS
     'Advisory rules for relationships every entity '
     'of a given type should have';
+
+CREATE TRIGGER update_required_relationships_updated_at
+    BEFORE UPDATE ON required_relationships
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================
 -- Constraint Overrides Table
@@ -160,12 +172,19 @@ CREATE TABLE constraint_overrides (
                     )),
     override_key    TEXT NOT NULL,
     acknowledged_at TIMESTAMPTZ DEFAULT NOW(),
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(campaign_id, constraint_type, override_key)
 );
 
 COMMENT ON TABLE constraint_overrides IS
     'GM acknowledgements that override specific '
     'constraint violations';
+
+CREATE TRIGGER update_constraint_overrides_updated_at
+    BEFORE UPDATE ON constraint_overrides
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================
 -- Add era_id to existing tables
