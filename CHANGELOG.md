@@ -570,6 +570,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Server configuration with testable constants (`cmd/server/config.go`)
 - Database entity tests for array handling (`entities_test.go`)
 - Client environment example file (`client/.env.example`)
+- PhaseStrip on the CreateCampaign page with Revise and
+  Enrich phase selection. Identify is always disabled on
+  create because no entities exist to match against yet.
+  After creation with phases selected, the backend triggers
+  the analysis pipeline and the frontend navigates to the
+  analysis wizard. Backend `POST /api/campaigns` now
+  supports `analyze`, `enrich`, and `phases` query
+  parameters.
 
 ### Fixed
 
@@ -737,6 +745,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Added `COMMENT ON` annotations for all 11 migration indexes.
   - Added integration tests for `check_required_relationships()`
     and `check_cardinality_violations()` PostgreSQL functions.
+- Strict YAML field validation in ontology loader using
+  `Decoder.KnownFields(true)` to catch unknown field typos
+  at startup.
+- Cross-campaign era assignment vulnerability in
+  relationship archive: `eraID` is now validated against
+  the archived row's campaign before applying.
+- Added `cardinality_violation` and `missing_required`
+  detection types to client type definitions,
+  EnrichPhasePage filter/labels, and useAnalysisWizard
+  enrichment groups.
+- Added `updated_at` column and update trigger to
+  `campaign_entity_types` table (migration 006).
 
 ### Changed
 
@@ -788,6 +808,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - pg_trgm, vector, pgedge_vectorizer, pg_tokenizer, vchord_bm25,
     vectorize, pgmq, pg_cron
 - Added `make test-db` to verify database extensions are installed
+- Ontology YAML files converted to four-space indentation
+  per project coding guidelines.
+- Added `text` language identifiers to fenced code blocks
+  in ontology design document.
 
 ### Added
 

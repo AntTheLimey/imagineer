@@ -205,7 +205,8 @@ Expert agents, and RAG context assembly with token budgets.
   recap).
 - [ ] `[MVP-2]` Phase strip on other pages: roll out
   `PhaseStrip` to SessionEditor and EntityEditor
-  (ChapterViewPage now has PhaseStrip).
+  (ChapterViewPage and CreateCampaign now have
+  PhaseStrip).
 - [ ] `[MVP-2]` Scope-aware RAG filtering: filter and weight
   RAG context results by scope level (currently the pipeline
   only adds scope metadata to prompts).
