@@ -73,6 +73,8 @@ Reference these files for project context:
 
 - `VISION.md` - Product vision and North Star.
 
+- `ROADMAP.md` - Strategic roadmap and build sequence.
+
 - `design.md` - Architecture and design philosophy.
 
 - `SCHEMAS.md` - Data model documentation.
