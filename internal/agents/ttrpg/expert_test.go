@@ -125,19 +125,16 @@ func TestExpert_Run_ValidResponse(t *testing.T) {
 	assert.Equal(t, int64(42), items[0].JobID)
 	assert.Equal(t, "analysis_report", items[0].DetectionType)
 	assert.Equal(t, "pending", items[0].Resolution)
-	assert.Equal(t, "analysis", items[0].Phase)
 	assert.Equal(t, "ttrpg-expert", items[0].MatchedText)
 
 	// Verify the first finding item.
 	assert.Equal(t, "pacing_note", items[1].DetectionType)
 	assert.Equal(t, "pending", items[1].Resolution)
-	assert.Equal(t, "analysis", items[1].Phase)
 	assert.Equal(t, "pacing", items[1].MatchedText)
 
 	// Verify the second finding item.
 	assert.Equal(t, "mechanics_warning", items[2].DetectionType)
 	assert.Equal(t, "pending", items[2].Resolution)
-	assert.Equal(t, "analysis", items[2].Phase)
 }
 
 func TestExpert_Run_LLMError(t *testing.T) {
@@ -198,10 +195,9 @@ func TestExpert_Run_EmptyFindings(t *testing.T) {
 	// Only the report item should be present.
 	require.Len(t, items, 1)
 	assert.Equal(t, "analysis_report", items[0].DetectionType)
-	assert.Equal(t, "analysis", items[0].Phase)
 }
 
-func TestExpert_Run_AllItemsHaveAnalysisPhase(t *testing.T) {
+func TestExpert_Run_PhaseNotSetByAgent(t *testing.T) {
 	llmResponse := `{
 		"report": "## Report\nDetailed analysis.",
 		"findings": [
@@ -243,9 +239,10 @@ func TestExpert_Run_AllItemsHaveAnalysisPhase(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, items, 4, "expected 1 report + 3 findings")
 
+	// Phase is now set by the pipeline, not the agent.
 	for i, item := range items {
-		assert.Equal(t, "analysis", item.Phase,
-			"item %d should have Phase='analysis'", i)
+		assert.Empty(t, item.Phase,
+			"item %d Phase should be empty (set by pipeline)", i)
 	}
 }
 

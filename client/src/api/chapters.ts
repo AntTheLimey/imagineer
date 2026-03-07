@@ -73,8 +73,6 @@ export const chaptersApi = {
         options?: AnalysisOptions,
     ): Promise<Chapter> {
         const params: Record<string, string> = {};
-        if (options?.analyze) params.analyze = 'true';
-        if (options?.enrich) params.enrich = 'true';
         if (options?.phases?.length)
             params.phases = options.phases.join(',');
         return apiClient.put<Chapter>(

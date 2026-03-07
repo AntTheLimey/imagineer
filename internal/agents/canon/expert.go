@@ -134,7 +134,6 @@ func convertToItems(
 			MatchedText:      c.ConflictingText,
 			Resolution:       "pending",
 			SuggestedContent: json.RawMessage(detail),
-			Phase:            "analysis",
 			CreatedAt:        now,
 		})
 	}

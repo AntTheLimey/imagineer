@@ -114,7 +114,6 @@ func convertToItems(jobID int64, resp *expertResponse) []models.ContentAnalysisI
 				MatchedText:      "ttrpg-expert",
 				Resolution:       "pending",
 				SuggestedContent: json.RawMessage(reportContent),
-				Phase:            "analysis",
 				CreatedAt:        now,
 			})
 		}
@@ -143,7 +142,6 @@ func convertToItems(jobID int64, resp *expertResponse) []models.ContentAnalysisI
 			MatchedText:      f.Category,
 			Resolution:       "pending",
 			SuggestedContent: json.RawMessage(findingContent),
-			Phase:            "analysis",
 			CreatedAt:        now,
 		})
 	}

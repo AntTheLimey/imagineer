@@ -47,10 +47,12 @@ func (e *Expert) Name() string {
 }
 
 // DependsOn returns the names of agents that must run before this one.
-// The graph expert depends on the enrichment agent so it can inspect
-// relationship suggestions produced during enrichment.
+// The graph expert has no hard dependencies and can run independently.
+// When relationship suggestions from other agents are available in
+// PriorResults they will be inspected, but their absence is handled
+// gracefully.
 func (e *Expert) DependsOn() []string {
-	return []string{"enrichment"}
+	return nil
 }
 
 // Run executes graph hygiene analysis. It performs two categories of
@@ -106,7 +108,6 @@ func (e *Expert) Run(
 			EntityID:         &entityID,
 			Resolution:       "pending",
 			SuggestedContent: json.RawMessage(detail),
-			Phase:            "enrichment",
 			CreatedAt:        now,
 		})
 	}
@@ -162,7 +163,6 @@ func (e *Expert) Run(
 					MatchedText:      v.RelationshipType,
 					Resolution:       "pending",
 					SuggestedContent: json.RawMessage(detail),
-					Phase:            "enrichment",
 					CreatedAt:        now,
 				})
 			}
@@ -215,7 +215,6 @@ func (e *Expert) Run(
 					EntityID:         &entityID,
 					Resolution:       "pending",
 					SuggestedContent: json.RawMessage(detail),
-					Phase:            "enrichment",
 					CreatedAt:        now,
 				})
 			}
@@ -265,7 +264,6 @@ func (e *Expert) Run(
 					EntityID:         &entityID,
 					Resolution:       "pending",
 					SuggestedContent: json.RawMessage(detail),
-					Phase:            "enrichment",
 					CreatedAt:        now,
 				})
 			}
@@ -377,7 +375,6 @@ func convertLLMFindings(
 			MatchedText:      f.Description,
 			Resolution:       "pending",
 			SuggestedContent: json.RawMessage(detail),
-			Phase:            "enrichment",
 			CreatedAt:        now,
 		})
 	}

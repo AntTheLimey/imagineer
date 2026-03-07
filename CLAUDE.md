@@ -1,13 +1,17 @@
 # Claude Standing Instructions
 
 > Standing instructions for Claude Code when working on Imagineer.
-> This document supplements the architectural design in design.md.
+> This document supplements the product vision in VISION.md and
+> the architectural design in design.md.
 
 ## Project Context
 
-Imagineer is a TTRPG campaign management platform supporting multiple game
-systems. Currently focused on: Call of Cthulhu 7e, GURPS 4e, Blades in the
-Dark/FitD, and D&D 5th Edition (2024 Revision).
+Imagineer is a conversational world-building and campaign management
+platform where AI is the GM's co-author and the structured world
+model is a living byproduct of the creative process. See VISION.md
+for the full product vision. Currently supporting: Call of Cthulhu
+7e, GURPS 4e, Blades in the Dark/FitD, and D&D 5th Edition (2024
+Revision).
 
 ## Primary Agent Role
 
@@ -66,6 +70,8 @@ Imagineer consists of:
 ## Key Files
 
 Reference these files for project context:
+
+- `VISION.md` - Product vision and North Star.
 
 - `design.md` - Architecture and design philosophy.
 

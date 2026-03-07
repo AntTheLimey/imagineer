@@ -58,8 +58,8 @@ type EnrichmentInput struct {
 
 // EnrichEntity sends content and entity state to the LLM and returns
 // enrichment items (description updates, log entries, relationship
-// suggestions). Items are created with phase="enrichment" and
-// resolution="pending".
+// suggestions). Items are created with resolution="pending"; the Phase
+// field is set by the pipeline after the agent runs.
 func (e *Engine) EnrichEntity(
 	ctx context.Context,
 	provider llm.Provider,
@@ -180,7 +180,6 @@ func convertToItems(input EnrichmentInput, resp *enrichmentResponse) []models.Co
 			EntityID:         &entityID,
 			Resolution:       "pending",
 			SuggestedContent: json.RawMessage(content),
-			Phase:            "enrichment",
 			CreatedAt:        now,
 		})
 	}
@@ -203,7 +202,6 @@ func convertToItems(input EnrichmentInput, resp *enrichmentResponse) []models.Co
 			EntityID:         &entityID,
 			Resolution:       "pending",
 			SuggestedContent: json.RawMessage(content),
-			Phase:            "enrichment",
 			CreatedAt:        now,
 		})
 	}
@@ -256,7 +254,6 @@ func convertToItems(input EnrichmentInput, resp *enrichmentResponse) []models.Co
 			EntityID:         &entityID,
 			Resolution:       "pending",
 			SuggestedContent: json.RawMessage(content),
-			Phase:            "enrichment",
 			CreatedAt:        now,
 		})
 	}

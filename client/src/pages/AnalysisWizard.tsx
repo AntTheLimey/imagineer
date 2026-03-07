@@ -37,6 +37,7 @@ import {
 } from '@mui/material';
 import { useState, useEffect, useRef } from 'react';
 import { useAnalysisWizard } from '../hooks/useAnalysisWizard';
+import { useEnrichmentStream } from '../hooks/useContentAnalysis';
 import { AnalysisWizardProvider } from '../contexts/AnalysisWizardContext';
 
 /** Human-readable labels for each wizard phase. */
@@ -81,6 +82,12 @@ export default function AnalysisWizard() {
     const jId = Number(jobId);
 
     const wizard = useAnalysisWizard(cId, jId, currentRoutePhase);
+
+    // Poll for new items while the pipeline is running.
+    // This ensures all phase pages see items as they arrive,
+    // not just the Enrich page.
+    const isProcessing = wizard.job?.status === 'enriching';
+    useEnrichmentStream(cId, jId, isProcessing);
 
     // Snackbar state for the auto-advance notification.
     const [snackOpen, setSnackOpen] = useState(false);

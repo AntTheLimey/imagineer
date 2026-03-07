@@ -21,18 +21,23 @@ import (
 	"github.com/antonypegg/imagineer/internal/auth"
 	"github.com/antonypegg/imagineer/internal/database"
 	"github.com/antonypegg/imagineer/internal/enrichment"
+	enrichdefaults "github.com/antonypegg/imagineer/internal/enrichment/defaults"
 	"github.com/antonypegg/imagineer/internal/llm"
 	"github.com/antonypegg/imagineer/internal/models"
 )
 
 // EnrichmentHandler handles enrichment trigger and streaming API requests.
 type EnrichmentHandler struct {
-	db *database.DB
+	db       *database.DB
+	registry *enrichment.PhaseRegistry
 }
 
 // NewEnrichmentHandler creates a new EnrichmentHandler.
 func NewEnrichmentHandler(db *database.DB) *EnrichmentHandler {
-	return &EnrichmentHandler{db: db}
+	return &EnrichmentHandler{
+		db:       db,
+		registry: enrichdefaults.NewDefaultRegistry(db),
+	}
 }
 
 // triggerEnrichmentResponse is the response body for the trigger
@@ -157,8 +162,8 @@ func (h *EnrichmentHandler) TriggerEnrichment(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Build the pipeline with analysis and enrichment stages.
-	pipeline := buildDefaultPipeline(h.db)
+	// Build the pipeline with enrichment stages using the registry.
+	pipeline := h.registry.BuildPipeline([]string{"enrich"})
 
 	// Pre-load entity objects from the accepted entity IDs.
 	entities := make([]models.Entity, 0, len(entityIDs))

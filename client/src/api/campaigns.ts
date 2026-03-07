@@ -66,8 +66,6 @@ export const campaignsApi = {
      */
     create(input: CreateCampaignInput, options?: AnalysisOptions): Promise<Campaign> {
         const params: Record<string, string> = {};
-        if (options?.analyze) params.analyze = 'true';
-        if (options?.enrich) params.enrich = 'true';
         if (options?.phases?.length)
             params.phases = options.phases.join(',');
         return apiClient.post<Campaign>('/campaigns', input, params);
@@ -82,8 +80,6 @@ export const campaignsApi = {
         options?: AnalysisOptions,
     ): Promise<Campaign> {
         const params: Record<string, string> = {};
-        if (options?.analyze) params.analyze = 'true';
-        if (options?.enrich) params.enrich = 'true';
         if (options?.phases?.length)
             params.phases = options.phases.join(',');
         return apiClient.put<Campaign>(

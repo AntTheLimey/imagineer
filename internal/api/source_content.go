@@ -14,11 +14,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/antonypegg/imagineer/internal/agents/canon"
-	"github.com/antonypegg/imagineer/internal/agents/graph"
-	"github.com/antonypegg/imagineer/internal/agents/ttrpg"
 	"github.com/antonypegg/imagineer/internal/database"
-	"github.com/antonypegg/imagineer/internal/enrichment"
 )
 
 // fetchSourceContent retrieves the text content from the appropriate
@@ -59,28 +55,4 @@ func fetchSourceContent(
 	}
 
 	return content, nil
-}
-
-// buildDefaultPipeline creates a Pipeline with the standard two-stage
-// layout used for content enrichment: an analysis stage (TTRPG expert
-// + canon expert) followed by an enrichment stage (enrichment agent +
-// graph expert).
-func buildDefaultPipeline(db *database.DB) *enrichment.Pipeline {
-	ttrpgAgent := ttrpg.NewExpert()
-	canonAgent := canon.NewExpert()
-	enrichAgent := enrichment.NewEnrichmentAgent(db)
-	graphAgent := graph.NewExpert(db)
-
-	return enrichment.NewPipeline(db, []enrichment.Stage{
-		{
-			Name:   "analysis",
-			Phase:  "analysis",
-			Agents: []enrichment.PipelineAgent{ttrpgAgent, canonAgent},
-		},
-		{
-			Name:   "enrichment",
-			Phase:  "enrichment",
-			Agents: []enrichment.PipelineAgent{enrichAgent, graphAgent},
-		},
-	})
 }

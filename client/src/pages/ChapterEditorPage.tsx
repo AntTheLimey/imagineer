@@ -306,8 +306,9 @@ export default function ChapterEditorPage() {
                             sortOrder: formData.sortOrder,
                         },
                         options: {
-                            analyze: true,
-                            enrich: mode === 'enrich',
+                            phases: mode === 'enrich'
+                                ? ['identify', 'revise', 'enrich']
+                                : ['identify', 'revise'],
                         },
                     });
 
@@ -344,10 +345,11 @@ export default function ChapterEditorPage() {
                         overview: formData.overview || undefined,
                         sortOrder: formData.sortOrder,
                     },
-                    options: {
-                        analyze: mode !== 'save',
-                        enrich: mode === 'enrich',
-                    },
+                    options: mode !== 'save' ? {
+                        phases: mode === 'enrich'
+                            ? ['identify', 'revise', 'enrich']
+                            : ['identify', 'revise'],
+                    } : undefined,
                 });
 
                 // Check for analysis results

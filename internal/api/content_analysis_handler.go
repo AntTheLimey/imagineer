@@ -24,13 +24,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/antonypegg/imagineer/internal/analysis"
 	"github.com/antonypegg/imagineer/internal/auth"
 	"github.com/antonypegg/imagineer/internal/database"
 	"github.com/antonypegg/imagineer/internal/enrichment"
+	enrichdefaults "github.com/antonypegg/imagineer/internal/enrichment/defaults"
 	"github.com/antonypegg/imagineer/internal/llm"
 	"github.com/antonypegg/imagineer/internal/models"
 )
@@ -42,7 +43,7 @@ const maxRequestBodyBytes = 1 << 20 // 1 MB
 // ContentAnalysisHandler handles content analysis API requests.
 type ContentAnalysisHandler struct {
 	db            *database.DB
-	analyzer      *analysis.Analyzer
+	registry      *enrichment.PhaseRegistry
 	enrichCancels sync.Map // map[int64]context.CancelFunc
 }
 
@@ -50,7 +51,7 @@ type ContentAnalysisHandler struct {
 func NewContentAnalysisHandler(db *database.DB) *ContentAnalysisHandler {
 	return &ContentAnalysisHandler{
 		db:       db,
-		analyzer: analysis.NewAnalyzer(db),
+		registry: enrichdefaults.NewDefaultRegistry(db),
 	}
 }
 
@@ -222,7 +223,8 @@ func (h *ContentAnalysisHandler) ListJobItems(w http.ResponseWriter, r *http.Req
 
 // ResolveItem handles PUT /api/campaigns/{id}/analysis/items/{itemId}
 // Resolves a content analysis item with the given resolution. Supported
-// resolutions are "accepted", "new_entity", "dismissed", and "acknowledged".
+// resolutions are "accepted", "new_entity", "dismissed", "acknowledged",
+// and "pinned".
 func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Request) {
 	campaignID, err := parseInt64(r, "id")
 	if err != nil {
@@ -279,11 +281,11 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 
 	// Validate the resolution value
 	switch req.Resolution {
-	case "accepted", "new_entity", "dismissed", "acknowledged":
+	case "accepted", "new_entity", "dismissed", "acknowledged", "pinned":
 		// valid
 	default:
 		respondError(w, http.StatusBadRequest,
-			"Resolution must be one of: accepted, new_entity, dismissed, acknowledged")
+			"Resolution must be one of: accepted, new_entity, dismissed, acknowledged, pinned")
 		return
 	}
 
@@ -506,16 +508,6 @@ func (h *ContentAnalysisHandler) ResolveItem(w http.ResponseWriter, r *http.Requ
 		log.Printf("Error updating job enrichment count: %v", err)
 	}
 
-	// Auto-trigger enrichment if all Phase 1 items are resolved
-	// and the "enrich" phase was selected for this job.
-	updatedJob, jobErr := h.db.GetAnalysisJob(r.Context(), fetchJobID)
-	if jobErr == nil &&
-		updatedJob.ResolvedItems == updatedJob.TotalItems &&
-		updatedJob.EnrichmentTotal == 0 &&
-		jobHasPhase(updatedJob.Phases, "enrich") {
-		h.TryAutoEnrich(r.Context(), fetchJobID, userID)
-	}
-
 	respondJSON(w, http.StatusOK, map[string]string{
 		"status": "resolved",
 	})
@@ -576,11 +568,11 @@ func (h *ContentAnalysisHandler) BatchResolve(w http.ResponseWriter, r *http.Req
 	}
 
 	switch req.Resolution {
-	case "accepted", "dismissed", "acknowledged":
+	case "accepted", "dismissed", "acknowledged", "pinned":
 		// valid
 	default:
 		respondError(w, http.StatusBadRequest,
-			"Resolution must be one of: accepted, dismissed, acknowledged")
+			"Resolution must be one of: accepted, dismissed, acknowledged, pinned")
 		return
 	}
 
@@ -685,16 +677,6 @@ func (h *ContentAnalysisHandler) BatchResolve(w http.ResponseWriter, r *http.Req
 			jobID, err)
 	}
 
-	// Auto-trigger enrichment if all Phase 1 items are resolved
-	// and the "enrich" phase was selected for this job.
-	updatedJob, jobErr := h.db.GetAnalysisJob(r.Context(), jobID)
-	if jobErr == nil &&
-		updatedJob.ResolvedItems == updatedJob.TotalItems &&
-		updatedJob.EnrichmentTotal == 0 &&
-		jobHasPhase(updatedJob.Phases, "enrich") {
-		h.TryAutoEnrich(r.Context(), jobID, userID)
-	}
-
 	respondJSON(w, http.StatusOK, BatchResolveResponse{Resolved: resolved})
 }
 
@@ -745,27 +727,23 @@ func (h *ContentAnalysisHandler) TriggerAnalysis(w http.ResponseWriter, r *http.
 	}
 
 	phases := parsePhases(r)
-
-	job, items, err := h.analyzer.AnalyzeContent(
-		r.Context(), campaignID,
-		req.SourceTable, req.SourceField, req.SourceID,
-		content,
-		phases,
-	)
-	if err != nil {
-		log.Printf("Error analyzing content: %v", err)
-		respondError(w, http.StatusInternalServerError,
-			"Failed to analyze content")
-		return
+	if len(phases) == 0 {
+		phases = []string{"identify"}
 	}
 
-	if items == nil {
-		items = []models.ContentAnalysisItem{}
+	job, err := h.RunPipeline(
+		r.Context(), campaignID,
+		req.SourceTable, req.SourceField, req.SourceID,
+		content, userID, phases)
+	if err != nil {
+		log.Printf("TriggerAnalysis failed: %v", err)
+		respondError(w, http.StatusInternalServerError, "Analysis failed")
+		return
 	}
 
 	respondJSON(w, http.StatusOK, TriggerAnalysisResponse{
 		Job:   job,
-		Items: items,
+		Items: nil, // Items populated asynchronously
 	})
 }
 
@@ -1021,6 +999,59 @@ func (h *ContentAnalysisHandler) updateSourceContent(
 	}
 
 	return h.db.Exec(ctx, updateSQL, sourceID, content)
+}
+
+// updateSourceContentTx is the transaction-aware variant of
+// updateSourceContent. It executes the update within the given
+// transaction instead of using the connection pool directly.
+func (h *ContentAnalysisHandler) updateSourceContentTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	sourceTable string,
+	sourceID int64,
+	sourceField string,
+	content string,
+) error {
+	var updateSQL string
+	switch sourceTable {
+	case "entities":
+		switch sourceField {
+		case "description":
+			updateSQL = "UPDATE entities SET description = $2, updated_at = NOW() WHERE id = $1"
+		case "gm_notes":
+			updateSQL = "UPDATE entities SET gm_notes = $2, updated_at = NOW() WHERE id = $1"
+		default:
+			return fmt.Errorf("unsupported field %q for table %q", sourceField, sourceTable)
+		}
+	case "chapters":
+		switch sourceField {
+		case "overview":
+			updateSQL = "UPDATE chapters SET overview = $2, updated_at = NOW() WHERE id = $1"
+		default:
+			return fmt.Errorf("unsupported field %q for table %q", sourceField, sourceTable)
+		}
+	case "sessions":
+		switch sourceField {
+		case "prep_notes":
+			updateSQL = "UPDATE sessions SET prep_notes = $2, updated_at = NOW() WHERE id = $1"
+		case "actual_notes":
+			updateSQL = "UPDATE sessions SET actual_notes = $2, updated_at = NOW() WHERE id = $1"
+		default:
+			return fmt.Errorf("unsupported field %q for table %q", sourceField, sourceTable)
+		}
+	case "campaigns":
+		switch sourceField {
+		case "description":
+			updateSQL = "UPDATE campaigns SET description = $2, updated_at = NOW() WHERE id = $1"
+		default:
+			return fmt.Errorf("unsupported field %q for table %q", sourceField, sourceTable)
+		}
+	default:
+		return fmt.Errorf("unsupported source table: %s", sourceTable)
+	}
+
+	_, err := tx.Exec(ctx, updateSQL, sourceID, content)
+	return err
 }
 
 // wikiLinkPattern matches wiki links of the form [[text]] or
@@ -1489,109 +1520,97 @@ func (h *ContentAnalysisHandler) CancelEnrichment(w http.ResponseWriter, r *http
 	respondJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
 }
 
-// RunContentEnrichment runs LLM enrichment directly on content without
-// depending on Phase 1 analysis results. It delegates entity discovery
-// and enrichment to the Pipeline and EnrichmentAgent. Results are saved
-// as enrichment-phase analysis items on the given job. The method runs
-// enrichment in a background goroutine and returns immediately.
-func (h *ContentAnalysisHandler) RunContentEnrichment(
+// RunPipeline creates an analysis job and runs the selected phases in a
+// background goroutine. It returns the created job immediately.
+func (h *ContentAnalysisHandler) RunPipeline(
 	ctx context.Context,
-	jobID int64,
 	campaignID int64,
+	sourceTable, sourceField string,
+	sourceID int64,
 	content string,
 	userID int64,
-) {
-	// 1. Fetch user settings to check LLM configuration.
-	settings, err := h.db.GetUserSettings(ctx, userID)
-	if err != nil || settings == nil {
-		log.Printf("Content-enrich: skipping job %d — no user settings found for user %d",
-			jobID, userID)
-		return
-	}
-	if settings.ContentGenService == nil || settings.ContentGenAPIKey == nil {
-		log.Printf("Content-enrich: skipping job %d — no LLM configured (service=%v, key=%v)",
-			jobID, settings.ContentGenService != nil, settings.ContentGenAPIKey != nil)
-		return
-	}
-
-	// 2. Create LLM provider from user settings.
-	provider, err := llm.NewProvider(
-		*settings.ContentGenService, *settings.ContentGenAPIKey,
-	)
-	if err != nil {
-		log.Printf("Content-enrich: failed to create LLM provider for job %d: %v",
-			jobID, err)
-		return
-	}
-
-	// 3. Get the job for source info.
-	job, err := h.db.GetAnalysisJob(ctx, jobID)
-	if err != nil {
-		log.Printf("Content-enrich: failed to get job %d: %v", jobID, err)
-		return
-	}
-
-	// 4. Set job status to "enriching".
-	if err := h.db.Exec(ctx,
-		"UPDATE content_analysis_jobs SET status = 'enriching' WHERE id = $1",
-		jobID,
+	phases []string,
+) (*models.ContentAnalysisJob, error) {
+	// Delete previous jobs for this source.
+	if err := h.db.DeleteAnalysisJobsForSource(
+		ctx, campaignID, sourceTable, sourceID, sourceField,
 	); err != nil {
-		log.Printf("Content-enrich: failed to set job %d status: %v",
-			jobID, err)
-		return
+		return nil, fmt.Errorf("failed to delete old jobs: %w", err)
 	}
 
-	// 5. Look up the campaign to get its game system code for RAG context.
-	campaign, campaignErr := h.db.GetCampaign(ctx, campaignID)
+	// Create job.
+	job := &models.ContentAnalysisJob{
+		CampaignID:  campaignID,
+		SourceTable: sourceTable,
+		SourceID:    sourceID,
+		SourceField: sourceField,
+		Status:      "running",
+		Phases:      phases,
+	}
+	createdJob, err := h.db.CreateAnalysisJob(ctx, job)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create job: %w", err)
+	}
+
+	// Build pipeline from registry.
+	pipeline := h.registry.BuildPipeline(phases)
+
+	// Fetch user settings for LLM provider.
+	var provider llm.Provider
+	settings, err := h.db.GetUserSettings(ctx, userID)
+	if err == nil && settings != nil &&
+		settings.ContentGenService != nil &&
+		settings.ContentGenAPIKey != nil {
+		provider, _ = llm.NewProvider(
+			*settings.ContentGenService,
+			*settings.ContentGenAPIKey)
+	}
+
+	// Look up campaign for game system.
+	campaign, _ := h.db.GetCampaign(ctx, campaignID)
 	var gameSystemCode string
-	if campaignErr != nil {
-		log.Printf("Content-enrich: failed to get campaign %d: %v",
-			campaignID, campaignErr)
-	} else if campaign.System != nil {
-		gameSystemCode = campaign.System.Code
+	var gameSystemID *int64
+	if campaign != nil {
+		if campaign.System != nil {
+			gameSystemCode = campaign.System.Code
+		}
+		gameSystemID = campaign.SystemID
 	}
 
-	// 6. Build pipeline and spawn background goroutine for enrichment.
-	pipeline := buildDefaultPipeline(h.db)
+	jobID := createdJob.ID
 
-	bgCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	// Spawn background goroutine.
+	bgCtx, cancel := context.WithTimeout(
+		context.Background(), 10*time.Minute)
 	h.enrichCancels.Store(jobID, cancel)
 	go func() {
 		defer h.enrichCancels.Delete(jobID)
 		defer cancel()
-		log.Printf("Content-enrich: starting enrichment for job %d", jobID)
+		log.Printf("Pipeline: starting job %d with phases %v", jobID, phases)
 
-		// Build RAG context for the enrichment pipeline.
+		// Build RAG context.
 		ctxBuilder := enrichment.NewContextBuilder(h.db, "")
-		ragCtx, ragErr := ctxBuilder.BuildContext(bgCtx, campaignID, content, gameSystemCode, nil)
+		ragCtx, ragErr := ctxBuilder.BuildContext(
+			bgCtx, campaignID, content, gameSystemCode, nil)
 		if ragErr != nil {
-			log.Printf("Content-enrich: failed to build RAG context for job %d: %v",
+			log.Printf("Pipeline: failed to build RAG context for job %d: %v",
 				jobID, ragErr)
 		}
 
-		// Load relationships for the enrichment pipeline so
-		// the graph expert receives complete data.
-		relationships, relErr := h.db.ListRelationshipsByCampaign(
-			bgCtx, campaignID)
+		// Load relationships.
+		relationships, relErr := h.db.ListRelationshipsByCampaign(bgCtx, campaignID)
 		if relErr != nil {
-			log.Printf(
-				"Content-enrich: failed to load relationships for job %d: %v",
+			log.Printf("Pipeline: failed to load relationships for job %d: %v",
 				jobID, relErr)
-			// Continue without relationships rather than
-			// blocking enrichment.
-		}
-
-		var gameSystemID *int64
-		if campaign != nil {
-			gameSystemID = campaign.SystemID
 		}
 
 		input := enrichment.PipelineInput{
 			CampaignID:    campaignID,
 			JobID:         jobID,
-			SourceTable:   job.SourceTable,
-			SourceID:      job.SourceID,
-			SourceScope:   enrichment.ScopeFromSourceTable(job.SourceTable),
+			SourceTable:   sourceTable,
+			SourceID:      sourceID,
+			SourceField:   sourceField,
+			SourceScope:   enrichment.ScopeFromSourceTable(sourceTable),
 			Content:       content,
 			Relationships: relationships,
 			GameSystemID:  gameSystemID,
@@ -1599,264 +1618,60 @@ func (h *ContentAnalysisHandler) RunContentEnrichment(
 			Ontology:      h.db.Ontology,
 		}
 
-		enrichItems, err := pipeline.Run(bgCtx, provider, input)
+		items, err := pipeline.Run(bgCtx, provider, input)
 		if err != nil {
-			log.Printf(
-				"Content-enrich: pipeline run failed for job %d: %v",
-				jobID, err)
-
-			reason := "Enrichment encountered an error"
+			log.Printf("Pipeline: run failed for job %d: %v", jobID, err)
+			reason := "Pipeline encountered an error"
 			var qe *llm.QuotaExceededError
 			if errors.As(err, &qe) {
 				reason = "API quota exceeded"
 			} else if strings.Contains(err.Error(), "rate limit") {
 				reason = "Rate limited after retries"
 			}
-
-			_ = h.db.SetJobFailureReason(
-				context.Background(), jobID, reason)
+			_ = h.db.SetJobFailureReason(context.Background(), jobID, reason)
 			return
 		}
 
-		if len(enrichItems) > 0 {
-			if err := h.db.CreateAnalysisItems(bgCtx, enrichItems); err != nil {
-				log.Printf(
-					"Content-enrich: failed to save items for job %d: %v",
+		// Assign job ID and persist items.
+		for i := range items {
+			items[i].JobID = jobID
+		}
+		if len(items) > 0 {
+			if err := h.db.CreateAnalysisItems(bgCtx, items); err != nil {
+				log.Printf("Pipeline: failed to save items for job %d: %v",
 					jobID, err)
-			} else {
-				if err := h.db.Exec(bgCtx,
-					"UPDATE content_analysis_jobs SET enrichment_total = enrichment_total + $1 WHERE id = $2",
-					len(enrichItems), jobID,
-				); err != nil {
-					log.Printf(
-						"Content-enrich: failed to update enrichment count for job %d: %v",
-						jobID, err)
-				}
+				return
 			}
 		}
 
-		// Mark enrichment as completed.
-		log.Printf("Content-enrich: completed enrichment for job %d", jobID)
-		if err := h.db.Exec(context.Background(),
-			"UPDATE content_analysis_jobs SET status = 'completed' WHERE id = $1",
-			jobID,
+		// Count items by phase for job stats.
+		identifyCount := 0
+		enrichCount := 0
+		for _, item := range items {
+			switch item.Phase {
+			case "identification":
+				identifyCount++
+			case "enrichment":
+				enrichCount++
+			}
+		}
+
+		// Update job counts and status.
+		if err := h.db.Exec(bgCtx,
+			`UPDATE content_analysis_jobs
+			 SET status = 'completed',
+			     total_items = $2,
+			     enrichment_total = $3
+			 WHERE id = $1`,
+			jobID, identifyCount, enrichCount,
 		); err != nil {
-			log.Printf(
-				"Content-enrich: failed to set job %d status to completed: %v",
-				jobID, err)
+			log.Printf("Pipeline: failed to update job %d status: %v", jobID, err)
 		}
+
+		log.Printf("Pipeline: completed job %d — %d items", jobID, len(items))
 	}()
-}
 
-// TryAutoEnrich automatically triggers LLM enrichment when all Phase 1
-// identification items have been resolved. It silently returns if the
-// user has not configured an LLM provider or if there are no accepted
-// entities to enrich.
-func (h *ContentAnalysisHandler) TryAutoEnrich(
-	ctx context.Context, jobID int64, userID int64,
-) {
-	// 1. Fetch user settings to check LLM configuration.
-	settings, err := h.db.GetUserSettings(ctx, userID)
-	if err != nil || settings == nil {
-		log.Printf("Auto-enrich: skipping job %d — no user settings found for user %d", jobID, userID)
-		return
-	}
-	if settings.ContentGenService == nil || settings.ContentGenAPIKey == nil {
-		log.Printf("Auto-enrich: skipping job %d — no LLM configured (service=%v, key=%v)",
-			jobID, settings.ContentGenService != nil, settings.ContentGenAPIKey != nil)
-		return
-	}
-
-	// 2. Create LLM provider from user settings.
-	provider, err := llm.NewProvider(
-		*settings.ContentGenService, *settings.ContentGenAPIKey,
-	)
-	if err != nil {
-		log.Printf("Auto-enrich: failed to create LLM provider for job %d: %v",
-			jobID, err)
-		return
-	}
-
-	// 3. Get the job for source info.
-	job, err := h.db.GetAnalysisJob(ctx, jobID)
-	if err != nil {
-		log.Printf("Auto-enrich: failed to get job %d: %v", jobID, err)
-		return
-	}
-
-	// 4. Collect accepted items with resolved entity IDs.
-	items, err := h.db.ListAnalysisItemsByJob(ctx, jobID, "", "identification")
-	if err != nil {
-		log.Printf("Auto-enrich: failed to list items for job %d: %v",
-			jobID, err)
-		return
-	}
-
-	entityIDSet := make(map[int64]bool)
-	for _, item := range items {
-		if (item.Resolution == "accepted" || item.Resolution == "new_entity") &&
-			item.ResolvedEntityID != nil {
-			entityIDSet[*item.ResolvedEntityID] = true
-		}
-	}
-
-	if len(entityIDSet) == 0 {
-		log.Printf("Auto-enrich: skipping job %d — no accepted entities with resolved_entity_id", jobID)
-		return
-	}
-
-	entityIDs := make([]int64, 0, len(entityIDSet))
-	for id := range entityIDSet {
-		entityIDs = append(entityIDs, id)
-	}
-
-	// 5. Set job status to "enriching".
-	if err := h.db.Exec(ctx,
-		"UPDATE content_analysis_jobs SET status = 'enriching' WHERE id = $1",
-		jobID,
-	); err != nil {
-		log.Printf("Auto-enrich: failed to set job %d status: %v",
-			jobID, err)
-		return
-	}
-
-	// 6. Fetch source content.
-	content, err := fetchSourceContent(
-		ctx, h.db, job.CampaignID, job.SourceTable, job.SourceID, job.SourceField,
-	)
-	if err != nil {
-		log.Printf("Auto-enrich: failed to fetch content for job %d: %v",
-			jobID, err)
-		_ = h.db.Exec(ctx,
-			"UPDATE content_analysis_jobs SET status = 'completed' WHERE id = $1",
-			jobID,
-		)
-		return
-	}
-
-	// 7. Pre-load entity objects from accepted entity IDs.
-	entities := make([]models.Entity, 0, len(entityIDs))
-	for _, eid := range entityIDs {
-		entity, err := h.db.GetEntity(ctx, eid)
-		if err != nil {
-			log.Printf("Auto-enrich: failed to get entity %d: %v", eid, err)
-			continue
-		}
-		entities = append(entities, *entity)
-	}
-
-	// Strip GM-only content from entities before passing to pipeline.
-	for i := range entities {
-		entities[i].GMNotes = nil
-	}
-
-	// 8. Look up the campaign to get its game system code for RAG context.
-	campaign, campaignErr := h.db.GetCampaign(ctx, job.CampaignID)
-	var gameSystemCode string
-	if campaignErr != nil {
-		log.Printf("Auto-enrich: failed to get campaign %d: %v",
-			job.CampaignID, campaignErr)
-	} else if campaign.System != nil {
-		gameSystemCode = campaign.System.Code
-	}
-
-	// 9. Build pipeline and spawn background goroutine for enrichment.
-	pipeline := buildDefaultPipeline(h.db)
-
-	bgCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	h.enrichCancels.Store(jobID, cancel)
-	go func() {
-		defer h.enrichCancels.Delete(jobID)
-		defer cancel()
-		log.Printf("Auto-enrich: starting enrichment for job %d with %d entities",
-			jobID, len(entities))
-
-		// Build RAG context for the enrichment pipeline.
-		ctxBuilder := enrichment.NewContextBuilder(h.db, "")
-		ragCtx, ragErr := ctxBuilder.BuildContext(bgCtx, job.CampaignID, content, gameSystemCode, entities)
-		if ragErr != nil {
-			log.Printf("Auto-enrich: failed to build RAG context for job %d: %v",
-				jobID, ragErr)
-		}
-
-		// Load relationships for the enrichment pipeline so
-		// the graph expert receives complete data.
-		relationships, relErr := h.db.ListRelationshipsByCampaign(
-			bgCtx, job.CampaignID)
-		if relErr != nil {
-			log.Printf(
-				"Auto-enrich: failed to load relationships for job %d: %v",
-				jobID, relErr)
-			// Continue without relationships rather than
-			// blocking enrichment.
-		}
-
-		var gameSystemID *int64
-		if campaign != nil {
-			gameSystemID = campaign.SystemID
-		}
-
-		input := enrichment.PipelineInput{
-			CampaignID:    job.CampaignID,
-			JobID:         jobID,
-			SourceTable:   job.SourceTable,
-			SourceID:      job.SourceID,
-			SourceScope:   enrichment.ScopeFromSourceTable(job.SourceTable),
-			Content:       content,
-			Entities:      entities,
-			Relationships: relationships,
-			GameSystemID:  gameSystemID,
-			Context:       ragCtx,
-			Ontology:      h.db.Ontology,
-		}
-
-		enrichItems, err := pipeline.Run(bgCtx, provider, input)
-		if err != nil {
-			log.Printf(
-				"Auto-enrich: pipeline run failed for job %d: %v",
-				jobID, err)
-
-			reason := "Enrichment encountered an error"
-			var qe *llm.QuotaExceededError
-			if errors.As(err, &qe) {
-				reason = "API quota exceeded"
-			} else if strings.Contains(err.Error(), "rate limit") {
-				reason = "Rate limited after retries"
-			}
-
-			_ = h.db.SetJobFailureReason(
-				context.Background(), jobID, reason)
-			return
-		}
-
-		if len(enrichItems) > 0 {
-			if err := h.db.CreateAnalysisItems(bgCtx, enrichItems); err != nil {
-				log.Printf(
-					"Auto-enrich: failed to save items for job %d: %v",
-					jobID, err)
-			} else {
-				if err := h.db.Exec(bgCtx,
-					"UPDATE content_analysis_jobs SET enrichment_total = enrichment_total + $1 WHERE id = $2",
-					len(enrichItems), jobID,
-				); err != nil {
-					log.Printf(
-						"Auto-enrich: failed to update enrichment count for job %d: %v",
-						jobID, err)
-				}
-			}
-		}
-
-		// Mark enrichment as completed.
-		log.Printf("Auto-enrich: completed enrichment for job %d", jobID)
-		if err := h.db.Exec(context.Background(),
-			"UPDATE content_analysis_jobs SET status = 'completed' WHERE id = $1",
-			jobID,
-		); err != nil {
-			log.Printf(
-				"Auto-enrich: failed to set job %d status to completed: %v",
-				jobID, err)
-		}
-	}()
+	return createdJob, nil
 }
 
 // GenerateRevisionResponse is the response body for the generate
@@ -1876,7 +1691,13 @@ type ApplyRevisionRequest struct {
 // GenerateRevision handles POST /api/campaigns/{id}/analysis/jobs/{jobId}/revision
 // Generates a revised version of the source content by incorporating
 // accepted analysis findings via the RevisionAgent LLM pipeline.
+//
+// Deprecated: Use GenerateItemRevision for per-finding surgical revisions instead.
+// This endpoint generates a full-document revision and will be removed in a future release.
 func (h *ContentAnalysisHandler) GenerateRevision(w http.ResponseWriter, r *http.Request) {
+	log.Printf("DEPRECATED: GenerateRevision called for campaign %s job %s -- use per-finding revision instead",
+		chi.URLParam(r, "id"), chi.URLParam(r, "jobId"))
+
 	campaignID, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
@@ -2069,7 +1890,13 @@ func (h *ContentAnalysisHandler) GenerateRevision(w http.ResponseWriter, r *http
 // ApplyRevision handles PUT /api/campaigns/{id}/analysis/jobs/{jobId}/revision/apply
 // Applies a previously generated revision to the source content, updating
 // the underlying chapter overview or session notes field.
+//
+// Deprecated: Use ApplyItemRevision for per-finding surgical revisions instead.
+// This endpoint applies a full-document revision and will be removed in a future release.
 func (h *ContentAnalysisHandler) ApplyRevision(w http.ResponseWriter, r *http.Request) {
+	log.Printf("DEPRECATED: ApplyRevision called for campaign %s job %s -- use per-finding revision instead",
+		chi.URLParam(r, "id"), chi.URLParam(r, "jobId"))
+
 	campaignID, err := parseInt64(r, "id")
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
@@ -2208,12 +2035,480 @@ func (h *ContentAnalysisHandler) ApplyRevision(w http.ResponseWriter, r *http.Re
 	})
 }
 
-// jobHasPhase checks whether a phase key is present in the job's phases slice.
-func jobHasPhase(phases []string, key string) bool {
-	for _, p := range phases {
-		if p == key {
-			return true
+// GenerateItemRevisionRequest is the request body for per-finding revision.
+type GenerateItemRevisionRequest struct {
+	ItemIDs      []int64 `json:"itemIds"`
+	Instructions string  `json:"instructions,omitempty"`
+}
+
+// GenerateItemRevisionResponse is the response body for per-finding revision.
+type GenerateItemRevisionResponse struct {
+	OriginalSection string `json:"originalSection"`
+	RevisedSection  string `json:"revisedSection"`
+}
+
+// ApplyItemRevisionRequest is the request body for applying a per-finding
+// revision.
+type ApplyItemRevisionRequest struct {
+	ItemIDs         []int64 `json:"itemIds"`
+	RevisedSection  string  `json:"revisedSection"`
+	OriginalSection string  `json:"originalSection"`
+}
+
+// loadSourceContent fetches the source text for a content analysis job
+// based on its source table and field.
+func (h *ContentAnalysisHandler) loadSourceContent(
+	ctx context.Context,
+	job *models.ContentAnalysisJob,
+) (string, error) {
+	switch job.SourceTable {
+	case "chapters":
+		chapter, err := h.db.GetChapter(ctx, job.SourceID)
+		if err != nil {
+			return "", fmt.Errorf("failed to fetch chapter %d: %w",
+				job.SourceID, err)
+		}
+		if chapter.Overview != nil {
+			return *chapter.Overview, nil
+		}
+		return "", nil
+
+	case "sessions":
+		session, err := h.db.GetSession(ctx, job.SourceID)
+		if err != nil {
+			return "", fmt.Errorf("failed to fetch session %d: %w",
+				job.SourceID, err)
+		}
+		switch job.SourceField {
+		case "prep_notes":
+			if session.PrepNotes != nil {
+				return *session.PrepNotes, nil
+			}
+			return "", nil
+		case "actual_notes":
+			if session.ActualNotes != nil {
+				return *session.ActualNotes, nil
+			}
+			return "", nil
+		default:
+			return "", fmt.Errorf("unsupported session field: %s",
+				job.SourceField)
+		}
+
+	case "campaigns":
+		campaign, err := h.db.GetCampaign(ctx, job.SourceID)
+		if err != nil {
+			return "", fmt.Errorf("failed to fetch campaign %d: %w",
+				job.SourceID, err)
+		}
+		if campaign.Description != nil {
+			return *campaign.Description, nil
+		}
+		return "", nil
+
+	case "entities":
+		entity, err := h.db.GetEntity(ctx, job.SourceID)
+		if err != nil {
+			return "", fmt.Errorf("failed to fetch entity %d: %w",
+				job.SourceID, err)
+		}
+		switch job.SourceField {
+		case "description":
+			if entity.Description != nil {
+				return *entity.Description, nil
+			}
+			return "", nil
+		case "gm_notes":
+			if entity.GMNotes != nil {
+				return *entity.GMNotes, nil
+			}
+			return "", nil
+		default:
+			return "", fmt.Errorf("unsupported entity field: %s",
+				job.SourceField)
+		}
+
+	default:
+		return "", fmt.Errorf("unsupported source table: %s",
+			job.SourceTable)
+	}
+}
+
+// GenerateItemRevision handles POST /api/campaigns/{id}/analysis/items/revision
+// Generates a revised version of a context window around the specified
+// analysis items using the per-finding revision LLM agent.
+func (h *ContentAnalysisHandler) GenerateItemRevision(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseInt64(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	if err := h.db.VerifyCampaignOwnership(r.Context(), campaignID, userID); err != nil {
+		respondError(w, http.StatusNotFound, "Campaign not found")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
+	var req GenerateItemRevisionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if len(req.ItemIDs) == 0 {
+		respondError(w, http.StatusBadRequest, "itemIds is required")
+		return
+	}
+	if len(req.ItemIDs) > 20 {
+		respondError(w, http.StatusBadRequest, "Too many itemIds (max 20)")
+		return
+	}
+
+	// Load items by their IDs.
+	items, err := h.db.GetAnalysisItemsByIDs(r.Context(), req.ItemIDs)
+	if err != nil {
+		log.Printf("GenerateItemRevision: error loading items: %v", err)
+		respondError(w, http.StatusInternalServerError,
+			"Failed to load analysis items")
+		return
+	}
+	if len(items) == 0 {
+		respondError(w, http.StatusNotFound, "No items found for the given IDs")
+		return
+	}
+
+	// Verify all items belong to the same job.
+	jobID := items[0].JobID
+	for _, item := range items[1:] {
+		if item.JobID != jobID {
+			respondError(w, http.StatusBadRequest,
+				"All items must belong to the same analysis job")
+			return
 		}
 	}
-	return false
+
+	// Verify the job belongs to this campaign.
+	job, err := h.db.GetAnalysisJob(r.Context(), jobID)
+	if err != nil {
+		log.Printf("GenerateItemRevision: error getting analysis job %d: %v",
+			jobID, err)
+		respondError(w, http.StatusNotFound, "Analysis job not found")
+		return
+	}
+	if job.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Analysis job not found")
+		return
+	}
+
+	// Validate all items have position data.
+	for _, item := range items {
+		if item.PositionStart == nil || item.PositionEnd == nil {
+			respondError(w, http.StatusBadRequest,
+				fmt.Sprintf("Item %d is missing position data", item.ID))
+			return
+		}
+	}
+
+	// Load the source content.
+	sourceContent, err := h.loadSourceContent(r.Context(), job)
+	if err != nil {
+		log.Printf("GenerateItemRevision: %v", err)
+		respondError(w, http.StatusInternalServerError,
+			"Failed to fetch source content")
+		return
+	}
+
+	// Validate positions are not stale: check that the matched text
+	// still aligns with the source content at the recorded positions.
+	for _, item := range items {
+		start := *item.PositionStart
+		end := *item.PositionEnd
+		if start < 0 || end > len(sourceContent) || start > end {
+			respondError(w, http.StatusConflict,
+				fmt.Sprintf("Item %d has out-of-bounds positions", item.ID))
+			return
+		}
+		if sourceContent[start:end] != item.MatchedText {
+			respondError(w, http.StatusConflict,
+				"Source content has changed since analysis was run; "+
+					"positions are stale")
+			return
+		}
+	}
+
+	// Determine combined position range across all items.
+	minStart := *items[0].PositionStart
+	maxEnd := *items[0].PositionEnd
+	for _, item := range items[1:] {
+		if *item.PositionStart < minStart {
+			minStart = *item.PositionStart
+		}
+		if *item.PositionEnd > maxEnd {
+			maxEnd = *item.PositionEnd
+		}
+	}
+
+	// Extract the context window around the findings.
+	contextWindow, _, _ := enrichment.ExtractContextWindow(
+		sourceContent, minStart, maxEnd)
+
+	// Build FindingDetails from items.
+	findings := make([]enrichment.FindingDetail, 0, len(items))
+	for _, item := range items {
+		var desc, suggestion string
+		if len(item.SuggestedContent) > 0 {
+			var sc map[string]interface{}
+			if jsonErr := json.Unmarshal(item.SuggestedContent, &sc); jsonErr == nil {
+				if d, ok := sc["description"].(string); ok {
+					desc = d
+				}
+				if s, ok := sc["suggestion"].(string); ok {
+					suggestion = s
+				}
+			}
+		}
+		findings = append(findings, enrichment.FindingDetail{
+			DetectionType: item.DetectionType,
+			MatchedText:   item.MatchedText,
+			Description:   desc,
+			Suggestion:    suggestion,
+		})
+	}
+
+	// Get the LLM provider from user settings.
+	settings, err := h.db.GetUserSettings(r.Context(), userID)
+	if err != nil {
+		log.Printf("GenerateItemRevision: error getting user settings: %v", err)
+		respondError(w, http.StatusInternalServerError,
+			"Failed to get user settings")
+		return
+	}
+	if settings == nil || settings.ContentGenService == nil || settings.ContentGenAPIKey == nil {
+		respondError(w, http.StatusBadRequest,
+			"LLM service not configured. Configure an LLM in Account Settings.")
+		return
+	}
+
+	provider, err := llm.NewProvider(
+		*settings.ContentGenService, *settings.ContentGenAPIKey,
+	)
+	if err != nil {
+		log.Printf("GenerateItemRevision: error creating LLM provider: %v", err)
+		respondError(w, http.StatusInternalServerError,
+			"Failed to create LLM provider")
+		return
+	}
+
+	// Call the finding revision agent with a dedicated timeout.
+	llmCtx, llmCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer llmCancel()
+
+	result, err := enrichment.GenerateFindingRevision(llmCtx, provider,
+		enrichment.FindingRevisionInput{
+			ContextWindow: contextWindow,
+			Findings:      findings,
+			Instructions:  req.Instructions,
+		})
+	if err != nil {
+		log.Printf("GenerateItemRevision: revision agent failed: %v", err)
+		respondError(w, http.StatusInternalServerError,
+			"Failed to generate revision")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, GenerateItemRevisionResponse{
+		OriginalSection: contextWindow,
+		RevisedSection:  result.RevisedSection,
+	})
+}
+
+// ApplyItemRevision handles PUT /api/campaigns/{id}/analysis/items/revision/apply
+// Applies a previously generated per-finding revision to the source
+// content, splicing the revised section in place of the original context
+// window, shifting downstream positions, and marking items as accepted.
+func (h *ContentAnalysisHandler) ApplyItemRevision(w http.ResponseWriter, r *http.Request) {
+	campaignID, err := parseInt64(r, "id")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid campaign ID")
+		return
+	}
+
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	if err := h.db.VerifyCampaignOwnership(r.Context(), campaignID, userID); err != nil {
+		respondError(w, http.StatusNotFound, "Campaign not found")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
+	var req ApplyItemRevisionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if len(req.ItemIDs) == 0 {
+		respondError(w, http.StatusBadRequest, "itemIds is required")
+		return
+	}
+	if len(req.ItemIDs) > 20 {
+		respondError(w, http.StatusBadRequest, "Too many itemIds (max 20)")
+		return
+	}
+	if req.RevisedSection == "" {
+		respondError(w, http.StatusBadRequest, "revisedSection is required")
+		return
+	}
+	if req.OriginalSection == "" {
+		respondError(w, http.StatusBadRequest, "originalSection is required")
+		return
+	}
+
+	// Load items by their IDs.
+	items, err := h.db.GetAnalysisItemsByIDs(r.Context(), req.ItemIDs)
+	if err != nil {
+		log.Printf("ApplyItemRevision: error loading items: %v", err)
+		respondError(w, http.StatusInternalServerError,
+			"Failed to load analysis items")
+		return
+	}
+	if len(items) == 0 {
+		respondError(w, http.StatusNotFound, "No items found for the given IDs")
+		return
+	}
+
+	// Verify all items belong to the same job.
+	jobID := items[0].JobID
+	for _, item := range items[1:] {
+		if item.JobID != jobID {
+			respondError(w, http.StatusBadRequest,
+				"All items must belong to the same analysis job")
+			return
+		}
+	}
+
+	// Verify the job belongs to this campaign.
+	job, err := h.db.GetAnalysisJob(r.Context(), jobID)
+	if err != nil {
+		log.Printf("ApplyItemRevision: error getting analysis job %d: %v",
+			jobID, err)
+		respondError(w, http.StatusNotFound, "Analysis job not found")
+		return
+	}
+	if job.CampaignID != campaignID {
+		respondError(w, http.StatusNotFound, "Analysis job not found")
+		return
+	}
+
+	// Validate all items have position data.
+	for _, item := range items {
+		if item.PositionStart == nil || item.PositionEnd == nil {
+			respondError(w, http.StatusBadRequest,
+				fmt.Sprintf("Item %d is missing position data", item.ID))
+			return
+		}
+	}
+
+	// Load the source content.
+	sourceContent, err := h.loadSourceContent(r.Context(), job)
+	if err != nil {
+		log.Printf("ApplyItemRevision: %v", err)
+		respondError(w, http.StatusInternalServerError,
+			"Failed to fetch source content")
+		return
+	}
+
+	// Determine combined position range across all items.
+	minStart := *items[0].PositionStart
+	maxEnd := *items[0].PositionEnd
+	for _, item := range items[1:] {
+		if *item.PositionStart < minStart {
+			minStart = *item.PositionStart
+		}
+		if *item.PositionEnd > maxEnd {
+			maxEnd = *item.PositionEnd
+		}
+	}
+
+	// Extract context window offsets for splicing.
+	contextWindow, windowStart, windowEnd := enrichment.ExtractContextWindow(
+		sourceContent, minStart, maxEnd)
+
+	// Stale validation: verify the source content at the context
+	// window still matches what was used during generation.
+	if contextWindow != req.OriginalSection {
+		respondError(w, http.StatusConflict,
+			"Source content has changed since revision was generated. "+
+				"Please regenerate.")
+		return
+	}
+
+	// Splice the revised section into the source content.
+	newContent := sourceContent[:windowStart] + req.RevisedSection +
+		sourceContent[windowEnd:]
+
+	// Wrap all mutations in a single database transaction to prevent
+	// partial updates if any step fails.
+	tx, err := h.db.Pool.Begin(r.Context())
+	if err != nil {
+		log.Printf("ApplyItemRevision: error beginning transaction: %v", err)
+		respondError(w, http.StatusInternalServerError,
+			"Failed to apply revision")
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+
+	// Update the source content within the transaction.
+	if err := h.updateSourceContentTx(r.Context(), tx, job.SourceTable,
+		job.SourceID, job.SourceField, newContent); err != nil {
+		log.Printf("ApplyItemRevision: error updating source content: %v", err)
+		respondError(w, http.StatusInternalServerError,
+			"Failed to apply revision")
+		return
+	}
+
+	// Shift positions for items beyond the replaced window.
+	delta := len(req.RevisedSection) - (windowEnd - windowStart)
+	if err := h.db.ShiftItemPositionsTx(r.Context(), tx, jobID,
+		windowEnd, delta); err != nil {
+		log.Printf("ApplyItemRevision: error shifting positions: %v", err)
+		respondError(w, http.StatusInternalServerError,
+			"Failed to update item positions")
+		return
+	}
+
+	// Mark all revised items as accepted within the transaction.
+	for _, item := range items {
+		if err := h.db.ResolveAnalysisItemTx(r.Context(), tx, item.ID,
+			"accepted", nil); err != nil {
+			log.Printf("ApplyItemRevision: error resolving item %d: %v",
+				item.ID, err)
+			respondError(w, http.StatusInternalServerError,
+				"Failed to resolve analysis item")
+			return
+		}
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		log.Printf("ApplyItemRevision: error committing transaction: %v", err)
+		respondError(w, http.StatusInternalServerError,
+			"Failed to apply revision")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"status":         "applied",
+		"updatedContent": newContent,
+	})
 }

@@ -7,7 +7,7 @@
 //
 // -------------------------------------------------------------------------
 
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useParams } from 'react-router-dom';
 import { Box, CircularProgress } from '@mui/material';
 import { ReactNode } from 'react';
 
@@ -15,6 +15,9 @@ import { ReactNode } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { CampaignProvider } from './contexts/CampaignContext';
 import { DraftProvider } from './contexts/DraftContext';
+
+// Hooks
+import { useAnalysisJob } from './hooks';
 
 // Layouts
 import { AppShell } from './layouts';
@@ -145,6 +148,28 @@ function FullScreenWrapper() {
 }
 
 /**
+ * Redirects to the first applicable phase of an analysis wizard job.
+ *
+ * Reads the job's phases array and navigates to the first phase route,
+ * falling back to "identify" if no phases are defined. This prevents
+ * landing on a disabled phase when a job was created without it.
+ *
+ * @returns A Navigate element targeting the first phase, or null while loading
+ */
+function AnalysisWizardRedirect() {
+    const { campaignId, jobId } = useParams();
+    const { data: job } = useAnalysisJob(
+        Number(campaignId), Number(jobId),
+    );
+
+    // Wait for job data to load before redirecting
+    if (!job) return null;
+
+    const firstPhase = job.phases?.[0] ?? 'identify';
+    return <Navigate to={firstPhase} replace />;
+}
+
+/**
  * Defines the application's route tree, including public, authenticated, AppShell-wrapped, and full-screen routes.
  *
  * Routes:
@@ -228,7 +253,7 @@ function AppRoutes() {
                     >
                         <Route
                             index
-                            element={<Navigate to="identify" replace />}
+                            element={<AnalysisWizardRedirect />}
                         />
                         <Route
                             path="identify"

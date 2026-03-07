@@ -11,7 +11,5 @@
  * Options for API calls that can trigger content analysis.
  */
 export interface AnalysisOptions {
-    analyze?: boolean;
-    enrich?: boolean;
     phases?: string[];
 }

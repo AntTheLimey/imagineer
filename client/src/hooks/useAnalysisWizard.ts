@@ -207,6 +207,13 @@ export function useAnalysisWizard(
         }
     }, [canAdvance, goToPhase, phases, currentPhaseIndex]);
 
+    // Refetch items when job completes (pipeline runs async).
+    useEffect(() => {
+        if (job?.status === 'completed' && items.length === 0) {
+            itemsQuery.refetch();
+        }
+    }, [job?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+
     // Auto-advance when all items are resolved.
     useEffect(() => {
         if (

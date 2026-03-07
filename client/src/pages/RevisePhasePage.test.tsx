@@ -12,7 +12,7 @@
  * Tests for the RevisePhasePage component.
  *
  * Mock strategy: mock the useWizardContext hook via the context module
- * and mock useResolveItem, useGenerateRevision, and useApplyRevision
+ * and mock useResolveItem, useGenerateItemRevision, and useApplyItemRevision
  * so no real API calls are made.
  */
 
@@ -33,22 +33,32 @@ vi.mock('../contexts/AnalysisWizardContext', () => ({
 
 vi.mock('../hooks/useContentAnalysis', () => ({
     useResolveItem: vi.fn(),
-    useGenerateRevision: vi.fn(),
-    useApplyRevision: vi.fn(),
+    useGenerateItemRevision: vi.fn(() => ({
+        mutate: vi.fn(),
+        isPending: false,
+        data: null,
+        error: null,
+    })),
+    useApplyItemRevision: vi.fn(() => ({
+        mutate: vi.fn(),
+        isPending: false,
+        data: null,
+        error: null,
+    })),
 }));
 
 import { useWizardContext } from '../contexts/AnalysisWizardContext';
 import {
     useResolveItem,
-    useGenerateRevision,
-    useApplyRevision,
+    useGenerateItemRevision,
+    useApplyItemRevision,
 } from '../hooks/useContentAnalysis';
 import RevisePhasePage from './RevisePhasePage';
 
 const mockUseWizardContext = vi.mocked(useWizardContext);
 const mockUseResolveItem = vi.mocked(useResolveItem);
-const mockUseGenerateRevision = vi.mocked(useGenerateRevision);
-const mockUseApplyRevision = vi.mocked(useApplyRevision);
+const mockUseGenerateItemRevision = vi.mocked(useGenerateItemRevision);
+const mockUseApplyItemRevision = vi.mocked(useApplyItemRevision);
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -159,15 +169,18 @@ describe('RevisePhasePage', () => {
             mutate: vi.fn(),
             isPending: false,
         } as unknown as ReturnType<typeof useResolveItem>);
-        mockUseGenerateRevision.mockReturnValue({
+        mockUseGenerateItemRevision.mockReturnValue({
             mutate: vi.fn(),
             isPending: false,
-            data: undefined,
-        } as unknown as ReturnType<typeof useGenerateRevision>);
-        mockUseApplyRevision.mockReturnValue({
+            data: null,
+            error: null,
+        } as unknown as ReturnType<typeof useGenerateItemRevision>);
+        mockUseApplyItemRevision.mockReturnValue({
             mutate: vi.fn(),
             isPending: false,
-        } as unknown as ReturnType<typeof useApplyRevision>);
+            data: null,
+            error: null,
+        } as unknown as ReturnType<typeof useApplyItemRevision>);
     });
 
     // -- Grouping ----------------------------------------------------------
@@ -232,7 +245,7 @@ describe('RevisePhasePage', () => {
 
     // -- Revision workflow section -----------------------------------------
 
-    it('shows revision workflow section with Generate button', () => {
+    it('shows revision workflow section with Revise Findings header', () => {
         mockUseWizardContext.mockReturnValue(
             makeWizardState({
                 phaseItems: mockAnalysisItems,
@@ -244,18 +257,13 @@ describe('RevisePhasePage', () => {
         renderPage();
 
         expect(
-            screen.getByText('Revision Workflow'),
-        ).toBeInTheDocument();
-        expect(
-            screen.getByRole('button', {
-                name: /generate revision/i,
-            }),
+            screen.getByText('Revise Findings'),
         ).toBeInTheDocument();
     });
 
     // -- Generate button disabled without acknowledged items ---------------
 
-    it('disables Generate button when no acknowledged items exist', () => {
+    it('does not show Generate Suggestion button when no acknowledged items exist', () => {
         const allPending = mockAnalysisItems.map((item) => ({
             ...item,
             resolution: 'pending' as const,
@@ -270,13 +278,15 @@ describe('RevisePhasePage', () => {
 
         renderPage();
 
-        const generateBtn = screen.getByRole('button', {
-            name: /generate revision/i,
-        });
-        expect(generateBtn).toBeDisabled();
+        // Per-item Generate Suggestion buttons only appear for acknowledged items
+        expect(
+            screen.queryByRole('button', {
+                name: /generate suggestion/i,
+            }),
+        ).not.toBeInTheDocument();
     });
 
-    it('enables Generate button when acknowledged items exist', () => {
+    it('shows Generate Suggestion button for acknowledged items', () => {
         mockUseWizardContext.mockReturnValue(
             makeWizardState({
                 phaseItems: mockAnalysisItems,
@@ -287,11 +297,11 @@ describe('RevisePhasePage', () => {
 
         renderPage();
 
-        const generateBtn = screen.getByRole('button', {
-            name: /generate revision/i,
+        // mockAnalysisItems[1] has resolution 'acknowledged', so one button should appear
+        const generateBtns = screen.getAllByRole('button', {
+            name: /generate suggestion/i,
         });
-        // mockAnalysisItems[1] has resolution 'acknowledged'
-        expect(generateBtn).not.toBeDisabled();
+        expect(generateBtns.length).toBeGreaterThanOrEqual(1);
     });
 
     // -- Severity chips ----------------------------------------------------

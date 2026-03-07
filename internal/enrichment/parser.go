@@ -159,7 +159,6 @@ func convertNewEntitiesToItems(
 			MatchedText:      name,
 			Resolution:       "pending",
 			SuggestedContent: json.RawMessage(content),
-			Phase:            "enrichment",
 			CreatedAt:        now,
 		})
 	}

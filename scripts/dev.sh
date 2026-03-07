@@ -94,8 +94,8 @@ done
 log_step "Running database migrations..."
 ./scripts/migrate.sh
 
-# Step 4: Load environment variables and start Go server
-log_step "Starting API server..."
+# Step 4: Load environment variables, build, and start Go server
+log_step "Building API server..."
 # Use set -a to automatically export all variables, then source the .env file
 # This is more robust than 'export $(grep ... | xargs)' which can break on
 # values containing spaces, quotes, or special characters
@@ -104,10 +104,14 @@ set -a
 source .env
 set +a
 
-# Kill any existing process on port 3001
-lsof -ti:3001 2>/dev/null | xargs -r kill -9 2>/dev/null || true
+go build -o bin/server ./cmd/server
+log_info "Build complete."
 
-go run ./cmd/server &
+# Kill any existing process on port 3001
+log_step "Starting API server..."
+lsof -ti:3001 2>/dev/null | while read -r pid; do kill -9 "$pid" 2>/dev/null || true; done || true
+
+./bin/server &
 SERVER_PID=$!
 sleep 3
 
@@ -122,7 +126,7 @@ log_step "Starting React client..."
 cd client
 
 # Kill any existing process on port 5173
-lsof -ti:5173 2>/dev/null | xargs -r kill -9 2>/dev/null || true
+lsof -ti:5173 2>/dev/null | while read -r pid; do kill -9 "$pid" 2>/dev/null || true; done || true
 
 npm run dev &
 CLIENT_PID=$!

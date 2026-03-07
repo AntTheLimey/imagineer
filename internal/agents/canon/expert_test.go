@@ -183,13 +183,11 @@ func TestExpert_Run_ValidResponse(t *testing.T) {
 	assert.Equal(t, int64(42), items[0].JobID)
 	assert.Equal(t, "canon_contradiction", items[0].DetectionType)
 	assert.Equal(t, "pending", items[0].Resolution)
-	assert.Equal(t, "analysis", items[0].Phase)
 
 	// Verify the second item (character -> character_inconsistency).
 	assert.Equal(t, int64(42), items[1].JobID)
 	assert.Equal(t, "character_inconsistency", items[1].DetectionType)
 	assert.Equal(t, "pending", items[1].Resolution)
-	assert.Equal(t, "analysis", items[1].Phase)
 }
 
 func TestExpert_Run_LLMError(t *testing.T) {
@@ -285,7 +283,7 @@ func TestExpert_Run_EmptyContradictions(t *testing.T) {
 	assert.Empty(t, items)
 }
 
-func TestExpert_Run_AllItemsHaveAnalysisPhase(t *testing.T) {
+func TestExpert_Run_PhaseNotSetByAgent(t *testing.T) {
 	llmResponse := `{
 		"contradictions": [
 			{
@@ -344,9 +342,10 @@ func TestExpert_Run_AllItemsHaveAnalysisPhase(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, items, 3, "expected 3 contradiction items")
 
+	// Phase is now set by the pipeline, not the agent.
 	for i, item := range items {
-		assert.Equal(t, "analysis", item.Phase,
-			"item %d should have Phase='analysis'", i)
+		assert.Empty(t, item.Phase,
+			"item %d Phase should be empty (set by pipeline)", i)
 	}
 }
 

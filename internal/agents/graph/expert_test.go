@@ -53,8 +53,7 @@ func TestExpert_Name(t *testing.T) {
 func TestExpert_DependsOn(t *testing.T) {
 	expert := NewExpert(nil)
 	deps := expert.DependsOn()
-	require.NotNil(t, deps)
-	assert.Equal(t, []string{"enrichment"}, deps)
+	assert.Nil(t, deps)
 }
 
 // ---------------------------------------------------------------------------
@@ -171,7 +170,6 @@ func TestExpert_Run_OrphanDetection(t *testing.T) {
 			foundOrphan = true
 			assert.Equal(t, int64(42), item.JobID)
 			assert.Equal(t, "pending", item.Resolution)
-			assert.Equal(t, "enrichment", item.Phase)
 			assert.Contains(t, item.MatchedText, "Mysterious Key")
 		}
 	}
@@ -228,7 +226,7 @@ func TestExpert_Run_LLMError(t *testing.T) {
 		"orphan warnings should be returned even when LLM fails")
 }
 
-func TestExpert_Run_AllItemsHaveEnrichmentPhase(t *testing.T) {
+func TestExpert_Run_PhaseNotSetByAgent(t *testing.T) {
 	llmResponse := `{
 		"findings": [
 			{
@@ -270,9 +268,10 @@ func TestExpert_Run_AllItemsHaveEnrichmentPhase(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, items)
 
+	// Phase is now set by the pipeline, not the agent.
 	for i, item := range items {
-		assert.Equal(t, "enrichment", item.Phase,
-			"item %d should have Phase='enrichment'", i)
+		assert.Empty(t, item.Phase,
+			"item %d Phase should be empty (set by pipeline)", i)
 	}
 }
 

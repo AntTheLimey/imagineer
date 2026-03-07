@@ -240,11 +240,17 @@ func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string)
 							r.Post("/enrich", enrichmentHandler.TriggerEnrichment)
 							r.Post("/cancel-enrichment", contentAnalysisHandler.CancelEnrichment)
 							r.Get("/enrichment-stream", enrichmentHandler.EnrichmentStream)
+							// Deprecated: Full-document revision endpoints.
+							// Use /analysis/items/revision instead.
 							r.Post("/revision", contentAnalysisHandler.GenerateRevision)
 							r.Put("/revision/apply", contentAnalysisHandler.ApplyRevision)
 						})
 						r.Put("/items/{itemId}", contentAnalysisHandler.ResolveItem)
 						r.Put("/items/{itemId}/revert", contentAnalysisHandler.RevertItem)
+
+						// Per-finding revision (surgical)
+						r.Post("/items/revision", contentAnalysisHandler.GenerateItemRevision)
+						r.Put("/items/revision/apply", contentAnalysisHandler.ApplyItemRevision)
 					})
 
 					// Eras

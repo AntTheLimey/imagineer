@@ -14,7 +14,7 @@
 
 import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { contentAnalysisApi, revisionApi } from '../api/contentAnalysis';
+import { contentAnalysisApi, revisionApi, itemRevisionApi } from '../api/contentAnalysis';
 import type {
     ContentAnalysisJob,
     ContentAnalysisItem,
@@ -25,6 +25,9 @@ import type {
     GenerateRevisionResponse,
     ApplyRevisionResponse,
     ApplyRevisionRequest,
+    GenerateItemRevisionRequest,
+    GenerateItemRevisionResponse,
+    ApplyItemRevisionRequest,
 } from '../api/contentAnalysis';
 import { campaignKeys } from './useCampaigns';
 import { entityKeys } from './useEntities';
@@ -70,6 +73,13 @@ export function useAnalysisJob(campaignId: number, jobId: number) {
         queryKey: contentAnalysisKeys.job(campaignId, jobId),
         queryFn: () => contentAnalysisApi.getJob(campaignId, jobId),
         enabled: !!campaignId && !!jobId,
+        refetchInterval: (query) => {
+            const status = query.state.data?.status;
+            if (status && (status === 'completed' || status === 'failed')) {
+                return false;
+            }
+            return 2000;
+        },
     });
 }
 
@@ -348,6 +358,60 @@ export function useApplyRevision(campaignId: number) {
     >({
         mutationFn: ({ jobId, req }) =>
             revisionApi.applyRevision(campaignId, jobId, req),
+        onSuccess: () => {
+            queryClient.invalidateQueries({
+                queryKey: contentAnalysisKeys.all,
+            });
+            queryClient.invalidateQueries({
+                queryKey: campaignKeys.all,
+            });
+            queryClient.invalidateQueries({
+                queryKey: entityKeys.all,
+            });
+            queryClient.invalidateQueries({
+                queryKey: chapterKeys.all,
+            });
+            queryClient.invalidateQueries({
+                queryKey: sessionKeys.all,
+            });
+        },
+    });
+}
+
+/**
+ * Mutation to generate a per-finding revision. The backend produces a
+ * revised section of source content based on one or more selected
+ * analysis items and optional user instructions.
+ *
+ * @param campaignId - The campaign the items belong to.
+ */
+export function useGenerateItemRevision(campaignId: number) {
+    return useMutation<
+        GenerateItemRevisionResponse,
+        Error,
+        GenerateItemRevisionRequest
+    >({
+        mutationFn: (req) =>
+            itemRevisionApi.generateItemRevision(campaignId, req),
+    });
+}
+
+/**
+ * Mutation to apply a per-finding revision to the source content.
+ * Invalidates content analysis, campaign, entity, chapter, and session
+ * caches on success since the source content has changed.
+ *
+ * @param campaignId - The campaign the items belong to.
+ */
+export function useApplyItemRevision(campaignId: number) {
+    const queryClient = useQueryClient();
+    return useMutation<
+        ApplyRevisionResponse,
+        Error,
+        ApplyItemRevisionRequest
+    >({
+        mutationFn: (req) =>
+            itemRevisionApi.applyItemRevision(campaignId, req),
         onSuccess: () => {
             queryClient.invalidateQueries({
                 queryKey: contentAnalysisKeys.all,

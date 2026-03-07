@@ -78,8 +78,8 @@ const PHASES: PhaseDefinition[] = [
 
 const DEFAULT_PHASES: PhaseSelection = {
     identify: true,
-    revise: false,
-    enrich: false,
+    revise: true,
+    enrich: true,
 };
 
 /**

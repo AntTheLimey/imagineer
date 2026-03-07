@@ -12,9 +12,9 @@
  * RevisePhasePage -- the second phase of the analysis wizard.
  *
  * Layout:
- *  - Top section: Revision workflow (generate, diff view, edit, apply).
+ *  - Top section: Header explaining the pin/dismiss workflow.
  *  - Left panel (~40%): Analysis findings grouped by detection type with
- *    severity indicators + new identification mentions after revision.
+ *    severity indicators, and new identification mentions after revision.
  *  - Right panel (~60%): Detail view for the selected finding or mention.
  */
 
@@ -35,22 +35,15 @@ import {
     Alert,
     Paper,
     Tooltip,
-    TextField,
     CircularProgress,
 } from '@mui/material';
 import {
     Check,
     CheckCircle,
     Close,
-    Edit,
-    PlayArrow,
 } from '@mui/icons-material';
 import { useWizardContext } from '../contexts/AnalysisWizardContext';
-import {
-    useResolveItem,
-    useGenerateRevision,
-    useApplyRevision,
-} from '../hooks/useContentAnalysis';
+import { useResolveItem } from '../hooks/useContentAnalysis';
 import type { ContentAnalysisItem } from '../api/contentAnalysis';
 
 // ---------------------------------------------------------------------------
@@ -198,24 +191,14 @@ function truncate(text: string, maxLen: number): string {
 
 export default function RevisePhasePage() {
     const { campaignId } = useParams<{ campaignId: string }>();
-    const { phaseItems, pendingCount, job, items } = useWizardContext();
+    const { phaseItems, items, job } = useWizardContext();
     const resolveItem = useResolveItem(Number(campaignId));
-    const generateRevision = useGenerateRevision(Number(campaignId));
-    const applyRevision = useApplyRevision(Number(campaignId));
 
     // -- Local state -------------------------------------------------------
 
     const [selectedItemId, setSelectedItemId] = useState<
         number | null
     >(null);
-    const [revisionContent, setRevisionContent] = useState<
-        string | null
-    >(null);
-    const [isEditing, setIsEditing] = useState(false);
-    const [revisionCount, setRevisionCount] = useState(0);
-    const [revisionError, setRevisionError] = useState<string | null>(
-        null,
-    );
 
     // -- Derived data ------------------------------------------------------
 
@@ -233,7 +216,7 @@ export default function RevisePhasePage() {
         [items],
     );
 
-    /** Group analysis items by detection type. */
+    /** Group all analysis items by detection type. */
     const groupedAnalysisItems = useMemo(() => {
         const grouped = analysisItems.reduce<
             Record<string, ContentAnalysisItem[]>
@@ -271,7 +254,7 @@ export default function RevisePhasePage() {
         }));
     }, [newMentions]);
 
-    /** Find the selected item across both analysis and mention items. */
+    /** Find the selected item across all analysis and mention items. */
     const selectedItem = useMemo(() => {
         if (selectedItemId === null) return null;
         const fromAnalysis = analysisItems.find(
@@ -283,55 +266,55 @@ export default function RevisePhasePage() {
         );
     }, [analysisItems, newMentions, selectedItemId]);
 
-    /** Count of acknowledged (queued) findings. */
-    const acknowledgedCount = useMemo(
-        () =>
-            analysisItems.filter(
-                (i) => i.resolution === 'acknowledged',
-            ).length,
-        [analysisItems],
-    );
-
-    /** Whether any acknowledged findings exist. */
-    const hasAcknowledgedFindings = acknowledgedCount > 0;
-
     // -- Handlers ----------------------------------------------------------
 
-    const handleResolve = (
-        itemId: number,
-        resolution: 'acknowledged' | 'accepted' | 'dismissed',
-    ) => {
+    /**
+     * After resolving an item (pin or dismiss), auto-advance to the next
+     * pending item.
+     */
+    const advanceAfterResolve = (resolvedItemId: number) => {
+        const allItems = [...analysisItems, ...newMentions];
+        const pendingItems = allItems.filter(
+            (i) =>
+                i.resolution === 'pending' &&
+                i.id !== resolvedItemId,
+        );
+        if (pendingItems.length > 0) {
+            setSelectedItemId(pendingItems[0].id);
+        } else {
+            setSelectedItemId(null);
+        }
+    };
+
+    const handlePin = (itemId: number) => {
         resolveItem.mutate(
             {
                 itemId,
-                req: { resolution },
+                req: { resolution: 'pinned' },
             },
             {
-                onSuccess: () => {
-                    // NOTE: phaseItems may be stale here since the
-                    // query invalidation triggered by the mutation
-                    // hasn't updated the context yet. The
-                    // i.id !== itemId guard ensures we skip the
-                    // just-resolved item regardless. For rapid
-                    // sequential resolutions, there is a small
-                    // window where a previously resolved item could
-                    // be selected, but the next render cycle
-                    // corrects this.
-                    const allItems = [...analysisItems, ...newMentions];
-                    const pendingItems = allItems.filter(
-                        (i) =>
-                            i.resolution === 'pending' &&
-                            i.id !== itemId,
-                    );
-                    if (pendingItems.length > 0) {
-                        setSelectedItemId(pendingItems[0].id);
-                    } else {
-                        setSelectedItemId(null);
-                    }
-                },
+                onSuccess: () => advanceAfterResolve(itemId),
                 onError: (err: Error) => {
                     console.error(
-                        'Failed to resolve item:',
+                        'Failed to pin item:',
+                        err.message,
+                    );
+                },
+            },
+        );
+    };
+
+    const handleDismiss = (itemId: number) => {
+        resolveItem.mutate(
+            {
+                itemId,
+                req: { resolution: 'dismissed' as const },
+            },
+            {
+                onSuccess: () => advanceAfterResolve(itemId),
+                onError: (err: Error) => {
+                    console.error(
+                        'Failed to dismiss item:',
                         err.message,
                     );
                 },
@@ -343,243 +326,17 @@ export default function RevisePhasePage() {
         setSelectedItemId(item.id);
     };
 
-    const handleGenerateRevision = () => {
-        if (!job) return;
-        setRevisionError(null);
-        generateRevision.mutate(job.id, {
-            onSuccess: (data) => {
-                setRevisionContent(data.revisedContent);
-                setIsEditing(false);
-            },
-            onError: (err: Error) => {
-                setRevisionError(err.message);
-            },
-        });
-    };
-
-    const handleApplyRevision = () => {
-        if (!job || !revisionContent) return;
-        applyRevision.mutate(
-            {
-                jobId: job.id,
-                req: { revisedContent: revisionContent },
-            },
-            {
-                onSuccess: () => {
-                    setRevisionCount((prev) => prev + 1);
-                    setRevisionContent(null);
-                    setIsEditing(false);
-                },
-                onError: (err: Error) => {
-                    console.error(
-                        'Failed to apply revision:',
-                        err.message,
-                    );
-                },
-            },
-        );
-    };
-
     // -- Render ------------------------------------------------------------
 
     return (
         <Stack spacing={2} sx={{ height: '100%' }}>
-            {/* Revision workflow section */}
+            {/* Revision workflow header */}
             <Paper variant="outlined" sx={{ p: 2 }}>
-                <Stack spacing={2}>
-                    {/* Header with iteration counter */}
-                    <Stack
-                        direction="row"
-                        alignItems="center"
-                        spacing={1}
-                    >
-                        <Typography variant="h6">
-                            Revision Workflow
-                        </Typography>
-                        {revisionCount > 0 && (
-                            <Chip
-                                label={`Iteration ${revisionCount}`}
-                                size="small"
-                                color="primary"
-                                variant="outlined"
-                            />
-                        )}
-                    </Stack>
-
-                    {/* Generate button */}
-                    <Box>
-                        <Button
-                            variant="contained"
-                            startIcon={
-                                generateRevision.isPending ? (
-                                    <CircularProgress
-                                        size={16}
-                                        color="inherit"
-                                    />
-                                ) : (
-                                    <PlayArrow />
-                                )
-                            }
-                            disabled={
-                                generateRevision.isPending ||
-                                !hasAcknowledgedFindings
-                            }
-                            onClick={handleGenerateRevision}
-                        >
-                            Generate Revision
-                        </Button>
-                        {!hasAcknowledgedFindings &&
-                            !generateRevision.isPending && (
-                                <Typography
-                                    variant="caption"
-                                    color="text.secondary"
-                                    sx={{ display: 'block', mt: 0.5 }}
-                                >
-                                    Acknowledge at least one finding to
-                                    generate a revision.
-                                </Typography>
-                            )}
-                        {revisionError && (
-                            <Alert
-                                severity="error"
-                                sx={{ mt: 1 }}
-                                onClose={() => setRevisionError(null)}
-                            >
-                                {revisionError}
-                            </Alert>
-                        )}
-                    </Box>
-
-                    {/* Summary */}
-                    {generateRevision.data?.summary && (
-                        <Alert severity="info" variant="outlined">
-                            {generateRevision.data.summary}
-                        </Alert>
-                    )}
-
-                    {/* Diff view */}
-                    {revisionContent !== null &&
-                        generateRevision.data && (
-                            <Box>
-                                <Stack
-                                    direction="row"
-                                    spacing={1}
-                                    sx={{ mb: 1 }}
-                                >
-                                    <Button
-                                        variant="outlined"
-                                        size="small"
-                                        startIcon={<Edit />}
-                                        onClick={() =>
-                                            setIsEditing(
-                                                (prev) => !prev,
-                                            )
-                                        }
-                                    >
-                                        {isEditing
-                                            ? 'Stop Editing'
-                                            : 'Edit Revision'}
-                                    </Button>
-                                    <Button
-                                        variant="contained"
-                                        size="small"
-                                        color="success"
-                                        disabled={
-                                            applyRevision.isPending
-                                        }
-                                        onClick={handleApplyRevision}
-                                    >
-                                        Apply Revision
-                                    </Button>
-                                </Stack>
-                                <Grid container spacing={2}>
-                                    <Grid item xs={12} md={6}>
-                                        <Paper
-                                            variant="outlined"
-                                            sx={{
-                                                p: 2,
-                                                bgcolor: 'action.hover',
-                                                maxHeight: 300,
-                                                overflow: 'auto',
-                                            }}
-                                        >
-                                            <Typography
-                                                variant="subtitle2"
-                                                gutterBottom
-                                                color="text.secondary"
-                                            >
-                                                Original
-                                            </Typography>
-                                            <Typography
-                                                variant="body2"
-                                                sx={{
-                                                    whiteSpace:
-                                                        'pre-wrap',
-                                                }}
-                                            >
-                                                {
-                                                    generateRevision
-                                                        .data
-                                                        .originalContent
-                                                }
-                                            </Typography>
-                                        </Paper>
-                                    </Grid>
-                                    <Grid item xs={12} md={6}>
-                                        <Paper
-                                            variant="outlined"
-                                            sx={{
-                                                p: 2,
-                                                bgcolor: 'action.hover',
-                                                maxHeight: 300,
-                                                overflow: 'auto',
-                                            }}
-                                        >
-                                            <Typography
-                                                variant="subtitle2"
-                                                gutterBottom
-                                                color="text.secondary"
-                                            >
-                                                Revised
-                                            </Typography>
-                                            {isEditing ? (
-                                                <TextField
-                                                    multiline
-                                                    fullWidth
-                                                    value={
-                                                        revisionContent
-                                                    }
-                                                    onChange={(e) =>
-                                                        setRevisionContent(
-                                                            e.target
-                                                                .value,
-                                                        )
-                                                    }
-                                                    variant="outlined"
-                                                    size="small"
-                                                    minRows={6}
-                                                    inputProps={{
-                                                        'aria-label':
-                                                            'Edit revised content',
-                                                    }}
-                                                />
-                                            ) : (
-                                                <Typography
-                                                    variant="body2"
-                                                    sx={{
-                                                        whiteSpace:
-                                                            'pre-wrap',
-                                                    }}
-                                                >
-                                                    {revisionContent}
-                                                </Typography>
-                                            )}
-                                        </Paper>
-                                    </Grid>
-                                </Grid>
-                            </Box>
-                        )}
-                </Stack>
+                <Typography variant="h6">Revise Findings</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    Review structural suggestions from analysis. Pin items to
+                    keep as reminders on the edit screen, or dismiss.
+                </Typography>
             </Paper>
 
             {/* Two-column layout for findings and detail */}
@@ -599,16 +356,12 @@ export default function RevisePhasePage() {
                                 variant="subtitle2"
                                 color="text.secondary"
                             >
-                                {analysisItems.length} findings (
-                                {pendingCount} pending
-                                {acknowledgedCount > 0 &&
-                                    `, ${acknowledgedCount} queued`}
-                                )
+                                {analysisItems.length} findings
                             </Typography>
                         </Box>
                         <Divider />
 
-                        {/* Section 1: Analysis findings */}
+                        {/* Analysis findings grouped by detection type */}
                         <List disablePadding>
                             {groupedAnalysisItems.map((group) => (
                                 <Box key={group.key}>
@@ -667,29 +420,8 @@ export default function RevisePhasePage() {
                                                     item,
                                                 )
                                             }
-                                            sx={{
-                                                pl: 4,
-                                                ...(item.resolution ===
-                                                    'acknowledged' && {
-                                                    borderLeft: 3,
-                                                    borderColor:
-                                                        'success.main',
-                                                    bgcolor:
-                                                        'action.selected',
-                                                }),
-                                            }}
+                                            sx={{ pl: 4 }}
                                         >
-                                            {item.resolution ===
-                                                'acknowledged' && (
-                                                <CheckCircle
-                                                    fontSize="small"
-                                                    color="success"
-                                                    sx={{
-                                                        mr: 1,
-                                                        flexShrink: 0,
-                                                    }}
-                                                />
-                                            )}
                                             <ListItemText
                                                 primary={
                                                     <Stack
@@ -707,11 +439,19 @@ export default function RevisePhasePage() {
                                                             }
                                                         </Typography>
                                                         {item.resolution ===
-                                                            'acknowledged' && (
+                                                            'pinned' && (
                                                             <Chip
-                                                                label="Queued"
+                                                                label="Pinned"
                                                                 size="small"
                                                                 color="success"
+                                                                variant="outlined"
+                                                            />
+                                                        )}
+                                                        {item.resolution ===
+                                                            'dismissed' && (
+                                                            <Chip
+                                                                label="Dismissed"
+                                                                size="small"
                                                                 variant="outlined"
                                                             />
                                                         )}
@@ -734,7 +474,7 @@ export default function RevisePhasePage() {
                                                     spacing={0.5}
                                                     sx={{ ml: 1 }}
                                                 >
-                                                    <Tooltip title="Acknowledge">
+                                                    <Tooltip title="Pin">
                                                         <IconButton
                                                             size="small"
                                                             color="success"
@@ -745,9 +485,8 @@ export default function RevisePhasePage() {
                                                                 e,
                                                             ) => {
                                                                 e.stopPropagation();
-                                                                handleResolve(
+                                                                handlePin(
                                                                     item.id,
-                                                                    'acknowledged',
                                                                 );
                                                             }}
                                                         >
@@ -765,9 +504,8 @@ export default function RevisePhasePage() {
                                                                 e,
                                                             ) => {
                                                                 e.stopPropagation();
-                                                                handleResolve(
+                                                                handleDismiss(
                                                                     item.id,
-                                                                    'dismissed',
                                                                 );
                                                             }}
                                                         >
@@ -780,6 +518,8 @@ export default function RevisePhasePage() {
                                     ))}
                                 </Box>
                             ))}
+
+                            {/* Empty state */}
                             {groupedAnalysisItems.length === 0 && (
                                 <Box
                                     sx={{
@@ -787,13 +527,25 @@ export default function RevisePhasePage() {
                                         textAlign: 'center',
                                     }}
                                 >
-                                    <Typography
-                                        variant="body2"
-                                        color="text.secondary"
-                                    >
-                                        No analysis findings in this
-                                        phase.
-                                    </Typography>
+                                    {job?.status === 'completed' || job?.status === 'failed' ? (
+                                        <Typography
+                                            variant="body2"
+                                            color="text.secondary"
+                                        >
+                                            No analysis findings in this
+                                            phase.
+                                        </Typography>
+                                    ) : (
+                                        <>
+                                            <CircularProgress size={24} sx={{ mb: 1 }} />
+                                            <Typography
+                                                variant="body2"
+                                                color="text.secondary"
+                                            >
+                                                Analysis in progress...
+                                            </Typography>
+                                        </>
+                                    )}
                                 </Box>
                             )}
                         </List>
@@ -920,9 +672,8 @@ export default function RevisePhasePage() {
                                                                                 e,
                                                                             ) => {
                                                                                 e.stopPropagation();
-                                                                                handleResolve(
+                                                                                handlePin(
                                                                                     item.id,
-                                                                                    'accepted',
                                                                                 );
                                                                             }}
                                                                         >
@@ -940,9 +691,8 @@ export default function RevisePhasePage() {
                                                                                 e,
                                                                             ) => {
                                                                                 e.stopPropagation();
-                                                                                handleResolve(
+                                                                                handleDismiss(
                                                                                     item.id,
-                                                                                    'dismissed',
                                                                                 );
                                                                             }}
                                                                         >
@@ -977,7 +727,8 @@ export default function RevisePhasePage() {
                             <DetailPanel
                                 item={selectedItem}
                                 isResolving={resolveItem.isPending}
-                                onResolve={handleResolve}
+                                onPin={handlePin}
+                                onDismiss={handleDismiss}
                             />
                         ) : (
                             <Box
@@ -1073,13 +824,11 @@ function SuggestedContentView({
 interface DetailPanelProps {
     item: ContentAnalysisItem;
     isResolving: boolean;
-    onResolve: (
-        itemId: number,
-        resolution: 'acknowledged' | 'accepted' | 'dismissed',
-    ) => void;
+    onPin: (itemId: number) => void;
+    onDismiss: (itemId: number) => void;
 }
 
-function DetailPanel({ item, isResolving, onResolve }: DetailPanelProps) {
+function DetailPanel({ item, isResolving, onPin, onDismiss }: DetailPanelProps) {
     const isPending = item.resolution === 'pending';
 
     /** Look up severity from REVISE_GROUPS for analysis items. */
@@ -1182,23 +931,18 @@ function DetailPanel({ item, isResolving, onResolve }: DetailPanelProps) {
                     <Stack direction="row" spacing={1}>
                         <Button
                             variant="contained"
-                            color="success"
                             disabled={isResolving}
-                            startIcon={<Check />}
-                            onClick={() =>
-                                onResolve(item.id, 'acknowledged')
-                            }
+                            startIcon={<CheckCircle />}
+                            onClick={() => onPin(item.id)}
                         >
-                            Acknowledge
+                            Pin
                         </Button>
                         <Button
                             variant="outlined"
                             color="error"
                             disabled={isResolving}
                             startIcon={<Close />}
-                            onClick={() =>
-                                onResolve(item.id, 'dismissed')
-                            }
+                            onClick={() => onDismiss(item.id)}
                         >
                             Dismiss
                         </Button>

@@ -15,7 +15,6 @@ package analysis
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"regexp"
 	"strings"
@@ -64,93 +63,38 @@ func NewAnalyzer(db *database.DB) *Analyzer {
 	return &Analyzer{db: db}
 }
 
-// AnalyzeContent scans content for wiki links, untagged entity
-// mentions, and potential misspellings. It persists the results as a
-// ContentAnalysisJob with associated ContentAnalysisItems and returns
-// both.
-func (a *Analyzer) AnalyzeContent(
+// ScanContent runs all identification scans on the given content and
+// returns the detected items. This method does not create a job or
+// persist items — it only performs the scans.
+func (a *Analyzer) ScanContent(
 	ctx context.Context,
 	campaignID int64,
-	sourceTable, sourceField string,
-	sourceID int64,
 	content string,
-	phases []string,
-) (*models.ContentAnalysisJob, []models.ContentAnalysisItem, error) {
+) ([]models.ContentAnalysisItem, error) {
+	if content == "" {
+		return nil, nil
+	}
+
 	var items []models.ContentAnalysisItem
 
-	if content != "" {
-		// Scan 1: extract wiki links and resolve them against
-		// known entities.
-		wikiItems, resolvedNames := a.scanWikiLinks(ctx, campaignID, content)
-		items = append(items, wikiItems...)
+	wikiItems, resolvedNames := a.scanWikiLinks(
+		ctx, campaignID, content)
+	items = append(items, wikiItems...)
 
-		// Compute original-coordinate ranges of existing wiki
-		// links so scans 2 and 3 can skip matches that fall
-		// inside them.
-		origRanges := wikiLinkOriginalRanges(content)
+	origRanges := wikiLinkOriginalRanges(content)
 
-		// Scan 2: detect untagged entity name mentions in
-		// content.
-		untaggedItems := a.scanUntaggedMentions(ctx, campaignID, content, origRanges)
-		items = append(items, untaggedItems...)
+	untaggedItems := a.scanUntaggedMentions(
+		ctx, campaignID, content, origRanges)
+	items = append(items, untaggedItems...)
 
-		// Scan 3: detect possible misspellings of entity names.
-		matchedNames := buildMatchedNames(resolvedNames, untaggedItems)
-		misspellingItems := a.scanMisspellings(ctx, campaignID, content, matchedNames, origRanges)
-		items = append(items, misspellingItems...)
-	}
+	matchedNames := buildMatchedNames(
+		resolvedNames, untaggedItems)
+	misspellingItems := a.scanMisspellings(
+		ctx, campaignID, content,
+		matchedNames, origRanges)
+	items = append(items, misspellingItems...)
 
-	// Delete any previous analysis jobs for this exact source field
-	// before creating a new one.
-	err := a.db.DeleteAnalysisJobsForSource(ctx, campaignID, sourceTable, sourceID, sourceField)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to delete old analysis jobs: %w", err)
-	}
-
-	// Validate phases against allowed set.
-	var validatedPhases []string
-	allowedPhases := map[string]bool{
-		"identify": true, "revise": true, "enrich": true,
-	}
-	for _, p := range phases {
-		if allowedPhases[p] {
-			validatedPhases = append(validatedPhases, p)
-		}
-	}
-	phases = validatedPhases
-
-	if len(phases) == 0 {
-		phases = []string{"identify"}
-	}
-
-	job := &models.ContentAnalysisJob{
-		CampaignID:    campaignID,
-		SourceTable:   sourceTable,
-		SourceID:      sourceID,
-		SourceField:   sourceField,
-		Status:        "completed",
-		TotalItems:    len(items),
-		ResolvedItems: 0,
-		Phases:        phases,
-	}
-
-	createdJob, err := a.db.CreateAnalysisJob(ctx, job)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create analysis job: %w", err)
-	}
-
-	// Assign the new job ID to every item before batch insert.
-	for i := range items {
-		items[i].JobID = createdJob.ID
-	}
-
-	if len(items) > 0 {
-		if err := a.db.CreateAnalysisItems(ctx, items); err != nil {
-			return nil, nil, fmt.Errorf("failed to create analysis items: %w", err)
-		}
-	}
-
-	return createdJob, items, nil
+	return items, nil
 }
 
 // scanWikiLinks extracts [[Entity]] and [[Entity|Display]] references,

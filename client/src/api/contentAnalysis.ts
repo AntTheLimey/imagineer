@@ -73,7 +73,7 @@ export interface ContentAnalysisItem {
     contextSnippet?: string;
     positionStart?: number;
     positionEnd?: number;
-    resolution: 'pending' | 'accepted' | 'acknowledged' | 'new_entity' | 'dismissed';
+    resolution: 'pending' | 'accepted' | 'acknowledged' | 'new_entity' | 'dismissed' | 'pinned';
     resolvedEntityId?: number;
     resolvedAt?: string;
     suggestedContent?: Record<string, unknown>;
@@ -95,7 +95,7 @@ export interface AnalysisSummary {
  * Request payload for resolving a single analysis item.
  */
 export interface ResolveAnalysisItemRequest {
-    resolution: 'accepted' | 'acknowledged' | 'new_entity' | 'dismissed';
+    resolution: 'accepted' | 'acknowledged' | 'new_entity' | 'dismissed' | 'pinned';
     entityType?: EntityType;
     entityName?: string;
     /** Override for the relationship type in a relationship_suggestion. */
@@ -266,6 +266,7 @@ export interface GenerateRevisionResponse {
  */
 export interface ApplyRevisionResponse {
     status: string;
+    updatedContent?: string;
 }
 
 /**
@@ -305,6 +306,56 @@ export const revisionApi = {
         return apiClient.put<ApplyRevisionResponse>(
             `/campaigns/${campaignId}/analysis/jobs/${jobId}/revision/apply`,
             req
+        );
+    },
+};
+
+/**
+ * Request payload for generating a per-finding revision.
+ */
+export interface GenerateItemRevisionRequest {
+    itemIds: number[];
+    instructions?: string;
+}
+
+/**
+ * Response from generating a per-finding revision.
+ */
+export interface GenerateItemRevisionResponse {
+    originalSection: string;
+    revisedSection: string;
+}
+
+/**
+ * Request payload for applying a per-finding revision.
+ */
+export interface ApplyItemRevisionRequest {
+    itemIds: number[];
+    revisedSection: string;
+    originalSection: string;
+}
+
+/**
+ * Per-finding revision API endpoints.
+ */
+export const itemRevisionApi = {
+    generateItemRevision(
+        campaignId: number,
+        req: GenerateItemRevisionRequest,
+    ): Promise<GenerateItemRevisionResponse> {
+        return apiClient.post<GenerateItemRevisionResponse>(
+            `/campaigns/${campaignId}/analysis/items/revision`,
+            req,
+        );
+    },
+
+    applyItemRevision(
+        campaignId: number,
+        req: ApplyItemRevisionRequest,
+    ): Promise<ApplyRevisionResponse> {
+        return apiClient.put<ApplyRevisionResponse>(
+            `/campaigns/${campaignId}/analysis/items/revision/apply`,
+            req,
         );
     },
 };

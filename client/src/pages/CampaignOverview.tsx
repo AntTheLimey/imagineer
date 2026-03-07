@@ -317,8 +317,6 @@ export default function CampaignOverview() {
                     },
                 },
                 options: {
-                    analyze: phases.identify || phases.revise,
-                    enrich: phases.enrich,
                     phases: phaseKeys.length > 0 ? phaseKeys : undefined,
                 },
             });

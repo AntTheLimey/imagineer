@@ -90,14 +90,14 @@ type PipelineAgent interface {
 // Stage groups agents that run at the same pipeline phase.
 type Stage struct {
 	Name   string
-	Phase  string // "analysis" or "enrichment"
+	Phase  string // long-form phase tag, e.g. "identification", "analysis", "enrichment"
 	Agents []PipelineAgent
 }
 
 // Pipeline orchestrates multi-stage content analysis.
 type Pipeline struct {
 	db     *database.DB
-	stages []Stage
+	Stages []Stage
 }
 
 // NewPipeline creates a new Pipeline with the given database handle and
@@ -106,7 +106,7 @@ type Pipeline struct {
 func NewPipeline(db *database.DB, stages []Stage) *Pipeline {
 	return &Pipeline{
 		db:     db,
-		stages: stages,
+		Stages: stages,
 	}
 }
 
@@ -121,7 +121,7 @@ func (p *Pipeline) Run(
 ) ([]models.ContentAnalysisItem, error) {
 	var allItems []models.ContentAnalysisItem
 
-	for _, stage := range p.stages {
+	for _, stage := range p.Stages {
 		// Make items from prior stages available to agents in
 		// this stage via the PriorResults field.
 		input.PriorResults = allItems
@@ -145,9 +145,11 @@ func (p *Pipeline) Run(
 				continue
 			}
 
-			// Tag every item with the agent that produced it.
+			// Tag every item with the agent that produced it
+			// and the phase from the current stage.
 			for i := range items {
 				items[i].AgentName = agent.Name()
+				items[i].Phase = stage.Phase
 			}
 
 			allItems = append(allItems, items...)
@@ -254,11 +256,11 @@ func topologicalSort(agents []PipelineAgent) (sorted []PipelineAgent, skipped []
 // debugging and logging.
 func (p *Pipeline) String() string {
 	total := 0
-	for _, s := range p.stages {
+	for _, s := range p.Stages {
 		total += len(s.Agents)
 	}
 	return fmt.Sprintf(
 		"Pipeline(%d stages, %d agents)",
-		len(p.stages), total,
+		len(p.Stages), total,
 	)
 }

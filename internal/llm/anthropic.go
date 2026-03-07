@@ -41,7 +41,7 @@ func NewAnthropicProvider(apiKey string) (*AnthropicProvider, error) {
 	return &AnthropicProvider{
 		apiKey:  apiKey,
 		baseURL: anthropicAPIURL,
-		client:  &http.Client{Timeout: 120 * time.Second},
+		client:  &http.Client{Timeout: 180 * time.Second},
 	}, nil
 }
 

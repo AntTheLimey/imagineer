@@ -441,10 +441,11 @@ export default function EntityEditor() {
                         gmNotes: formData.gmNotes.trim() || undefined,
                         sourceConfidence: formData.sourceConfidence,
                     },
-                    options: {
-                        analyze: mode !== 'save',
-                        enrich: mode === 'enrich',
-                    },
+                    options: mode !== 'save' ? {
+                        phases: mode === 'enrich'
+                            ? ['identify', 'revise', 'enrich']
+                            : ['identify', 'revise'],
+                    } : undefined,
                 });
 
                 // Check for analysis results

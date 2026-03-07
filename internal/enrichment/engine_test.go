@@ -402,7 +402,6 @@ func TestEnrichEntity_Success(t *testing.T) {
 	assert.Equal(t, "description_update", items[0].DetectionType)
 	assert.Equal(t, "Kael", items[0].MatchedText)
 	assert.Equal(t, "pending", items[0].Resolution)
-	assert.Equal(t, "enrichment", items[0].Phase)
 	assert.NotNil(t, items[0].EntityID)
 	assert.Equal(t, int64(1), *items[0].EntityID)
 
@@ -922,7 +921,6 @@ func TestConvertNewEntitiesToItems(t *testing.T) {
 	assert.Equal(t, "new_entity_suggestion", items[0].DetectionType)
 	assert.Equal(t, "Lady Ashworth", items[0].MatchedText)
 	assert.Equal(t, "pending", items[0].Resolution)
-	assert.Equal(t, "enrichment", items[0].Phase)
 	assert.Nil(t, items[0].EntityID)
 
 	var content0 map[string]string
@@ -1058,7 +1056,6 @@ func TestDetectNewEntities_Success(t *testing.T) {
 	assert.Equal(t, "new_entity_suggestion", items[0].DetectionType)
 	assert.Equal(t, "Inspector Barrington", items[0].MatchedText)
 	assert.Equal(t, "pending", items[0].Resolution)
-	assert.Equal(t, "enrichment", items[0].Phase)
 	assert.Nil(t, items[0].EntityID)
 
 	var content map[string]string

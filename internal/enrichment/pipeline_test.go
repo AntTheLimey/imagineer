@@ -239,6 +239,25 @@ func TestPipelineRun_AgentNameTaggingMultipleAgents(t *testing.T) {
 	assert.Equal(t, "agent-beta", items[1].AgentName)
 }
 
+func TestPipeline_SetsPhaseFromStage(t *testing.T) {
+	agent := &mockPipelineAgent{
+		name: "test",
+		items: []models.ContentAnalysisItem{
+			{DetectionType: "finding", Phase: "wrong"},
+		},
+	}
+	p := NewPipeline(nil, []Stage{
+		{Name: "s1", Phase: "my_phase",
+			Agents: []PipelineAgent{agent}},
+	})
+	items, err := p.Run(
+		context.Background(), nil, PipelineInput{})
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, "my_phase", items[0].Phase)
+	assert.Equal(t, "test", items[0].AgentName)
+}
+
 func TestPipelineRun_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 

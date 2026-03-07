@@ -282,6 +282,19 @@ func (db *DB) ResolveAnalysisItem(ctx context.Context, itemID int64, resolution 
 	return db.Exec(ctx, query, itemID, resolution, resolvedEntityID)
 }
 
+// ResolveAnalysisItemTx is the transaction-aware variant of
+// ResolveAnalysisItem. It executes the update within the given
+// transaction instead of using the connection pool directly.
+func (db *DB) ResolveAnalysisItemTx(ctx context.Context, tx pgx.Tx, itemID int64, resolution string, resolvedEntityID *int64) error {
+	query := `
+		UPDATE content_analysis_items
+		SET resolution = $2, resolved_entity_id = $3, resolved_at = NOW()
+		WHERE id = $1`
+
+	_, err := tx.Exec(ctx, query, itemID, resolution, resolvedEntityID)
+	return err
+}
+
 // UpdateJobResolvedCount recalculates and updates the resolved_items
 // count for a content analysis job based on items that are no longer
 // pending.
@@ -497,4 +510,77 @@ func scanAnalysisItems(rows pgx.Rows) ([]models.ContentAnalysisItem, error) {
 	}
 
 	return items, nil
+}
+
+// ShiftItemPositions adjusts position_start and position_end for all
+// content analysis items in a job whose position_start is strictly
+// greater than afterPosition. The delta value is added to both
+// position columns and may be negative.
+func (db *DB) ShiftItemPositions(ctx context.Context, jobID int64, afterPosition int, delta int) error {
+	query := `
+		UPDATE content_analysis_items
+		SET position_start = position_start + $3,
+		    position_end   = position_end   + $3
+		WHERE job_id = $1
+		  AND position_start > $2
+		  AND position_start IS NOT NULL`
+
+	return db.Exec(ctx, query, jobID, afterPosition, delta)
+}
+
+// ShiftItemPositionsTx is the transaction-aware variant of
+// ShiftItemPositions. It executes the update within the given
+// transaction instead of using the connection pool directly.
+func (db *DB) ShiftItemPositionsTx(ctx context.Context, tx pgx.Tx, jobID int64, afterPosition int, delta int) error {
+	query := `
+		UPDATE content_analysis_items
+		SET position_start = position_start + $3,
+		    position_end   = position_end   + $3
+		WHERE job_id = $1
+		  AND position_start > $2
+		  AND position_start IS NOT NULL`
+
+	_, err := tx.Exec(ctx, query, jobID, afterPosition, delta)
+	return err
+}
+
+// GetAnalysisItemsByIDs retrieves content analysis items matching the
+// given IDs, joining on entities to populate entity_name and
+// entity_type. Results are ordered by position_start ascending. An
+// empty input slice returns an empty result without querying the
+// database.
+func (db *DB) GetAnalysisItemsByIDs(ctx context.Context, itemIDs []int64) ([]models.ContentAnalysisItem, error) {
+	if len(itemIDs) == 0 {
+		return []models.ContentAnalysisItem{}, nil
+	}
+
+	// Build parameterised IN clause: ($1, $2, $3, ...)
+	placeholders := make([]string, len(itemIDs))
+	args := make([]interface{}, len(itemIDs))
+	for i, id := range itemIDs {
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+		args[i] = id
+	}
+
+	query := fmt.Sprintf(`
+		SELECT i.id, i.job_id, i.detection_type, i.matched_text,
+		       i.entity_id, i.similarity, i.context_snippet,
+		       i.position_start, i.position_end, i.resolution,
+		       i.resolved_entity_id, i.resolved_at, i.created_at,
+		       i.suggested_content, i.phase,
+		       i.agent_name, i.pipeline_run_id,
+		       e.name AS entity_name, e.entity_type
+		FROM content_analysis_items i
+		LEFT JOIN entities e ON i.entity_id = e.id
+		WHERE i.id IN (%s)
+		ORDER BY i.position_start ASC`,
+		strings.Join(placeholders, ", "))
+
+	rows, err := db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get analysis items by IDs: %w", err)
+	}
+	defer rows.Close()
+
+	return scanAnalysisItems(rows)
 }

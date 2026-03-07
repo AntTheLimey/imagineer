@@ -192,8 +192,6 @@ export default function CreateCampaign() {
                     },
                 },
                 options: hasAnyPhase ? {
-                    analyze: phases.identify || phases.revise,
-                    enrich: phases.enrich,
                     phases: phaseKeys.length > 0 ? phaseKeys : undefined,
                 } : undefined,
             });
