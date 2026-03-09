@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Canticle Campaign Seed Data
+  - Initial seed of the Canticle campaign with 90 entities
+    and 55 relationships covering the London, Lyon, and
+    Venice chapters plus campaign-wide entities.
+  - Supplemental seed data adding 84 entities and 42
+    relationships: PCs, major Vienna NPCs, creatures,
+    deities, key locations, stolen Mythos tomes, documents,
+    events, rituals, organizations, and cult cells.
+  - Remaining Canticle entities with 99 entities and 29
+    relationships: minor London, Lyon, and Vienna NPCs, all
+    remaining locations, artifacts, documents, events,
+    organizations, and remaining Aeternum Choir cells.
 - Ontology Schema for Campaign Knowledge Graphs
   - YAML-based ontology schema replaces ad hoc constraint
     mechanisms with a formal, evolvable type system for

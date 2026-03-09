@@ -28,6 +28,16 @@ component.
 
 ## In Progress
 
+### Conversational Backend (Phase 1)
+
+The conversational backend enables AI-powered chat for session
+prep, play, and wrap-up stages. The design is complete and the
+implementation plan is pending.
+
+- [ ] `[MVP-1]` Implement the conversational backend as
+  described in the design document at
+  `docs/plans/2026-03-09-conversational-backend-design.md`.
+
 ### Session Stage Workflows
 
 The basic session CRUD (create, list, edit, delete) and stage
@@ -462,6 +472,20 @@ Features planned for after the initial release.
 ---
 
 ## Completed
+
+### Canticle Campaign Seed Data (Phase 0)
+
+- [x] Seed the Canticle campaign with 90 entities and 55
+  relationships covering the London, Lyon, and Venice
+  chapters plus campaign-wide entities.
+- [x] Add supplemental seed data with 84 entities and 42
+  relationships: PCs, major Vienna NPCs, creatures,
+  deities, key locations, stolen Mythos tomes, documents,
+  events, rituals, organizations, and cult cells.
+- [x] Add remaining Canticle entities with 99 entities and
+  29 relationships: minor London, Lyon, and Vienna NPCs,
+  all remaining locations, artifacts, documents, events,
+  organizations, and remaining Aeternum Choir cells.
 
 ### Chapter Upgrades
 

@@ -165,9 +165,14 @@ without play.
 - **Enforces narrative consistency** across chapters and sessions
   — catching contradictions, timeline conflicts, and forgotten
   plot threads.
-- **Generates content with deep knowledge of the GM's world** —
-  not generic TTRPG advice, but suggestions grounded in
+- **Generates content woven into the existing world** — not
+  generic TTRPG advice, but content actively connected to
   established characters, locations, factions, and history.
+  When asked to create an inn, the AI places it in the right
+  district, staffs it with NPCs the players met three sessions
+  ago, and gives the innkeeper a reason to know the merchant
+  from last chapter. Every generative act strengthens the
+  world's connective tissue.
 - **Extracts structure from unstructured content** — turning
   session notes, brainstorming conversations, and imported
   documents into entities, relationships, and timeline events.
@@ -224,6 +229,17 @@ The most valuable thing the AI does is not "analyze your text for
 entities." It is "you planned X, the players did Y, here is what
 that means for Z." Plan-vs-reality reconciliation is the killer
 feature of prep mode.
+
+### World-Grounded Generation
+
+The AI never generates content in isolation. Every generative
+request triggers a world model scan: scope resolution, orphan
+entity discovery, underconnected NPC identification, and
+relationship gap analysis. The AI actively seeks opportunities
+to connect new content to existing fabric, turning loose threads
+into narrative connective tissue. A generic LLM gives you a
+plausible inn; Imagineer gives you an inn that makes your world
+more coherent.
 
 ### The World Grows Through Use
 
