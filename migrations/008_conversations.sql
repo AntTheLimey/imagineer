@@ -425,7 +425,7 @@ BEGIN
     VALUES
         (p_campaign_id, p_scope_type, p_scope_id)
     ON CONFLICT ON CONSTRAINT uq_conversation_scope
-    DO UPDATE SET id = conversations.id
+    DO UPDATE SET updated_at = conversations.updated_at
     RETURNING conversations.id INTO v_id;
 
     -- xmax = 0 means the row was freshly inserted
