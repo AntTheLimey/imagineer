@@ -133,7 +133,7 @@ func (s *SSEWriter) WriteError(msg string) error {
 //	event: <type>\ndata: <json>\n\n
 func (s *SSEWriter) writeEvent(
 	eventType string,
-	data interface{},
+	data any,
 ) error {
 	jsonData, err := json.Marshal(data)
 	if err != nil {

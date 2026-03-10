@@ -52,8 +52,12 @@ func NewSessionCache(ttl time.Duration) *SessionCache {
 }
 
 // Get returns the cache entry for the given conversation
-// ID and refreshes its LastAccessed timestamp. It returns
+// ID, updating LastAccessed to extend the TTL. Returns
 // nil, false if the entry does not exist or has expired.
+//
+// The caller must not modify the returned entry
+// concurrently with other goroutines accessing the same
+// conversation. Use Set to store updated state.
 func (c *SessionCache) Get(convID int64) (*CacheEntry, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
