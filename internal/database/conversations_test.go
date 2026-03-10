@@ -125,3 +125,140 @@ func TestGetConversation_NotFound(t *testing.T) {
 	assert.Contains(t, err.Error(),
 		"failed to get conversation")
 }
+
+func TestCreateMessage(t *testing.T) {
+	db := setupIntegrationDB(t)
+	ctx := context.Background()
+	campaignID, _ := createTestCampaign(t, db)
+
+	conv, _, err :=
+		db.GetOrCreateConversation(ctx,
+			campaignID,
+			models.ScopeTypeChapter,
+			int64(1),
+		)
+	require.NoError(t, err)
+
+	msg, err := db.CreateMessage(ctx, conv.ID,
+		models.MessageRoleUser,
+		"Hello, help me with Session 5",
+		nil, nil, nil, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, conv.ID, msg.ConversationID)
+	assert.Equal(t, models.MessageRoleUser, msg.Role)
+	assert.Equal(t,
+		"Hello, help me with Session 5",
+		msg.Content)
+	assert.False(t, msg.Compacted)
+
+	// Verify trigger bumped updated_at
+	got, err := db.GetConversation(ctx, conv.ID)
+	require.NoError(t, err)
+	assert.True(t,
+		got.UpdatedAt.After(conv.UpdatedAt) ||
+			got.UpdatedAt.Equal(conv.UpdatedAt))
+}
+
+func TestListMessages(t *testing.T) {
+	db := setupIntegrationDB(t)
+	ctx := context.Background()
+	campaignID, _ := createTestCampaign(t, db)
+
+	conv, _, err :=
+		db.GetOrCreateConversation(ctx,
+			campaignID,
+			models.ScopeTypeChapter,
+			int64(1),
+		)
+	require.NoError(t, err)
+
+	_, err = db.CreateMessage(ctx, conv.ID,
+		models.MessageRoleUser, "First message",
+		nil, nil, nil, nil, nil)
+	require.NoError(t, err)
+	_, err = db.CreateMessage(ctx, conv.ID,
+		models.MessageRoleAssistant, "Response",
+		nil, nil, nil, nil, nil)
+	require.NoError(t, err)
+
+	msgs, err := db.ListMessages(ctx,
+		conv.ID, 50, 0)
+	require.NoError(t, err)
+	assert.Len(t, msgs, 2)
+	assert.Equal(t, "First message",
+		msgs[0].Content)
+}
+
+func TestAssembleConversationContext(t *testing.T) {
+	db := setupIntegrationDB(t)
+	ctx := context.Background()
+	campaignID, _ := createTestCampaign(t, db)
+
+	conv, _, err :=
+		db.GetOrCreateConversation(ctx,
+			campaignID,
+			models.ScopeTypeChapter,
+			int64(1),
+		)
+	require.NoError(t, err)
+
+	tokens := 100
+	_, err = db.CreateMessage(ctx, conv.ID,
+		models.MessageRoleUser, "Hello",
+		nil, nil, nil, nil, &tokens)
+	require.NoError(t, err)
+
+	cc, err := db.AssembleConversationContext(
+		ctx, conv.ID)
+	require.NoError(t, err)
+	assert.Equal(t, conv.ID,
+		cc.Conversation.ID)
+	assert.Len(t, cc.Messages, 1)
+	assert.Equal(t, 100, cc.TokenEstimate)
+}
+
+func TestCompactMessages(t *testing.T) {
+	db := setupIntegrationDB(t)
+	ctx := context.Background()
+	campaignID, _ := createTestCampaign(t, db)
+
+	conv, _, err :=
+		db.GetOrCreateConversation(ctx,
+			campaignID,
+			models.ScopeTypeChapter,
+			int64(1),
+		)
+	require.NoError(t, err)
+
+	msg1, err := db.CreateMessage(ctx, conv.ID,
+		models.MessageRoleUser, "Old message",
+		nil, nil, nil, nil, nil)
+	require.NoError(t, err)
+	_, err = db.CreateMessage(ctx, conv.ID,
+		models.MessageRoleAssistant, "Recent message",
+		nil, nil, nil, nil, nil)
+	require.NoError(t, err)
+
+	// Compact the first message
+	count, err := db.CompactMessages(ctx,
+		conv.ID, []int64{msg1.ID},
+		"Summary of old exchange", 50)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+
+	// Verify summary was updated
+	got, err := db.GetConversation(ctx, conv.ID)
+	require.NoError(t, err)
+	assert.NotNil(t, got.Summary)
+	assert.Equal(t, "Summary of old exchange",
+		*got.Summary)
+	assert.Equal(t, 50, got.SummaryTokens)
+
+	// Verify context excludes compacted
+	cc, err := db.AssembleConversationContext(
+		ctx, conv.ID)
+	require.NoError(t, err)
+	assert.Len(t, cc.Messages, 1)
+	assert.Equal(t, "Recent message",
+		cc.Messages[0].Content)
+}
