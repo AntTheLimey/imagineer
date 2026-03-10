@@ -40,7 +40,11 @@ func NewAnthropicStreamProvider(
 	return &AnthropicStreamProvider{
 		apiKey:  apiKey,
 		baseURL: anthropicAPIURL,
-		client:  &http.Client{Timeout: 300 * time.Second},
+		client: &http.Client{
+			Transport: &http.Transport{
+				ResponseHeaderTimeout: 30 * time.Second,
+			},
+		},
 	}, nil
 }
 
@@ -266,14 +270,19 @@ func (p *AnthropicStreamProvider) readSSEStream(
 			var msg sseMessageStart
 			if err := json.Unmarshal(
 				[]byte(data), &msg,
-			); err == nil {
-				if msg.Message.Usage.InputTokens > 0 {
-					ch <- StreamEvent{
-						Type: EventUsage,
-						Usage: &TokenUsage{
-							InputTokens: msg.Message.Usage.InputTokens,
-						},
-					}
+			); err != nil {
+				ch <- StreamEvent{
+					Type:  EventError,
+					Error: fmt.Errorf("parse message_start: %w", err),
+				}
+				continue
+			}
+			if msg.Message.Usage.InputTokens > 0 {
+				ch <- StreamEvent{
+					Type: EventUsage,
+					Usage: &TokenUsage{
+						InputTokens: msg.Message.Usage.InputTokens,
+					},
 				}
 			}
 
@@ -281,13 +290,18 @@ func (p *AnthropicStreamProvider) readSSEStream(
 			var block sseContentBlockStart
 			if err := json.Unmarshal(
 				[]byte(data), &block,
-			); err == nil {
-				blockType = block.ContentBlock.Type
-				if blockType == "tool_use" {
-					toolName = block.ContentBlock.Name
-					toolID = block.ContentBlock.ID
-					toolInputJSON.Reset()
+			); err != nil {
+				ch <- StreamEvent{
+					Type:  EventError,
+					Error: fmt.Errorf("parse content_block_start: %w", err),
 				}
+				continue
+			}
+			blockType = block.ContentBlock.Type
+			if blockType == "tool_use" {
+				toolName = block.ContentBlock.Name
+				toolID = block.ContentBlock.ID
+				toolInputJSON.Reset()
 			}
 
 		case "content_block_delta":
@@ -327,14 +341,19 @@ func (p *AnthropicStreamProvider) readSSEStream(
 			var md sseMessageDelta
 			if err := json.Unmarshal(
 				[]byte(data), &md,
-			); err == nil {
-				if md.Usage.OutputTokens > 0 {
-					ch <- StreamEvent{
-						Type: EventUsage,
-						Usage: &TokenUsage{
-							OutputTokens: md.Usage.OutputTokens,
-						},
-					}
+			); err != nil {
+				ch <- StreamEvent{
+					Type:  EventError,
+					Error: fmt.Errorf("parse message_delta: %w", err),
+				}
+				continue
+			}
+			if md.Usage.OutputTokens > 0 {
+				ch <- StreamEvent{
+					Type: EventUsage,
+					Usage: &TokenUsage{
+						OutputTokens: md.Usage.OutputTokens,
+					},
 				}
 			}
 
