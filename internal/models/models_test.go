@@ -704,3 +704,29 @@ func TestSessionChatMessage_JSONMarshalUnmarshal(t *testing.T) {
 	assert.Equal(t, msg.Content, result.Content)
 	assert.Equal(t, msg.SortOrder, result.SortOrder)
 }
+
+func TestScopeTypeValues(t *testing.T) {
+	valid := []ScopeType{
+		ScopeTypeEntity,
+		ScopeTypeChapter,
+		ScopeTypeSession,
+		ScopeTypeScene,
+		ScopeTypeCampaign,
+	}
+	for _, st := range valid {
+		assert.NotEmpty(t, string(st))
+	}
+}
+
+func TestMessageRoleValues(t *testing.T) {
+	valid := []MessageRole{
+		RoleUser,
+		RoleAssistant,
+		RoleSystem,
+		RoleToolCall,
+		RoleToolResult,
+	}
+	for _, r := range valid {
+		assert.NotEmpty(t, string(r))
+	}
+}
