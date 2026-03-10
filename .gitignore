@@ -1,6 +1,9 @@
 # Claude
 .claude/settings.local.json
 
+# Git worktrees
+.worktrees/
+
 # Build output
 bin/
 dist/
