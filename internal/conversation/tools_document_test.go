@@ -22,7 +22,7 @@ import (
 func TestDocumentToolDefinitions(t *testing.T) {
 	// Verify both tools have valid definitions.
 	// Use nil DB since we only check definitions.
-	tools := BuildDocumentTools(nil)
+	tools := BuildDocumentTools(nil, 0)
 	assert.Len(t, tools, 2)
 
 	for _, tool := range tools {
@@ -48,7 +48,7 @@ func TestDocumentToolDefinitions(t *testing.T) {
 }
 
 func TestDocumentToolInputSchemas(t *testing.T) {
-	tools := BuildDocumentTools(nil)
+	tools := BuildDocumentTools(nil, 0)
 
 	for _, tool := range tools {
 		t.Run(tool.Definition.Name, func(t *testing.T) {
@@ -79,7 +79,7 @@ func TestDocumentToolInputSchemas(t *testing.T) {
 }
 
 func TestDocumentToolNamesUnique(t *testing.T) {
-	tools := BuildDocumentTools(nil)
+	tools := BuildDocumentTools(nil, 0)
 	seen := make(map[string]bool)
 	for _, tool := range tools {
 		name := tool.Definition.Name
@@ -134,7 +134,7 @@ func TestReadDocumentInputValidation(t *testing.T) {
 
 	// Build tools with nil DB — validation happens
 	// before any DB calls.
-	tools := BuildDocumentTools(nil)
+	tools := BuildDocumentTools(nil, 0)
 	var readTool Tool
 	for _, tool := range tools {
 		if tool.Definition.Name == "read_document" {
@@ -221,7 +221,7 @@ func TestEditDocumentInputValidation(t *testing.T) {
 
 	// Build tools with nil DB — validation happens
 	// before any DB calls.
-	tools := BuildDocumentTools(nil)
+	tools := BuildDocumentTools(nil, 0)
 	var editTool Tool
 	for _, tool := range tools {
 		if tool.Definition.Name == "edit_document" {

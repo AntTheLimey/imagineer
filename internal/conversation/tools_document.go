@@ -25,10 +25,13 @@ import (
 // edit_document tools and returns them as a slice.
 // Pass nil for db when only tool definitions are
 // needed (e.g. in tests).
-func BuildDocumentTools(db *database.DB) []Tool {
+func BuildDocumentTools(
+	db *database.DB,
+	campaignID int64,
+) []Tool {
 	return []Tool{
-		buildReadDocumentTool(db),
-		buildEditDocumentTool(db),
+		buildReadDocumentTool(db, campaignID),
+		buildEditDocumentTool(db, campaignID),
 	}
 }
 
@@ -61,12 +64,14 @@ func derefStr(s *string) string {
 }
 
 // readDocument fetches the title and content for a
-// given scope type and ID from the database.
+// given scope type and ID from the database. It also
+// verifies the record belongs to the expected campaign.
 func readDocument(
 	ctx context.Context,
 	db *database.DB,
 	scopeType models.ScopeType,
 	scopeID int64,
+	campaignID int64,
 ) (title, content string, err error) {
 	switch scopeType {
 	case models.ScopeTypeChapter:
@@ -74,6 +79,10 @@ func readDocument(
 		if e != nil {
 			return "", "", fmt.Errorf(
 				"failed to get chapter: %w", e)
+		}
+		if ch.CampaignID != campaignID {
+			return "", "", fmt.Errorf(
+				"document does not belong to this campaign")
 		}
 		return ch.Title, derefStr(ch.Overview), nil
 
@@ -83,6 +92,10 @@ func readDocument(
 			return "", "", fmt.Errorf(
 				"failed to get session: %w", e)
 		}
+		if s.CampaignID != campaignID {
+			return "", "", fmt.Errorf(
+				"document does not belong to this campaign")
+		}
 		return derefStr(s.Title), derefStr(s.PrepNotes), nil
 
 	case models.ScopeTypeScene:
@@ -91,6 +104,10 @@ func readDocument(
 			return "", "", fmt.Errorf(
 				"failed to get scene: %w", e)
 		}
+		if sc.CampaignID != campaignID {
+			return "", "", fmt.Errorf(
+				"document does not belong to this campaign")
+		}
 		return sc.Title, derefStr(sc.Description), nil
 
 	case models.ScopeTypeEntity:
@@ -98,6 +115,10 @@ func readDocument(
 		if e != nil {
 			return "", "", fmt.Errorf(
 				"failed to get entity: %w", e)
+		}
+		if ent.CampaignID != campaignID {
+			return "", "", fmt.Errorf(
+				"document does not belong to this campaign")
 		}
 		return ent.Name, derefStr(ent.Description), nil
 
@@ -111,7 +132,10 @@ func readDocument(
 // document content for a chapter, session, scene, or
 // entity. It deliberately excludes GM notes for
 // security purposes.
-func buildReadDocumentTool(db *database.DB) Tool {
+func buildReadDocumentTool(
+	db *database.DB,
+	campaignID int64,
+) Tool {
 	return Tool{
 		Definition: llm.ToolDefinition{
 			Name: "read_document",
@@ -167,7 +191,8 @@ func buildReadDocumentTool(db *database.DB) Tool {
 			}
 
 			title, content, err := readDocument(
-				ctx, db, st, params.ScopeID)
+				ctx, db, st, params.ScopeID,
+				campaignID)
 			if err != nil {
 				return nil, err
 			}
@@ -197,28 +222,44 @@ func writeContent(
 			models.UpdateChapterRequest{
 				Overview: &content,
 			})
-		return err
+		if err != nil {
+			return fmt.Errorf(
+				"failed to update chapter: %w", err)
+		}
+		return nil
 
 	case models.ScopeTypeSession:
 		_, err := db.UpdateSession(ctx, scopeID,
 			models.UpdateSessionRequest{
 				PrepNotes: &content,
 			})
-		return err
+		if err != nil {
+			return fmt.Errorf(
+				"failed to update session: %w", err)
+		}
+		return nil
 
 	case models.ScopeTypeScene:
 		_, err := db.UpdateScene(ctx, scopeID,
 			models.UpdateSceneRequest{
 				Description: &content,
 			})
-		return err
+		if err != nil {
+			return fmt.Errorf(
+				"failed to update scene: %w", err)
+		}
+		return nil
 
 	case models.ScopeTypeEntity:
 		_, err := db.UpdateEntity(ctx, scopeID,
 			models.UpdateEntityRequest{
 				Description: &content,
 			})
-		return err
+		if err != nil {
+			return fmt.Errorf(
+				"failed to update entity: %w", err)
+		}
+		return nil
 
 	default:
 		return fmt.Errorf(
@@ -231,13 +272,16 @@ func writeContent(
 // document content for a chapter, session, scene, or
 // entity. Supports replace, append, and insert
 // (prepend) operations.
-func buildEditDocumentTool(db *database.DB) Tool {
+func buildEditDocumentTool(
+	db *database.DB,
+	campaignID int64,
+) Tool {
 	return Tool{
 		Definition: llm.ToolDefinition{
 			Name: "edit_document",
-			Description: "Edit the text content of a chapter, session, scene, or entity. " +
-				"Supports replace (find and replace text), append (add to end), " +
-				"and insert (add to beginning) operations.",
+			Description: "Edit the content of a chapter, session, scene, or entity. " +
+				"Supports replace (first occurrence), insert (prepend), " +
+				"and append operations.",
 			InputSchema: json.RawMessage(`{
 				"type": "object",
 				"properties": {
@@ -327,9 +371,12 @@ func buildEditDocumentTool(db *database.DB) Tool {
 					"invalid scope_type: %s", params.ScopeType)
 			}
 
-			// Read the current content.
+			// Note: read-modify-write is not transactional.
+			// Acceptable because conversations serialise
+			// requests per session.
 			title, content, err := readDocument(
-				ctx, db, st, params.ScopeID)
+				ctx, db, st, params.ScopeID,
+				campaignID)
 			if err != nil {
 				return nil, err
 			}
