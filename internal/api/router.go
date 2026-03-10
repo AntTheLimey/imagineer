@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/antonypegg/imagineer/internal/auth"
+	"github.com/antonypegg/imagineer/internal/conversation"
 	"github.com/antonypegg/imagineer/internal/database"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -33,11 +34,17 @@ var ErrMissingJWTSecret = errors.New("JWT secret is required for authentication"
 // JWT authentication middleware is applied to protected routes (campaigns, entities,
 // stats, imports, agents).
 //
-// NewRouter creates and returns a configured HTTP router for the API, including middleware, CORS,
-// public routes, and authentication-protected routes for campaign, entity, user, import, agent and
-// statistics endpoints.
+// The orch parameter is the conversation orchestrator. If nil, conversation
+// routes are still registered but will return errors when called (the handler
+// gracefully handles a nil orchestrator).
+//
 // If jwtSecret is empty, NewRouter returns ErrMissingJWTSecret.
-func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string) (http.Handler, error) {
+func NewRouter(
+	db *database.DB,
+	authHandler *auth.AuthHandler,
+	jwtSecret string,
+	orch *conversation.Orchestrator,
+) (http.Handler, error) {
 	if jwtSecret == "" {
 		return nil, ErrMissingJWTSecret
 	}
@@ -71,6 +78,7 @@ func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string)
 	sceneHandler := NewSceneHandler(db)
 	draftHandler := NewDraftHandler(db)
 	enrichmentHandler := NewEnrichmentHandler(db)
+	convHandler := NewConversationHandler(db, orch)
 
 	// API routes
 	r.Route("/api", func(r chi.Router) {
@@ -270,6 +278,16 @@ func NewRouter(db *database.DB, authHandler *auth.AuthHandler, jwtSecret string)
 						r.Get("/", h.ListConstraintOverrides)
 						r.Post("/", h.CreateConstraintOverride)
 						r.Delete("/{overrideId}", h.DeleteConstraintOverride)
+					})
+
+					// Conversations
+					r.Route("/conversations", func(r chi.Router) {
+						r.Post("/", convHandler.Create)
+						r.Get("/", convHandler.List)
+						r.Route("/{conversationId}", func(r chi.Router) {
+							r.Get("/", convHandler.Get)
+							r.Post("/messages", convHandler.SendMessage)
+						})
 					})
 				})
 			})

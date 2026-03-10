@@ -359,7 +359,7 @@ func TestAnalysisSummary_JSONSerialization(t *testing.T) {
 }
 
 func TestContentAnalysis_RoutesRegistered(t *testing.T) {
-	router, err := NewRouter(nil, nil, testJWTSecret)
+	router, err := NewRouter(nil, nil, testJWTSecret, nil)
 	require.NoError(t, err)
 
 	tests := []struct {

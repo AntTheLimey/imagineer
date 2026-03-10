@@ -165,7 +165,7 @@ func TestEntityResolveResult_ArraySerialization(t *testing.T) {
 func TestResolveEntity_RouteRegistered(t *testing.T) {
 	// Verify the route is registered in the router by checking that
 	// a request to the resolve endpoint does not return 404/405.
-	router, err := NewRouter(nil, nil, testJWTSecret)
+	router, err := NewRouter(nil, nil, testJWTSecret, nil)
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/campaigns/1/entities/resolve?name=test", nil)
