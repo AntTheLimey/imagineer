@@ -14,6 +14,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/antonypegg/imagineer/internal/models"
 )
@@ -202,7 +203,11 @@ func (db *DB) CreateMessage(
 }
 
 // ListMessages returns messages for a conversation
-// with pagination. Ordered by created_at ascending.
+// ordered by created_at ASC. When beforeID > 0,
+// returns only messages with id < beforeID (for
+// loading earlier history). Callers needing the
+// N messages immediately before a cursor should
+// pass an appropriate limit.
 func (db *DB) ListMessages(
 	ctx context.Context,
 	conversationID int64,
@@ -306,9 +311,21 @@ func (db *DB) AssembleConversationContext(
 			"context rows error: %w", err)
 	}
 	if first {
-		return nil, fmt.Errorf(
-			"conversation %d not found",
-			conversationID)
+		// Stored function returned no rows — either the
+		// conversation does not exist, or all messages
+		// are compacted (JOIN on compacted=FALSE).
+		// Fall back to a direct conversation lookup.
+		conv, err := db.GetConversation(ctx, conversationID)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"conversation %d not found: %w",
+				conversationID, err)
+		}
+		return &models.ConversationContext{
+			Conversation:  *conv,
+			Messages:      nil,
+			TokenEstimate: conv.SummaryTokens,
+		}, nil
 	}
 	return &cc, nil
 }
@@ -322,6 +339,10 @@ func (db *DB) CompactMessages(
 	newSummary string,
 	summaryTokens int,
 ) (int, error) {
+	if len(messageIDs) == 0 {
+		return 0, nil
+	}
+
 	var compactedCount int
 	err := db.QueryRow(ctx,
 		`SELECT compact_messages($1, $2, $3, $4)`,
@@ -372,4 +393,83 @@ func (db *DB) scanMessages(
 			"message rows error: %w", err)
 	}
 	return msgs, nil
+}
+
+// LogTokenUsage records token consumption for a
+// single LLM call.
+func (db *DB) LogTokenUsage(
+	ctx context.Context,
+	usage models.TokenUsageLog,
+) error {
+	err := db.Exec(ctx,
+		`INSERT INTO token_usage_log
+			(conversation_id, campaign_id,
+			 user_id, model, input_tokens,
+			 output_tokens, total_tokens,
+			 llm_call_type, agent_name)
+		 VALUES ($1, $2, $3, $4, $5, $6,
+				 $7, $8, $9)`,
+		usage.ConversationID,
+		usage.CampaignID,
+		usage.UserID,
+		usage.Model,
+		usage.InputTokens,
+		usage.OutputTokens,
+		usage.TotalTokens,
+		string(usage.LLMCallType),
+		usage.AgentName,
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to log token usage: %w", err)
+	}
+	return nil
+}
+
+// GetTokenUsageSummary calls
+// get_token_usage_summary(). Pass nil for
+// campaignID or userID for broader aggregation.
+func (db *DB) GetTokenUsageSummary(
+	ctx context.Context,
+	campaignID *int64,
+	userID *int64,
+	since time.Time,
+	until *time.Time,
+) ([]models.TokenUsageSummary, error) {
+	rows, err := db.Query(ctx,
+		`SELECT llm_call_type, model,
+			call_count, total_input_tokens,
+			total_output_tokens, total_tokens
+		 FROM get_token_usage_summary(
+			 $1, $2, $3, $4)`,
+		campaignID, userID, since, until,
+	)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"get_token_usage_summary: %w", err)
+	}
+	defer rows.Close()
+
+	var summaries []models.TokenUsageSummary
+	for rows.Next() {
+		var s models.TokenUsageSummary
+		err := rows.Scan(
+			&s.LLMCallType, &s.Model,
+			&s.CallCount,
+			&s.TotalInputTokens,
+			&s.TotalOutputTokens,
+			&s.TotalTokens,
+		)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"scan token usage summary: %w",
+				err)
+		}
+		summaries = append(summaries, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf(
+			"token usage rows error: %w", err)
+	}
+	return summaries, nil
 }

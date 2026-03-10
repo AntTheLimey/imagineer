@@ -15,6 +15,7 @@ package database
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/antonypegg/imagineer/internal/models"
 	"github.com/stretchr/testify/assert"
@@ -261,4 +262,87 @@ func TestCompactMessages(t *testing.T) {
 	assert.Len(t, cc.Messages, 1)
 	assert.Equal(t, "Recent message",
 		cc.Messages[0].Content)
+}
+
+func TestLogTokenUsage(t *testing.T) {
+	db := setupIntegrationDB(t)
+	ctx := context.Background()
+	campaignID, _ := createTestCampaign(t, db)
+
+	// Get user ID from campaign owner
+	var userID int64
+	err := db.QueryRow(ctx,
+		"SELECT owner_id FROM campaigns WHERE id = $1",
+		campaignID).Scan(&userID)
+	require.NoError(t, err)
+
+	conv, _, err :=
+		db.GetOrCreateConversation(ctx,
+			campaignID,
+			models.ScopeTypeChapter,
+			int64(1),
+		)
+	require.NoError(t, err)
+
+	err = db.LogTokenUsage(ctx,
+		models.TokenUsageLog{
+			ConversationID: conv.ID,
+			CampaignID:     campaignID,
+			UserID:         userID,
+			Model:          "claude-sonnet-4-20250514",
+			InputTokens:    1200,
+			OutputTokens:   380,
+			TotalTokens:    1580,
+			LLMCallType:    models.CallTypeConversation,
+		},
+	)
+	require.NoError(t, err)
+}
+
+func TestGetTokenUsageSummary(t *testing.T) {
+	db := setupIntegrationDB(t)
+	ctx := context.Background()
+	campaignID, _ := createTestCampaign(t, db)
+
+	// Get user ID from campaign owner
+	var userID int64
+	err := db.QueryRow(ctx,
+		"SELECT owner_id FROM campaigns WHERE id = $1",
+		campaignID).Scan(&userID)
+	require.NoError(t, err)
+
+	conv, _, err :=
+		db.GetOrCreateConversation(ctx,
+			campaignID,
+			models.ScopeTypeChapter,
+			int64(1),
+		)
+	require.NoError(t, err)
+
+	// Log two entries
+	for i := 0; i < 2; i++ {
+		err = db.LogTokenUsage(ctx,
+			models.TokenUsageLog{
+				ConversationID: conv.ID,
+				CampaignID:     campaignID,
+				UserID:         userID,
+				Model:          "claude-sonnet-4-20250514",
+				InputTokens:    1000,
+				OutputTokens:   500,
+				TotalTokens:    1500,
+				LLMCallType:    models.CallTypeConversation,
+			},
+		)
+		require.NoError(t, err)
+	}
+
+	since := time.Now().Add(-1 * time.Hour)
+	summaries, err := db.GetTokenUsageSummary(
+		ctx, &campaignID, &userID, since, nil)
+	require.NoError(t, err)
+	assert.NotEmpty(t, summaries)
+	assert.Equal(t, int64(2),
+		summaries[0].CallCount)
+	assert.Equal(t, int64(3000),
+		summaries[0].TotalTokens)
 }
