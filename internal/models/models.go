@@ -882,8 +882,6 @@ type CreateConstraintOverrideRequest struct {
 	OverrideKey    string `json:"overrideKey"`
 }
 
-// --- Conversation types ---
-
 // ScopeType identifies what a conversation is scoped to.
 type ScopeType string
 
@@ -899,11 +897,11 @@ const (
 type MessageRole string
 
 const (
-	RoleUser       MessageRole = "user"
-	RoleAssistant  MessageRole = "assistant"
-	RoleSystem     MessageRole = "system"
-	RoleToolCall   MessageRole = "tool_call"
-	RoleToolResult MessageRole = "tool_result"
+	MessageRoleUser       MessageRole = "user"
+	MessageRoleAssistant  MessageRole = "assistant"
+	MessageRoleSystem     MessageRole = "system"
+	MessageRoleToolCall   MessageRole = "tool_call"
+	MessageRoleToolResult MessageRole = "tool_result"
 )
 
 // LLMCallType categorises an LLM invocation for metering.
@@ -980,9 +978,9 @@ type TokenUsageLog struct {
 // conversation metadata and all uncompacted
 // messages in one struct.
 type ConversationContext struct {
-	Conversation  Conversation
-	Messages      []Message
-	TokenEstimate int
+	Conversation  Conversation `json:"conversation"`
+	Messages      []Message    `json:"messages"`
+	TokenEstimate int          `json:"tokenEstimate"`
 }
 
 // ConversationListItem is a row from the

@@ -706,27 +706,270 @@ func TestSessionChatMessage_JSONMarshalUnmarshal(t *testing.T) {
 }
 
 func TestScopeTypeValues(t *testing.T) {
-	valid := []ScopeType{
-		ScopeTypeEntity,
-		ScopeTypeChapter,
-		ScopeTypeSession,
-		ScopeTypeScene,
-		ScopeTypeCampaign,
+	tests := []struct {
+		scopeType ScopeType
+		expected  string
+	}{
+		{ScopeTypeEntity, "entity"},
+		{ScopeTypeChapter, "chapter"},
+		{ScopeTypeSession, "session"},
+		{ScopeTypeScene, "scene"},
+		{ScopeTypeCampaign, "campaign"},
 	}
-	for _, st := range valid {
-		assert.NotEmpty(t, string(st))
+
+	for _, tt := range tests {
+		t.Run(tt.expected, func(t *testing.T) {
+			assert.Equal(t, tt.expected, string(tt.scopeType))
+		})
 	}
 }
 
 func TestMessageRoleValues(t *testing.T) {
-	valid := []MessageRole{
-		RoleUser,
-		RoleAssistant,
-		RoleSystem,
-		RoleToolCall,
-		RoleToolResult,
+	tests := []struct {
+		role     MessageRole
+		expected string
+	}{
+		{MessageRoleUser, "user"},
+		{MessageRoleAssistant, "assistant"},
+		{MessageRoleSystem, "system"},
+		{MessageRoleToolCall, "tool_call"},
+		{MessageRoleToolResult, "tool_result"},
 	}
-	for _, r := range valid {
-		assert.NotEmpty(t, string(r))
+
+	for _, tt := range tests {
+		t.Run(tt.expected, func(t *testing.T) {
+			assert.Equal(t, tt.expected, string(tt.role))
+		})
+	}
+}
+
+func TestLLMCallType_Values(t *testing.T) {
+	tests := []struct {
+		callType LLMCallType
+		expected string
+	}{
+		{CallTypeConversation, "conversation"},
+		{CallTypeCompaction, "compaction"},
+		{CallTypeAgentTool, "agent_tool"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.expected, func(t *testing.T) {
+			assert.Equal(t, tt.expected, string(tt.callType))
+		})
+	}
+}
+
+func TestConversation_JSONMarshalUnmarshal(t *testing.T) {
+	title := "Discussing the cult's motives"
+	summary := "We explored the cult's hierarchy"
+
+	tests := []struct {
+		name         string
+		conversation Conversation
+	}{
+		{
+			name: "full conversation",
+			conversation: Conversation{
+				ID:            1,
+				CampaignID:    3,
+				ScopeType:     ScopeTypeEntity,
+				ScopeID:       5,
+				Title:         &title,
+				Summary:       &summary,
+				SummaryTokens: 120,
+				CreatedAt:     time.Date(2025, 8, 1, 10, 0, 0, 0, time.UTC),
+				UpdatedAt:     time.Date(2025, 8, 2, 14, 0, 0, 0, time.UTC),
+				Messages: []Message{
+					{
+						ID:             1,
+						ConversationID: 1,
+						Role:           MessageRoleUser,
+						Content:        "Tell me about this NPC",
+						CreatedAt:      time.Date(2025, 8, 1, 10, 0, 0, 0, time.UTC),
+					},
+				},
+			},
+		},
+		{
+			name: "minimal conversation",
+			conversation: Conversation{
+				ID:         2,
+				CampaignID: 3,
+				ScopeType:  ScopeTypeCampaign,
+				ScopeID:    3,
+				CreatedAt:  time.Date(2025, 8, 3, 9, 0, 0, 0, time.UTC),
+				UpdatedAt:  time.Date(2025, 8, 3, 9, 0, 0, 0, time.UTC),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Marshal
+			data, err := json.Marshal(tt.conversation)
+			require.NoError(t, err)
+
+			// Verify nullable and omitempty fields in raw JSON
+			var raw map[string]interface{}
+			err = json.Unmarshal(data, &raw)
+			require.NoError(t, err)
+
+			if tt.conversation.Title != nil {
+				assert.Equal(t, *tt.conversation.Title, raw["title"])
+			} else {
+				assert.NotContains(t, raw, "title")
+			}
+			if tt.conversation.Summary != nil {
+				assert.Equal(t, *tt.conversation.Summary, raw["summary"])
+			} else {
+				assert.NotContains(t, raw, "summary")
+			}
+			if len(tt.conversation.Messages) > 0 {
+				assert.Contains(t, raw, "messages")
+			} else {
+				assert.NotContains(t, raw, "messages")
+			}
+
+			// Round-trip test
+			var result Conversation
+			err = json.Unmarshal(data, &result)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.conversation.ID, result.ID)
+			assert.Equal(t, tt.conversation.CampaignID, result.CampaignID)
+			assert.Equal(t, tt.conversation.ScopeType, result.ScopeType)
+			assert.Equal(t, tt.conversation.ScopeID, result.ScopeID)
+			assert.Equal(t, tt.conversation.SummaryTokens, result.SummaryTokens)
+		})
+	}
+}
+
+func TestMessage_JSONMarshalUnmarshal(t *testing.T) {
+	toolName := "search_entities"
+	toolUseID := "toolu_abc123"
+	tokens := 50
+
+	tests := []struct {
+		name    string
+		message Message
+	}{
+		{
+			name: "full message with tool fields",
+			message: Message{
+				ID:             1,
+				ConversationID: 1,
+				Role:           MessageRoleToolCall,
+				Content:        "",
+				ToolName:       &toolName,
+				ToolUseID:      &toolUseID,
+				ToolInput:      json.RawMessage(`{"query": "cultists"}`),
+				ToolResult:     json.RawMessage(`{"entities": []}`),
+				Tokens:         &tokens,
+				Compacted:      false,
+				CreatedAt:      time.Date(2025, 8, 1, 10, 0, 0, 0, time.UTC),
+			},
+		},
+		{
+			name: "minimal user message",
+			message: Message{
+				ID:             2,
+				ConversationID: 1,
+				Role:           MessageRoleUser,
+				Content:        "What do we know about the cult?",
+				Compacted:      false,
+				CreatedAt:      time.Date(2025, 8, 1, 10, 1, 0, 0, time.UTC),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Marshal
+			data, err := json.Marshal(tt.message)
+			require.NoError(t, err)
+
+			// Round-trip test
+			var result Message
+			err = json.Unmarshal(data, &result)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.message.ID, result.ID)
+			assert.Equal(t, tt.message.ConversationID, result.ConversationID)
+			assert.Equal(t, tt.message.Role, result.Role)
+			assert.Equal(t, tt.message.Content, result.Content)
+			assert.Equal(t, tt.message.Compacted, result.Compacted)
+
+			// Verify tool fields
+			if tt.message.ToolName != nil {
+				require.NotNil(t, result.ToolName)
+				assert.Equal(t, *tt.message.ToolName, *result.ToolName)
+			} else {
+				assert.Nil(t, result.ToolName)
+			}
+			if tt.message.ToolUseID != nil {
+				require.NotNil(t, result.ToolUseID)
+				assert.Equal(t, *tt.message.ToolUseID, *result.ToolUseID)
+			} else {
+				assert.Nil(t, result.ToolUseID)
+			}
+
+			// Verify json.RawMessage fields round-trip
+			if tt.message.ToolInput != nil {
+				assert.JSONEq(t, string(tt.message.ToolInput), string(result.ToolInput))
+			}
+			if tt.message.ToolResult != nil {
+				assert.JSONEq(t, string(tt.message.ToolResult), string(result.ToolResult))
+			}
+		})
+	}
+}
+
+func TestSendMessageRequest_JSONUnmarshal(t *testing.T) {
+	tests := []struct {
+		name     string
+		jsonData string
+		expected SendMessageRequest
+		wantErr  bool
+	}{
+		{
+			name:     "content only",
+			jsonData: `{"content": "Tell me about the cult"}`,
+			expected: SendMessageRequest{
+				Content: "Tell me about the cult",
+			},
+		},
+		{
+			name:     "with editor selection",
+			jsonData: `{"content": "Expand on this", "editorSelection": "The cult meets at midnight"}`,
+			expected: SendMessageRequest{
+				Content: "Expand on this",
+			},
+		},
+		{
+			name:     "invalid JSON",
+			jsonData: `{"content": }`,
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var result SendMessageRequest
+			err := json.Unmarshal([]byte(tt.jsonData), &result)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected.Content, result.Content)
+
+			if tt.name == "with editor selection" {
+				require.NotNil(t, result.EditorSelection)
+				assert.Equal(t, "The cult meets at midnight", *result.EditorSelection)
+			}
+		})
 	}
 }
