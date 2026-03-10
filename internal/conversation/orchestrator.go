@@ -13,6 +13,7 @@ package conversation
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/antonypegg/imagineer/internal/database"
@@ -44,6 +45,7 @@ type Orchestrator struct {
 	cache      *SessionCache
 	promptPath string
 	schemasDir string
+	model      string
 }
 
 // OrchestratorConfig holds the configuration for
@@ -55,6 +57,7 @@ type OrchestratorConfig struct {
 	PromptPath string
 	SchemasDir string
 	CacheTTL   time.Duration
+	Model      string
 }
 
 // NewOrchestrator creates an orchestrator with the
@@ -66,6 +69,11 @@ func NewOrchestrator(cfg OrchestratorConfig) *Orchestrator {
 		ttl = defaultCacheTTL
 	}
 
+	model := cfg.Model
+	if model == "" {
+		model = "unspecified"
+	}
+
 	return &Orchestrator{
 		db:         cfg.DB,
 		provider:   cfg.Provider,
@@ -73,6 +81,7 @@ func NewOrchestrator(cfg OrchestratorConfig) *Orchestrator {
 		cache:      NewSessionCache(ttl),
 		promptPath: cfg.PromptPath,
 		schemasDir: cfg.SchemasDir,
+		model:      model,
 	}
 }
 
@@ -96,6 +105,14 @@ func (o *Orchestrator) HandleMessage(
 	userID int64,
 	content string,
 ) (<-chan llm.StreamEvent, error) {
+	if content == "" {
+		return nil, fmt.Errorf("message content is required")
+	}
+	if conversationID <= 0 {
+		return nil, fmt.Errorf(
+			"valid conversation ID is required")
+	}
+
 	outCh := make(chan llm.StreamEvent, 64)
 
 	go func() {
@@ -198,6 +215,9 @@ func (o *Orchestrator) runLoop(
 	// Step 3: Build system prompt.
 	systemPrompt := defaultSystemPrompt
 	if o.promptPath != "" {
+		// TODO: populate PromptContext from campaign data
+		// (campaign name, game system, etc.) once the
+		// campaign is loaded from the database.
 		rendered, err := LoadSystemPrompt(
 			o.promptPath, PromptContext{})
 		if err != nil {
@@ -301,8 +321,14 @@ func (o *Orchestrator) runLoop(
 						execErr.Error()))
 				}
 
-				// Append assistant tool call and
-				// result messages.
+				// Note: multiple tool calls from a
+				// single LLM turn are appended as
+				// interleaved assistant/user pairs.
+				// This alternates roles correctly but
+				// deviates from the Anthropic API's
+				// preferred format of batched content
+				// blocks. See tools_agent.go for the
+				// same pattern and rationale.
 				messages = append(messages,
 					llm.StreamingMessage{
 						Role:      "assistant",
@@ -322,20 +348,36 @@ func (o *Orchestrator) runLoop(
 				if o.db != nil {
 					toolName := call.Name
 					toolID := call.ID
-					_, _ = o.db.CreateMessage(
+					if _, err := o.db.CreateMessage(
 						ctx, conversationID,
 						models.MessageRoleToolCall,
 						"",
 						&toolName, &toolID,
 						call.Input, nil, nil,
-					)
-					_, _ = o.db.CreateMessage(
+					); err != nil {
+						slog.Warn(
+							"failed to persist tool call",
+							"conversation_id",
+							conversationID,
+							"tool", call.Name,
+							"error", err,
+						)
+					}
+					if _, err := o.db.CreateMessage(
 						ctx, conversationID,
 						models.MessageRoleToolResult,
 						"",
 						&toolName, &toolID,
 						nil, result, nil,
-					)
+					); err != nil {
+						slog.Warn(
+							"failed to persist tool result",
+							"conversation_id",
+							conversationID,
+							"tool", call.Name,
+							"error", err,
+						)
+					}
 				}
 			}
 			// Loop back for next LLM call.
@@ -346,29 +388,43 @@ func (o *Orchestrator) runLoop(
 
 		// Persist assistant message.
 		if o.db != nil {
-			_, _ = o.db.CreateMessage(
+			if _, err := o.db.CreateMessage(
 				ctx, conversationID,
 				models.MessageRoleAssistant,
 				accumulated,
 				nil, nil, nil, nil, nil,
-			)
+			); err != nil {
+				slog.Error(
+					"failed to persist assistant message",
+					"conversation_id",
+					conversationID,
+					"error", err,
+				)
+			}
 		}
 
 		// Log token usage.
 		if o.db != nil && (totalUsage.InputTokens > 0 ||
 			totalUsage.OutputTokens > 0) {
-			_ = o.db.LogTokenUsage(
+			if err := o.db.LogTokenUsage(
 				ctx, models.TokenUsageLog{
 					ConversationID: conversationID,
 					CampaignID:     campaignID,
 					UserID:         userID,
-					Model:          "unknown",
+					Model:          o.model,
 					InputTokens:    totalUsage.InputTokens,
 					OutputTokens:   totalUsage.OutputTokens,
 					TotalTokens: totalUsage.InputTokens +
 						totalUsage.OutputTokens,
 					LLMCallType: models.CallTypeConversation,
-				})
+				}); err != nil {
+				slog.Warn(
+					"failed to log token usage",
+					"conversation_id",
+					conversationID,
+					"error", err,
+				)
+			}
 		}
 
 		// Update cache.
