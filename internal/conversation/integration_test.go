@@ -35,8 +35,8 @@ func TestConversationEndToEnd(t *testing.T) {
 			// First call: tool use.
 			{
 				{Type: llm.EventToolUse,
-					ToolName:  "search_entities",
-					ToolID:    "call_001",
+					ToolName: "search_entities",
+					ToolID:   "call_001",
 					ToolInput: json.RawMessage(
 						`{"query":"NPCs near the inn"}`)},
 				{Type: llm.EventUsage,
@@ -224,13 +224,13 @@ func TestConversationEndToEndMultipleToolCalls(
 			// First call: two tool calls.
 			{
 				{Type: llm.EventToolUse,
-					ToolName:  "search_entities",
-					ToolID:    "call_001",
+					ToolName: "search_entities",
+					ToolID:   "call_001",
 					ToolInput: json.RawMessage(
 						`{"query":"tavern"}`)},
 				{Type: llm.EventToolUse,
-					ToolName:  "get_entity",
-					ToolID:    "call_002",
+					ToolName: "get_entity",
+					ToolID:   "call_002",
 					ToolInput: json.RawMessage(
 						`{"id":42}`)},
 				{Type: llm.EventUsage,
@@ -367,8 +367,8 @@ func TestConversationEndToEndToolError(t *testing.T) {
 			// First call: tool call.
 			{
 				{Type: llm.EventToolUse,
-					ToolName:  "search_entities",
-					ToolID:    "call_001",
+					ToolName: "search_entities",
+					ToolID:   "call_001",
 					ToolInput: json.RawMessage(
 						`{"query":"dragons"}`)},
 				{Type: llm.EventDone},
@@ -470,8 +470,8 @@ func TestConversationEndToEndCachePreservation(
 			// First call: tool use.
 			{
 				{Type: llm.EventToolUse,
-					ToolName:  "echo_tool",
-					ToolID:    "call_001",
+					ToolName: "echo_tool",
+					ToolID:   "call_001",
 					ToolInput: json.RawMessage(
 						`{"message":"test"}`)},
 				{Type: llm.EventDone},
