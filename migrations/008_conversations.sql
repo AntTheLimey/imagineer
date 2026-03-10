@@ -265,6 +265,12 @@ CREATE INDEX idx_token_usage_conversation
 COMMENT ON INDEX idx_token_usage_conversation IS
     'Per-conversation token total queries.';
 
+CREATE INDEX idx_messages_conversation_counts
+    ON messages(conversation_id, compacted);
+COMMENT ON INDEX idx_messages_conversation_counts
+    IS 'Supports COUNT aggregations in '
+       'conversation_list view.';
+
 -- ============================================
 -- Section 4: Views
 -- ============================================
@@ -402,27 +408,31 @@ DECLARE
     v_id      BIGINT;
     v_created BOOLEAN;
 BEGIN
+    -- Validate scope_type at function level for
+    -- clear error messages before hitting the
+    -- CHECK constraint.
+    IF p_scope_type NOT IN (
+        'entity', 'chapter', 'session',
+        'scene', 'campaign'
+    ) THEN
+        RAISE EXCEPTION
+            'invalid scope_type: %', p_scope_type
+            USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+
     INSERT INTO conversations
         (campaign_id, scope_type, scope_id)
     VALUES
         (p_campaign_id, p_scope_type, p_scope_id)
     ON CONFLICT ON CONSTRAINT uq_conversation_scope
-    DO NOTHING
+    DO UPDATE SET id = conversations.id
     RETURNING conversations.id INTO v_id;
 
-    IF v_id IS NOT NULL THEN
-        v_created := TRUE;
-    ELSE
-        v_created := FALSE;
-        SELECT conversations.id INTO v_id
-        FROM conversations
-        WHERE conversations.campaign_id
-                  = p_campaign_id
-          AND conversations.scope_type
-                  = p_scope_type
-          AND conversations.scope_id
-                  = p_scope_id;
-    END IF;
+    -- xmax = 0 means the row was freshly inserted
+    -- (no prior version existed).
+    SELECT (xmax = 0) INTO v_created
+    FROM conversations
+    WHERE conversations.id = v_id;
 
     RETURN QUERY
     SELECT c.id, c.campaign_id,
@@ -463,32 +473,14 @@ RETURNS TABLE (
     message_tokens           INT,
     message_created_at       TIMESTAMPTZ
 ) AS $$
-DECLARE
-    v_summary_tokens INT;
-    v_token_estimate INT;
 BEGIN
-    SELECT c.summary_tokens
-    INTO v_summary_tokens
-    FROM conversations c
-    WHERE c.id = p_conversation_id;
-
-    IF NOT FOUND THEN
-        RETURN;
-    END IF;
-
-    SELECT v_summary_tokens
-           + COALESCE(SUM(m.tokens), 0)
-    INTO v_token_estimate
-    FROM messages m
-    WHERE m.conversation_id
-              = p_conversation_id
-      AND m.compacted = FALSE;
-
     RETURN QUERY
     SELECT c.id, c.campaign_id,
         c.scope_type::TEXT, c.scope_id,
         c.summary, c.summary_tokens,
-        v_token_estimate,
+        (c.summary_tokens
+         + COALESCE(SUM(m.tokens)
+             OVER (), 0))::INT,
         m.id, m.role::TEXT, m.content,
         m.tool_name, m.tool_use_id,
         m.tool_input, m.tool_result,
@@ -518,6 +510,17 @@ RETURNS INT AS $$
 DECLARE
     v_compacted_count INT;
 BEGIN
+    -- Verify conversation exists.
+    IF NOT EXISTS (
+        SELECT 1 FROM conversations
+        WHERE id = p_conversation_id
+    ) THEN
+        RAISE EXCEPTION
+            'conversation % not found',
+            p_conversation_id
+            USING ERRCODE = 'no_data_found';
+    END IF;
+
     UPDATE messages
     SET compacted = TRUE
     WHERE conversation_id = p_conversation_id
