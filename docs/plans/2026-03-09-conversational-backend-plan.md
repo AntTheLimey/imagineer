@@ -43,133 +43,599 @@ token_usage_log tables.
 **Step 1: Write the migration**
 
 ```sql
-/*
- * Migration 008: Conversation tables
+/*-------------------------------------------------------------------------
  *
- * Adds conversations, messages, and token_usage_log
- * tables for the Phase 1 conversational backend.
+ * Imagineer - TTRPG Campaign Intelligence Platform
+ *
+ * Copyright (c) 2025 - 2026
+ * This software is released under The MIT License
+ *
+ *-------------------------------------------------------------------------
  */
 
--- Conversations: one thread per document/entity
+-- ============================================
+-- Migration 008: Conversation Layer
+--
+-- Adds conversations, messages, and
+-- token_usage_log tables with full database
+-- support: triggers, indexes, views, and
+-- stored functions for the Phase 1
+-- conversational backend.
+-- ============================================
+
+BEGIN;
+
+-- ============================================
+-- Section 1: Tables
+-- ============================================
+
 CREATE TABLE conversations (
-    id              BIGSERIAL PRIMARY KEY,
-    campaign_id     BIGINT NOT NULL
-                        REFERENCES campaigns(id),
-    scope_type      TEXT NOT NULL
-                        CHECK (scope_type IN (
-                            'entity', 'chapter', 'session',
-                            'scene', 'campaign'
-                        )),
-    scope_id        BIGINT NOT NULL,
-    title           TEXT,
-    summary         TEXT,
-    summary_tokens  INT DEFAULT 0,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id             BIGSERIAL PRIMARY KEY,
+    campaign_id    BIGINT NOT NULL
+                   REFERENCES campaigns(id)
+                   ON DELETE CASCADE,
+    scope_type     TEXT NOT NULL
+                   CHECK (scope_type IN (
+                       'entity', 'chapter',
+                       'session', 'scene',
+                       'campaign'
+                   )),
+    scope_id       BIGINT NOT NULL,
+    title          TEXT,
+    summary        TEXT,
+    summary_tokens INT NOT NULL DEFAULT 0
+                   CHECK (summary_tokens >= 0),
+    created_at     TIMESTAMPTZ NOT NULL
+                   DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ NOT NULL
+                   DEFAULT NOW(),
+
+    CONSTRAINT uq_conversation_scope
+        UNIQUE (campaign_id, scope_type, scope_id)
 );
 
 COMMENT ON TABLE conversations IS
-    'Chat threads scoped to a campaign document or entity';
+    'Chat threads scoped to a campaign document '
+    'or entity. One thread per scope. Access via '
+    'get_or_create_conversation() only.';
 COMMENT ON COLUMN conversations.scope_type IS
     'entity, chapter, session, scene, or campaign';
+COMMENT ON COLUMN conversations.scope_id IS
+    'PK of the scoped record. For campaign scope '
+    'this equals campaign_id. Not a FK because '
+    'the target table varies by scope_type.';
 COMMENT ON COLUMN conversations.summary IS
-    'Compacted conversation summary';
+    'Rolling summary of compacted messages. '
+    'NULL until first compaction.';
 COMMENT ON COLUMN conversations.summary_tokens IS
-    'Token count of the current summary';
+    'Token count of current summary for context '
+    'window budget calculation.';
+COMMENT ON CONSTRAINT uq_conversation_scope
+    ON conversations IS
+    'One thread per scope. Used by '
+    'get_or_create_conversation() ON CONFLICT.';
 
-CREATE INDEX idx_conversations_campaign
-    ON conversations(campaign_id);
-COMMENT ON INDEX idx_conversations_campaign IS
-    'Look up conversations by campaign';
-
-CREATE INDEX idx_conversations_scope
-    ON conversations(campaign_id, scope_type, scope_id);
-COMMENT ON INDEX idx_conversations_scope IS
-    'Find conversation for a specific document/entity';
-
--- Messages: every turn in a conversation
 CREATE TABLE messages (
     id              BIGSERIAL PRIMARY KEY,
     conversation_id BIGINT NOT NULL
-                        REFERENCES conversations(id)
-                        ON DELETE CASCADE,
+                    REFERENCES conversations(id)
+                    ON DELETE CASCADE,
     role            TEXT NOT NULL
-                        CHECK (role IN (
-                            'user', 'assistant', 'system',
-                            'tool_call', 'tool_result'
-                        )),
-    content         TEXT NOT NULL,
+                    CHECK (role IN (
+                        'user', 'assistant',
+                        'system', 'tool_call',
+                        'tool_result'
+                    )),
+    content         TEXT NOT NULL DEFAULT '',
     tool_name       TEXT,
+    tool_use_id     TEXT,
     tool_input      JSONB,
     tool_result     JSONB,
-    tokens          INT,
+    tokens          INT CHECK (tokens >= 0),
     compacted       BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at      TIMESTAMPTZ NOT NULL
+                    DEFAULT NOW(),
+
+    CONSTRAINT tool_fields_consistent CHECK (
+        (role IN ('tool_call', 'tool_result')
+            AND tool_name IS NOT NULL)
+        OR role NOT IN ('tool_call', 'tool_result')
+    )
 );
 
 COMMENT ON TABLE messages IS
-    'Individual messages within a conversation thread';
+    'Individual messages within a conversation. '
+    'Never deleted. Compacted messages excluded '
+    'from context assembly but retained for '
+    'full transcript retrieval.';
 COMMENT ON COLUMN messages.role IS
-    'user, assistant, system, tool_call, or tool_result';
-COMMENT ON COLUMN messages.tool_name IS
-    'Populated for tool_call and tool_result messages';
-COMMENT ON COLUMN messages.tool_input IS
-    'Tool input parameters for tool_call messages';
-COMMENT ON COLUMN messages.tool_result IS
-    'Tool output for tool_result messages';
+    'user, assistant, system, tool_call, or '
+    'tool_result';
+COMMENT ON COLUMN messages.content IS
+    'Message text. Empty string for pure '
+    'tool_call messages.';
+COMMENT ON COLUMN messages.tool_use_id IS
+    'Anthropic tool_use_id correlating a '
+    'tool_call to its tool_result. Required '
+    'for context reconstruction.';
 COMMENT ON COLUMN messages.compacted IS
-    'TRUE = message summarised and excluded from context';
+    'TRUE = incorporated into summary, excluded '
+    'from live context. Set by compact_messages().';
+COMMENT ON CONSTRAINT tool_fields_consistent
+    ON messages IS
+    'tool_name required for tool_call/tool_result.';
 
-CREATE INDEX idx_messages_conversation
-    ON messages(conversation_id, created_at);
-COMMENT ON INDEX idx_messages_conversation IS
-    'Fetch messages for a conversation in chronological order';
-
-CREATE INDEX idx_messages_uncompacted
-    ON messages(conversation_id)
-    WHERE compacted = FALSE;
-COMMENT ON INDEX idx_messages_uncompacted IS
-    'Fetch only active (non-compacted) messages';
-
--- Token usage log: every LLM call
 CREATE TABLE token_usage_log (
     id              BIGSERIAL PRIMARY KEY,
     conversation_id BIGINT NOT NULL
-                        REFERENCES conversations(id),
+                    REFERENCES conversations(id)
+                    ON DELETE RESTRICT,
     campaign_id     BIGINT NOT NULL
-                        REFERENCES campaigns(id),
+                    REFERENCES campaigns(id)
+                    ON DELETE RESTRICT,
     user_id         BIGINT NOT NULL
-                        REFERENCES users(id),
+                    REFERENCES users(id)
+                    ON DELETE RESTRICT,
     model           TEXT NOT NULL,
-    input_tokens    INT NOT NULL,
-    output_tokens   INT NOT NULL,
-    total_tokens    INT NOT NULL,
+    input_tokens    INT NOT NULL
+                    CHECK (input_tokens >= 0),
+    output_tokens   INT NOT NULL
+                    CHECK (output_tokens >= 0),
+    total_tokens    INT NOT NULL
+                    CHECK (total_tokens >= 0),
     llm_call_type   TEXT NOT NULL
-                        CHECK (llm_call_type IN (
-                            'conversation', 'compaction',
-                            'agent_tool'
-                        )),
+                    CHECK (llm_call_type IN (
+                        'conversation',
+                        'compaction',
+                        'agent_tool'
+                    )),
     agent_name      TEXT,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at      TIMESTAMPTZ NOT NULL
+                    DEFAULT NOW(),
+
+    CONSTRAINT total_tokens_consistent CHECK (
+        total_tokens = input_tokens + output_tokens
+    ),
+    CONSTRAINT agent_name_when_agent_tool CHECK (
+        llm_call_type != 'agent_tool'
+        OR agent_name IS NOT NULL
+    )
 );
 
 COMMENT ON TABLE token_usage_log IS
-    'Per-LLM-call token usage for metering and billing';
+    'Append-only ledger of every LLM call. '
+    'ON DELETE RESTRICT — billing records must '
+    'not be silently removed.';
 COMMENT ON COLUMN token_usage_log.llm_call_type IS
     'conversation, compaction, or agent_tool';
 COMMENT ON COLUMN token_usage_log.agent_name IS
-    'For agent_tool calls: ttrpg_expert, canon_expert, '
-    'or graph_expert';
+    'For agent_tool: ttrpg_expert, canon_expert, '
+    'or graph_expert. NULL otherwise.';
+COMMENT ON CONSTRAINT total_tokens_consistent
+    ON token_usage_log IS
+    'total = input + output at write time.';
+COMMENT ON CONSTRAINT agent_name_when_agent_tool
+    ON token_usage_log IS
+    'agent_name required when type is agent_tool.';
 
-CREATE INDEX idx_token_usage_campaign
-    ON token_usage_log(campaign_id, created_at);
-COMMENT ON INDEX idx_token_usage_campaign IS
-    'Aggregate token usage by campaign over time';
+-- ============================================
+-- Section 2: Triggers
+-- ============================================
 
-CREATE INDEX idx_token_usage_user
-    ON token_usage_log(user_id, created_at);
-COMMENT ON INDEX idx_token_usage_user IS
-    'Aggregate token usage by user over time';
+CREATE TRIGGER update_conversations_updated_at
+    BEFORE UPDATE ON conversations
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+COMMENT ON TRIGGER update_conversations_updated_at
+    ON conversations IS
+    'Keeps updated_at current on every UPDATE.';
+
+CREATE OR REPLACE FUNCTION
+touch_conversation_on_message()
+RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE conversations
+    SET updated_at = NOW()
+    WHERE id = NEW.conversation_id;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION touch_conversation_on_message()
+    IS 'Bumps conversations.updated_at on new '
+       'message insert.';
+
+CREATE TRIGGER touch_conversation_updated_at
+    AFTER INSERT ON messages
+    FOR EACH ROW
+    EXECUTE FUNCTION
+        touch_conversation_on_message();
+
+COMMENT ON TRIGGER touch_conversation_updated_at
+    ON messages IS
+    'INSERT only. Keeps conversation list sort '
+    'order accurate.';
+
+-- ============================================
+-- Section 3: Indexes
+-- ============================================
+
+CREATE INDEX idx_conversations_campaign
+    ON conversations(campaign_id,
+                     updated_at DESC);
+COMMENT ON INDEX idx_conversations_campaign IS
+    'Conversation list ordered by last activity.';
+
+CREATE INDEX idx_messages_context_window
+    ON messages(conversation_id, created_at)
+    WHERE compacted = FALSE;
+COMMENT ON INDEX idx_messages_context_window IS
+    'Hot-path partial index for context assembly. '
+    'Covers only uncompacted messages.';
+
+CREATE INDEX idx_messages_conversation_full
+    ON messages(conversation_id, created_at);
+COMMENT ON INDEX idx_messages_conversation_full IS
+    'Full ordered scan for transcript view.';
+
+CREATE INDEX idx_messages_compaction_candidates
+    ON messages(conversation_id, id)
+    WHERE compacted = FALSE;
+COMMENT ON INDEX idx_messages_compaction_candidates
+    IS 'Oldest uncompacted messages for '
+       'compaction.';
+
+CREATE INDEX idx_token_usage_campaign_time
+    ON token_usage_log(campaign_id, created_at)
+    INCLUDE (input_tokens, output_tokens,
+             total_tokens, llm_call_type);
+COMMENT ON INDEX idx_token_usage_campaign_time IS
+    'Covering index for campaign token '
+    'aggregation. Index-only scan for SUM '
+    'queries.';
+
+CREATE INDEX idx_token_usage_user_time
+    ON token_usage_log(user_id, created_at)
+    INCLUDE (input_tokens, output_tokens,
+             total_tokens, llm_call_type);
+COMMENT ON INDEX idx_token_usage_user_time IS
+    'Covering index for per-user token '
+    'aggregation.';
+
+CREATE INDEX idx_token_usage_conversation
+    ON token_usage_log(conversation_id)
+    INCLUDE (total_tokens, llm_call_type,
+             created_at);
+COMMENT ON INDEX idx_token_usage_conversation IS
+    'Per-conversation token total queries.';
+
+-- ============================================
+-- Section 4: Views
+-- ============================================
+
+CREATE VIEW conversation_list AS
+SELECT
+    c.id,
+    c.campaign_id,
+    c.scope_type,
+    c.scope_id,
+    c.title,
+    c.summary_tokens,
+    c.created_at,
+    c.updated_at,
+    m.role                 AS last_message_role,
+    LEFT(m.content, 200)   AS last_message_preview,
+    m.created_at           AS last_message_at,
+    COALESCE(counts.total_messages, 0)
+                           AS total_messages,
+    COALESCE(counts.uncompacted_messages, 0)
+                           AS uncompacted_messages
+FROM conversations c
+LEFT JOIN LATERAL (
+    SELECT role, content, created_at
+    FROM messages
+    WHERE conversation_id = c.id
+      AND compacted = FALSE
+      AND role IN ('user', 'assistant')
+    ORDER BY created_at DESC
+    LIMIT 1
+) m ON TRUE
+LEFT JOIN LATERAL (
+    SELECT
+        COUNT(*)              AS total_messages,
+        COUNT(*) FILTER (
+            WHERE NOT compacted
+        )                     AS uncompacted_messages
+    FROM messages
+    WHERE conversation_id = c.id
+) counts ON TRUE;
+
+COMMENT ON VIEW conversation_list IS
+    'Conversation list with message preview '
+    'and counts. One row per conversation.';
+
+CREATE VIEW conversation_context AS
+SELECT
+    c.id                  AS conversation_id,
+    c.campaign_id,
+    c.scope_type,
+    c.scope_id,
+    c.title,
+    c.summary,
+    c.summary_tokens,
+    m.id                  AS message_id,
+    m.role,
+    m.content,
+    m.tool_name,
+    m.tool_use_id,
+    m.tool_input,
+    m.tool_result,
+    m.tokens              AS message_tokens,
+    m.created_at          AS message_created_at
+FROM conversations c
+JOIN messages m
+    ON m.conversation_id = c.id
+   AND m.compacted = FALSE
+ORDER BY c.id, m.created_at;
+
+COMMENT ON VIEW conversation_context IS
+    'Uncompacted messages with conversation '
+    'metadata. Filter by conversation_id.';
+
+CREATE VIEW token_usage_by_campaign AS
+SELECT
+    campaign_id,
+    DATE_TRUNC('day', created_at)
+                          AS usage_date,
+    llm_call_type,
+    model,
+    COUNT(*)              AS call_count,
+    SUM(input_tokens)     AS total_input,
+    SUM(output_tokens)    AS total_output,
+    SUM(total_tokens)     AS total_tokens
+FROM token_usage_log
+GROUP BY campaign_id,
+    DATE_TRUNC('day', created_at),
+    llm_call_type, model;
+
+COMMENT ON VIEW token_usage_by_campaign IS
+    'Daily token aggregation by campaign.';
+
+CREATE VIEW token_usage_by_user AS
+SELECT
+    user_id,
+    DATE_TRUNC('day', created_at)
+                          AS usage_date,
+    llm_call_type,
+    model,
+    COUNT(*)              AS call_count,
+    SUM(input_tokens)     AS total_input,
+    SUM(output_tokens)    AS total_output,
+    SUM(total_tokens)     AS total_tokens
+FROM token_usage_log
+GROUP BY user_id,
+    DATE_TRUNC('day', created_at),
+    llm_call_type, model;
+
+COMMENT ON VIEW token_usage_by_user IS
+    'Daily token aggregation by user.';
+
+-- ============================================
+-- Section 5: Stored Functions
+-- ============================================
+
+CREATE OR REPLACE FUNCTION
+get_or_create_conversation(
+    p_campaign_id BIGINT,
+    p_scope_type  TEXT,
+    p_scope_id    BIGINT
+)
+RETURNS TABLE (
+    id             BIGINT,
+    campaign_id    BIGINT,
+    scope_type     TEXT,
+    scope_id       BIGINT,
+    title          TEXT,
+    summary        TEXT,
+    summary_tokens INT,
+    created_at     TIMESTAMPTZ,
+    updated_at     TIMESTAMPTZ,
+    was_created    BOOLEAN
+) AS $$
+DECLARE
+    v_id      BIGINT;
+    v_created BOOLEAN;
+BEGIN
+    INSERT INTO conversations
+        (campaign_id, scope_type, scope_id)
+    VALUES
+        (p_campaign_id, p_scope_type, p_scope_id)
+    ON CONFLICT ON CONSTRAINT uq_conversation_scope
+    DO NOTHING
+    RETURNING conversations.id INTO v_id;
+
+    IF v_id IS NOT NULL THEN
+        v_created := TRUE;
+    ELSE
+        v_created := FALSE;
+        SELECT conversations.id INTO v_id
+        FROM conversations
+        WHERE conversations.campaign_id
+                  = p_campaign_id
+          AND conversations.scope_type
+                  = p_scope_type
+          AND conversations.scope_id
+                  = p_scope_id;
+    END IF;
+
+    RETURN QUERY
+    SELECT c.id, c.campaign_id,
+        c.scope_type::TEXT, c.scope_id,
+        c.title, c.summary, c.summary_tokens,
+        c.created_at, c.updated_at, v_created
+    FROM conversations c
+    WHERE c.id = v_id;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION
+    get_or_create_conversation(
+        BIGINT, TEXT, BIGINT)
+    IS 'Atomic upsert: returns existing or '
+       'creates new conversation for a scope. '
+       'Returns was_created for logging.';
+
+CREATE OR REPLACE FUNCTION
+assemble_conversation_context(
+    p_conversation_id BIGINT
+)
+RETURNS TABLE (
+    conversation_id          BIGINT,
+    campaign_id              BIGINT,
+    scope_type               TEXT,
+    scope_id                 BIGINT,
+    summary                  TEXT,
+    summary_tokens           INT,
+    uncompacted_token_estimate INT,
+    message_id               BIGINT,
+    role                     TEXT,
+    content                  TEXT,
+    tool_name                TEXT,
+    tool_use_id              TEXT,
+    tool_input               JSONB,
+    tool_result              JSONB,
+    message_tokens           INT,
+    message_created_at       TIMESTAMPTZ
+) AS $$
+DECLARE
+    v_summary_tokens INT;
+    v_token_estimate INT;
+BEGIN
+    SELECT c.summary_tokens
+    INTO v_summary_tokens
+    FROM conversations c
+    WHERE c.id = p_conversation_id;
+
+    IF NOT FOUND THEN
+        RETURN;
+    END IF;
+
+    SELECT v_summary_tokens
+           + COALESCE(SUM(m.tokens), 0)
+    INTO v_token_estimate
+    FROM messages m
+    WHERE m.conversation_id
+              = p_conversation_id
+      AND m.compacted = FALSE;
+
+    RETURN QUERY
+    SELECT c.id, c.campaign_id,
+        c.scope_type::TEXT, c.scope_id,
+        c.summary, c.summary_tokens,
+        v_token_estimate,
+        m.id, m.role::TEXT, m.content,
+        m.tool_name, m.tool_use_id,
+        m.tool_input, m.tool_result,
+        m.tokens, m.created_at
+    FROM conversations c
+    JOIN messages m
+        ON m.conversation_id = c.id
+       AND m.compacted = FALSE
+    WHERE c.id = p_conversation_id
+    ORDER BY m.created_at;
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+COMMENT ON FUNCTION
+    assemble_conversation_context(BIGINT)
+    IS 'Hot path: conversation metadata + '
+       'uncompacted messages + token estimate '
+       'in one round-trip. STABLE.';
+
+CREATE OR REPLACE FUNCTION compact_messages(
+    p_conversation_id BIGINT,
+    p_message_ids     BIGINT[],
+    p_new_summary     TEXT,
+    p_summary_tokens  INT
+)
+RETURNS INT AS $$
+DECLARE
+    v_compacted_count INT;
+BEGIN
+    UPDATE messages
+    SET compacted = TRUE
+    WHERE conversation_id = p_conversation_id
+      AND id = ANY(p_message_ids)
+      AND compacted = FALSE;
+    GET DIAGNOSTICS v_compacted_count
+        = ROW_COUNT;
+
+    UPDATE conversations
+    SET summary        = p_new_summary,
+        summary_tokens = p_summary_tokens
+    WHERE id = p_conversation_id;
+
+    RETURN v_compacted_count;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION
+    compact_messages(BIGINT, BIGINT[], TEXT, INT)
+    IS 'Atomic: marks messages compacted + '
+       'updates summary. Both succeed or both '
+       'roll back.';
+
+CREATE OR REPLACE FUNCTION
+get_token_usage_summary(
+    p_campaign_id BIGINT,
+    p_user_id     BIGINT,
+    p_since       TIMESTAMPTZ,
+    p_until       TIMESTAMPTZ DEFAULT NULL
+)
+RETURNS TABLE (
+    llm_call_type       TEXT,
+    model               TEXT,
+    call_count          BIGINT,
+    total_input_tokens  BIGINT,
+    total_output_tokens BIGINT,
+    total_tokens        BIGINT
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT t.llm_call_type, t.model,
+        COUNT(*)::BIGINT,
+        SUM(t.input_tokens)::BIGINT,
+        SUM(t.output_tokens)::BIGINT,
+        SUM(t.total_tokens)::BIGINT
+    FROM token_usage_log t
+    WHERE (p_campaign_id IS NULL
+            OR t.campaign_id = p_campaign_id)
+      AND (p_user_id IS NULL
+            OR t.user_id = p_user_id)
+      AND t.created_at >= p_since
+      AND t.created_at
+              < COALESCE(p_until, NOW())
+    GROUP BY t.llm_call_type, t.model
+    ORDER BY SUM(t.total_tokens) DESC;
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+COMMENT ON FUNCTION
+    get_token_usage_summary(
+        BIGINT, BIGINT, TIMESTAMPTZ,
+        TIMESTAMPTZ)
+    IS 'Flexible token aggregation. Filter by '
+       'campaign, user, or both. p_until '
+       'defaults to NOW().';
+
+-- ============================================
+-- Section 6: Record Migration
+-- ============================================
+INSERT INTO schema_migrations (version)
+VALUES ('008_conversations');
+
+COMMIT;
 ```
 
 **Step 2: Run migration**
@@ -178,17 +644,22 @@ Run: `make migrate`
 
 Expected: Migration 008 applies without errors.
 
-**Step 3: Verify tables exist**
+**Step 3: Verify tables, views, and functions exist**
 
 Run: `psql -c "\dt conversations; \dt messages; \dt token_usage_log;" imagineer`
 
-Expected: All three tables listed.
+Run: `psql -c "\dv conversation_list; \dv conversation_context; \dv token_usage_by_campaign; \dv token_usage_by_user;" imagineer`
+
+Run: `psql -c "\df get_or_create_conversation; \df assemble_conversation_context; \df compact_messages; \df get_token_usage_summary;" imagineer`
+
+Expected: All three tables, four views, and four
+stored functions listed.
 
 **Step 4: Commit**
 
 ```bash
 git add migrations/008_conversations.sql
-git commit -m "feat: add conversations, messages, and token_usage_log tables (migration 008)"
+git commit -m "feat: add conversation layer migration with triggers, views, and stored functions (008)"
 ```
 
 ---
@@ -271,6 +742,7 @@ type Message struct {
     Role           MessageRole     `json:"role"`
     Content        string          `json:"content"`
     ToolName       *string         `json:"toolName,omitempty"`
+    ToolUseID      *string         `json:"toolUseId,omitempty"`
     ToolInput      json.RawMessage `json:"toolInput,omitempty"`
     ToolResult     json.RawMessage `json:"toolResult,omitempty"`
     Tokens         *int            `json:"tokens,omitempty"`
@@ -299,6 +771,47 @@ type TokenUsageLog struct {
     LLMCallType    LLMCallType `json:"llmCallType"`
     AgentName      *string     `json:"agentName,omitempty"`
     CreatedAt      time.Time   `json:"createdAt"`
+}
+
+// ConversationContext is the return type from
+// assemble_conversation_context(). Contains
+// conversation metadata and all uncompacted
+// messages in one struct.
+type ConversationContext struct {
+    Conversation  Conversation
+    Messages      []Message
+    TokenEstimate int
+}
+
+// ConversationListItem is a row from the
+// conversation_list view, including derived
+// fields for display.
+type ConversationListItem struct {
+    ID                  int64     `json:"id"`
+    CampaignID          int64     `json:"campaignId"`
+    ScopeType           ScopeType `json:"scopeType"`
+    ScopeID             int64     `json:"scopeId"`
+    Title               *string   `json:"title,omitempty"`
+    SummaryTokens       int       `json:"summaryTokens"`
+    CreatedAt           time.Time `json:"createdAt"`
+    UpdatedAt           time.Time `json:"updatedAt"`
+    LastMessageRole     *string   `json:"lastMessageRole,omitempty"`
+    LastMessagePreview  *string   `json:"lastMessagePreview,omitempty"`
+    LastMessageAt       *time.Time `json:"lastMessageAt,omitempty"`
+    TotalMessages       int       `json:"totalMessages"`
+    UncompactedMessages int       `json:"uncompactedMessages"`
+}
+
+// TokenUsageSummary is the return type from
+// get_token_usage_summary(). One row per
+// (llm_call_type, model) combination.
+type TokenUsageSummary struct {
+    LLMCallType       string `json:"llmCallType"`
+    Model             string `json:"model"`
+    CallCount         int64  `json:"callCount"`
+    TotalInputTokens  int64  `json:"totalInputTokens"`
+    TotalOutputTokens int64  `json:"totalOutputTokens"`
+    TotalTokens       int64  `json:"totalTokens"`
 }
 ```
 
@@ -352,8 +865,9 @@ git commit -m "feat: add conversation, message, and token usage model types"
 
 ## Task 3: Database Layer — Conversation CRUD
 
-Add database functions for creating, getting, and listing
-conversations.
+Add database functions for creating/upserting, getting, and
+listing conversations. Uses the `get_or_create_conversation()`
+stored function and the `conversation_list` view.
 
 **Files:**
 
@@ -387,26 +901,38 @@ import (
     "imagineer/internal/models"
 )
 
-func TestCreateConversation(t *testing.T) {
+func TestGetOrCreateConversation(t *testing.T) {
     db := setupTestDB(t)
     ctx := context.Background()
     campaignID := createTestCampaign(t, db)
 
-    conv, err := db.CreateConversation(ctx,
-        campaignID,
-        models.CreateConversationRequest{
-            ScopeType: models.ScopeTypeChapter,
-            ScopeID:   1,
-        },
-    )
+    // First call: creates the conversation
+    conv, wasCreated, err :=
+        db.GetOrCreateConversation(ctx,
+            campaignID,
+            models.ScopeTypeChapter,
+            int64(1),
+        )
 
     require.NoError(t, err)
+    assert.True(t, wasCreated)
     assert.Equal(t, campaignID, conv.CampaignID)
     assert.Equal(t, models.ScopeTypeChapter,
         conv.ScopeType)
     assert.Equal(t, int64(1), conv.ScopeID)
     assert.NotZero(t, conv.ID)
     assert.NotZero(t, conv.CreatedAt)
+
+    // Second call: returns existing
+    conv2, wasCreated2, err :=
+        db.GetOrCreateConversation(ctx,
+            campaignID,
+            models.ScopeTypeChapter,
+            int64(1),
+        )
+    require.NoError(t, err)
+    assert.False(t, wasCreated2)
+    assert.Equal(t, conv.ID, conv2.ID)
 }
 
 func TestGetConversation(t *testing.T) {
@@ -414,13 +940,12 @@ func TestGetConversation(t *testing.T) {
     ctx := context.Background()
     campaignID := createTestCampaign(t, db)
 
-    created, err := db.CreateConversation(ctx,
-        campaignID,
-        models.CreateConversationRequest{
-            ScopeType: models.ScopeTypeEntity,
-            ScopeID:   42,
-        },
-    )
+    created, _, err :=
+        db.GetOrCreateConversation(ctx,
+            campaignID,
+            models.ScopeTypeEntity,
+            int64(42),
+        )
     require.NoError(t, err)
 
     got, err := db.GetConversation(ctx, created.ID)
@@ -436,18 +961,16 @@ func TestListConversations(t *testing.T) {
     campaignID := createTestCampaign(t, db)
 
     // Create two conversations
-    _, err := db.CreateConversation(ctx, campaignID,
-        models.CreateConversationRequest{
-            ScopeType: models.ScopeTypeChapter,
-            ScopeID:   1,
-        },
+    _, _, err := db.GetOrCreateConversation(ctx,
+        campaignID,
+        models.ScopeTypeChapter,
+        int64(1),
     )
     require.NoError(t, err)
-    _, err = db.CreateConversation(ctx, campaignID,
-        models.CreateConversationRequest{
-            ScopeType: models.ScopeTypeEntity,
-            ScopeID:   2,
-        },
+    _, _, err = db.GetOrCreateConversation(ctx,
+        campaignID,
+        models.ScopeTypeEntity,
+        int64(2),
     )
     require.NoError(t, err)
 
@@ -455,6 +978,10 @@ func TestListConversations(t *testing.T) {
         campaignID, "", 0, 20)
     require.NoError(t, err)
     assert.GreaterOrEqual(t, len(convs), 2)
+    // Verify view-derived fields are populated
+    for _, c := range convs {
+        assert.NotZero(t, c.CampaignID)
+    }
 }
 
 func TestListConversationsFiltered(t *testing.T) {
@@ -462,18 +989,16 @@ func TestListConversationsFiltered(t *testing.T) {
     ctx := context.Background()
     campaignID := createTestCampaign(t, db)
 
-    _, err := db.CreateConversation(ctx, campaignID,
-        models.CreateConversationRequest{
-            ScopeType: models.ScopeTypeChapter,
-            ScopeID:   1,
-        },
+    _, _, err := db.GetOrCreateConversation(ctx,
+        campaignID,
+        models.ScopeTypeChapter,
+        int64(1),
     )
     require.NoError(t, err)
-    _, err = db.CreateConversation(ctx, campaignID,
-        models.CreateConversationRequest{
-            ScopeType: models.ScopeTypeEntity,
-            ScopeID:   2,
-        },
+    _, _, err = db.GetOrCreateConversation(ctx,
+        campaignID,
+        models.ScopeTypeEntity,
+        int64(2),
     )
     require.NoError(t, err)
 
@@ -489,9 +1014,9 @@ func TestListConversationsFiltered(t *testing.T) {
 
 **Step 2: Run tests to verify they fail**
 
-Run: `go test -v -tags integration ./internal/database/ -run TestCreateConversation`
+Run: `go test -v -tags integration ./internal/database/ -run TestGetOrCreateConversation`
 
-Expected: FAIL — `CreateConversation` not defined.
+Expected: FAIL — `GetOrCreateConversation` not defined.
 
 **Step 3: Implement conversation CRUD**
 
@@ -507,36 +1032,41 @@ import (
     "imagineer/internal/models"
 )
 
-// CreateConversation creates a new conversation thread
-// scoped to a campaign document or entity.
-func (db *DB) CreateConversation(
+// GetOrCreateConversation calls the
+// get_or_create_conversation() stored function.
+// Returns the conversation and whether it was
+// newly created.
+func (db *DB) GetOrCreateConversation(
     ctx context.Context,
     campaignID int64,
-    req models.CreateConversationRequest,
-) (*models.Conversation, error) {
+    scopeType models.ScopeType,
+    scopeID int64,
+) (*models.Conversation, bool, error) {
     var conv models.Conversation
+    var wasCreated bool
     err := db.QueryRow(ctx,
-        `INSERT INTO conversations
-            (campaign_id, scope_type, scope_id)
-         VALUES ($1, $2, $3)
-         RETURNING id, campaign_id, scope_type,
+        `SELECT id, campaign_id, scope_type,
             scope_id, title, summary,
-            summary_tokens, created_at, updated_at`,
+            summary_tokens, created_at,
+            updated_at, was_created
+         FROM get_or_create_conversation(
+             $1, $2, $3)`,
         campaignID,
-        string(req.ScopeType),
-        req.ScopeID,
+        string(scopeType),
+        scopeID,
     ).Scan(
         &conv.ID, &conv.CampaignID,
         &conv.ScopeType, &conv.ScopeID,
         &conv.Title, &conv.Summary,
         &conv.SummaryTokens,
         &conv.CreatedAt, &conv.UpdatedAt,
+        &wasCreated,
     )
     if err != nil {
-        return nil, fmt.Errorf(
-            "failed to create conversation: %w", err)
+        return nil, false, fmt.Errorf(
+            "get_or_create_conversation: %w", err)
     }
-    return &conv, nil
+    return &conv, wasCreated, nil
 }
 
 // GetConversation retrieves a conversation by ID.
@@ -546,8 +1076,9 @@ func (db *DB) GetConversation(
 ) (*models.Conversation, error) {
     var conv models.Conversation
     err := db.QueryRow(ctx,
-        `SELECT id, campaign_id, scope_type, scope_id,
-            title, summary, summary_tokens,
+        `SELECT id, campaign_id, scope_type,
+            scope_id, title, summary,
+            summary_tokens,
             created_at, updated_at
          FROM conversations
          WHERE id = $1`,
@@ -567,23 +1098,28 @@ func (db *DB) GetConversation(
     return &conv, nil
 }
 
-// ListConversations lists conversations for a campaign
-// with optional scope_type filter.
+// ListConversations queries the conversation_list
+// view, returning conversations with message
+// preview and counts.
 func (db *DB) ListConversations(
     ctx context.Context,
     campaignID int64,
     scopeType string,
     scopeID int64,
     limit int,
-) ([]models.Conversation, error) {
+) ([]models.ConversationListItem, error) {
     if limit <= 0 {
         limit = 20
     }
 
-    query := `SELECT id, campaign_id, scope_type,
-            scope_id, title, summary,
-            summary_tokens, created_at, updated_at
-         FROM conversations
+    query := `SELECT id, campaign_id,
+            scope_type, scope_id, title,
+            summary_tokens, created_at,
+            updated_at, last_message_role,
+            last_message_preview,
+            last_message_at, total_messages,
+            uncompacted_messages
+         FROM conversation_list
          WHERE campaign_id = $1`
     args := []any{campaignID}
     argN := 2
@@ -602,67 +1138,50 @@ func (db *DB) ListConversations(
     }
 
     query += fmt.Sprintf(
-        " ORDER BY updated_at DESC LIMIT $%d", argN)
+        " ORDER BY updated_at DESC LIMIT $%d",
+        argN)
     args = append(args, limit)
 
     rows, err := db.Query(ctx, query, args...)
     if err != nil {
         return nil, fmt.Errorf(
-            "failed to list conversations: %w", err)
+            "failed to list conversations: %w",
+            err)
     }
     defer rows.Close()
 
-    var convs []models.Conversation
+    var items []models.ConversationListItem
     for rows.Next() {
-        var c models.Conversation
+        var c models.ConversationListItem
         err := rows.Scan(
             &c.ID, &c.CampaignID,
             &c.ScopeType, &c.ScopeID,
-            &c.Title, &c.Summary,
-            &c.SummaryTokens,
+            &c.Title, &c.SummaryTokens,
             &c.CreatedAt, &c.UpdatedAt,
+            &c.LastMessageRole,
+            &c.LastMessagePreview,
+            &c.LastMessageAt,
+            &c.TotalMessages,
+            &c.UncompactedMessages,
         )
         if err != nil {
             return nil, fmt.Errorf(
-                "failed to scan conversation: %w", err)
+                "failed to scan conversation: %w",
+                err)
         }
-        convs = append(convs, c)
+        items = append(items, c)
     }
     if err := rows.Err(); err != nil {
         return nil, fmt.Errorf(
             "conversation rows error: %w", err)
     }
-    return convs, nil
-}
-
-// UpdateConversationSummary updates the compacted
-// summary for a conversation.
-func (db *DB) UpdateConversationSummary(
-    ctx context.Context,
-    id int64,
-    summary string,
-    summaryTokens int,
-) error {
-    _, err := db.Exec(ctx,
-        `UPDATE conversations
-         SET summary = $2,
-             summary_tokens = $3,
-             updated_at = NOW()
-         WHERE id = $1`,
-        id, summary, summaryTokens,
-    )
-    if err != nil {
-        return fmt.Errorf(
-            "failed to update conversation summary: %w",
-            err)
-    }
-    return nil
+    return items, nil
 }
 ```
 
 **Step 4: Run tests to verify they pass**
 
-Run: `go test -v -tags integration ./internal/database/ -run TestCreateConversation`
+Run: `go test -v -tags integration ./internal/database/ -run TestGetOrCreateConversation`
 
 Run: `go test -v -tags integration ./internal/database/ -run TestGetConversation`
 
@@ -675,7 +1194,7 @@ Expected: All pass.
 ```bash
 git add internal/database/conversations.go \
         internal/database/conversations_test.go
-git commit -m "feat: add conversation CRUD database layer"
+git commit -m "feat: add conversation CRUD using stored functions and views"
 ```
 
 ---
@@ -683,7 +1202,8 @@ git commit -m "feat: add conversation CRUD database layer"
 ## Task 4: Database Layer — Messages
 
 Add database functions for creating and listing messages,
-and for marking messages as compacted.
+assembling conversation context via the stored function,
+and compacting messages via the stored function.
 
 **Files:**
 
@@ -700,24 +1220,32 @@ func TestCreateMessage(t *testing.T) {
     ctx := context.Background()
     campaignID := createTestCampaign(t, db)
 
-    conv, err := db.CreateConversation(ctx,
-        campaignID,
-        models.CreateConversationRequest{
-            ScopeType: models.ScopeTypeChapter,
-            ScopeID:   1,
-        },
-    )
+    conv, _, err :=
+        db.GetOrCreateConversation(ctx,
+            campaignID,
+            models.ScopeTypeChapter,
+            int64(1),
+        )
     require.NoError(t, err)
 
     msg, err := db.CreateMessage(ctx, conv.ID,
-        models.RoleUser, "Hello, help me with Session 5",
-        nil, nil, nil, nil)
+        models.RoleUser,
+        "Hello, help me with Session 5",
+        nil, nil, nil, nil, nil)
     require.NoError(t, err)
     assert.Equal(t, conv.ID, msg.ConversationID)
     assert.Equal(t, models.RoleUser, msg.Role)
-    assert.Equal(t, "Hello, help me with Session 5",
+    assert.Equal(t,
+        "Hello, help me with Session 5",
         msg.Content)
     assert.False(t, msg.Compacted)
+
+    // Verify trigger bumped updated_at
+    got, err := db.GetConversation(ctx, conv.ID)
+    require.NoError(t, err)
+    assert.True(t,
+        got.UpdatedAt.After(conv.UpdatedAt) ||
+            got.UpdatedAt.Equal(conv.UpdatedAt))
 }
 
 func TestListMessages(t *testing.T) {
@@ -725,63 +1253,103 @@ func TestListMessages(t *testing.T) {
     ctx := context.Background()
     campaignID := createTestCampaign(t, db)
 
-    conv, err := db.CreateConversation(ctx,
-        campaignID,
-        models.CreateConversationRequest{
-            ScopeType: models.ScopeTypeChapter,
-            ScopeID:   1,
-        },
-    )
+    conv, _, err :=
+        db.GetOrCreateConversation(ctx,
+            campaignID,
+            models.ScopeTypeChapter,
+            int64(1),
+        )
     require.NoError(t, err)
 
     _, err = db.CreateMessage(ctx, conv.ID,
         models.RoleUser, "First message",
-        nil, nil, nil, nil)
+        nil, nil, nil, nil, nil)
     require.NoError(t, err)
     _, err = db.CreateMessage(ctx, conv.ID,
         models.RoleAssistant, "Response",
-        nil, nil, nil, nil)
+        nil, nil, nil, nil, nil)
     require.NoError(t, err)
 
-    msgs, err := db.ListMessages(ctx, conv.ID, 50, 0)
+    msgs, err := db.ListMessages(ctx,
+        conv.ID, 50, 0)
     require.NoError(t, err)
     assert.Len(t, msgs, 2)
-    assert.Equal(t, "First message", msgs[0].Content)
+    assert.Equal(t, "First message",
+        msgs[0].Content)
 }
 
-func TestListUncompactedMessages(t *testing.T) {
+func TestAssembleConversationContext(t *testing.T) {
     db := setupTestDB(t)
     ctx := context.Background()
     campaignID := createTestCampaign(t, db)
 
-    conv, err := db.CreateConversation(ctx,
-        campaignID,
-        models.CreateConversationRequest{
-            ScopeType: models.ScopeTypeChapter,
-            ScopeID:   1,
-        },
-    )
+    conv, _, err :=
+        db.GetOrCreateConversation(ctx,
+            campaignID,
+            models.ScopeTypeChapter,
+            int64(1),
+        )
+    require.NoError(t, err)
+
+    tokens := 100
+    _, err = db.CreateMessage(ctx, conv.ID,
+        models.RoleUser, "Hello",
+        nil, nil, nil, nil, &tokens)
+    require.NoError(t, err)
+
+    cc, err := db.AssembleConversationContext(
+        ctx, conv.ID)
+    require.NoError(t, err)
+    assert.Equal(t, conv.ID,
+        cc.Conversation.ID)
+    assert.Len(t, cc.Messages, 1)
+    assert.Equal(t, 100, cc.TokenEstimate)
+}
+
+func TestCompactMessages(t *testing.T) {
+    db := setupTestDB(t)
+    ctx := context.Background()
+    campaignID := createTestCampaign(t, db)
+
+    conv, _, err :=
+        db.GetOrCreateConversation(ctx,
+            campaignID,
+            models.ScopeTypeChapter,
+            int64(1),
+        )
     require.NoError(t, err)
 
     msg1, err := db.CreateMessage(ctx, conv.ID,
         models.RoleUser, "Old message",
-        nil, nil, nil, nil)
+        nil, nil, nil, nil, nil)
     require.NoError(t, err)
     _, err = db.CreateMessage(ctx, conv.ID,
         models.RoleAssistant, "Recent message",
-        nil, nil, nil, nil)
+        nil, nil, nil, nil, nil)
     require.NoError(t, err)
 
-    // Mark first as compacted
-    err = db.MarkMessagesCompacted(ctx,
-        []int64{msg1.ID})
+    // Compact the first message
+    count, err := db.CompactMessages(ctx,
+        conv.ID, []int64{msg1.ID},
+        "Summary of old exchange", 50)
     require.NoError(t, err)
+    assert.Equal(t, 1, count)
 
-    msgs, err := db.ListUncompactedMessages(ctx,
-        conv.ID)
+    // Verify summary was updated
+    got, err := db.GetConversation(ctx, conv.ID)
     require.NoError(t, err)
-    assert.Len(t, msgs, 1)
-    assert.Equal(t, "Recent message", msgs[0].Content)
+    assert.NotNil(t, got.Summary)
+    assert.Equal(t, "Summary of old exchange",
+        *got.Summary)
+    assert.Equal(t, 50, got.SummaryTokens)
+
+    // Verify context excludes compacted
+    cc, err := db.AssembleConversationContext(
+        ctx, conv.ID)
+    require.NoError(t, err)
+    assert.Len(t, cc.Messages, 1)
+    assert.Equal(t, "Recent message",
+        cc.Messages[0].Content)
 }
 ```
 
@@ -797,12 +1365,16 @@ Add to `internal/database/conversations.go`:
 
 ```go
 // CreateMessage inserts a message into a conversation.
+// The touch_conversation_on_message trigger
+// automatically bumps conversations.updated_at on
+// insert -- no manual UPDATE needed.
 func (db *DB) CreateMessage(
     ctx context.Context,
     conversationID int64,
     role models.MessageRole,
     content string,
     toolName *string,
+    toolUseID *string,
     toolInput json.RawMessage,
     toolResult json.RawMessage,
     tokens *int,
@@ -811,34 +1383,29 @@ func (db *DB) CreateMessage(
     err := db.QueryRow(ctx,
         `INSERT INTO messages
             (conversation_id, role, content,
-             tool_name, tool_input, tool_result,
-             tokens)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         RETURNING id, conversation_id, role, content,
-            tool_name, tool_input, tool_result,
-            tokens, compacted, created_at`,
+             tool_name, tool_use_id,
+             tool_input, tool_result, tokens)
+         VALUES ($1, $2, $3, $4, $5, $6,
+                 $7, $8)
+         RETURNING id, conversation_id, role,
+            content, tool_name, tool_use_id,
+            tool_input, tool_result, tokens,
+            compacted, created_at`,
         conversationID, string(role), content,
-        toolName, toolInput, toolResult, tokens,
+        toolName, toolUseID,
+        toolInput, toolResult, tokens,
     ).Scan(
         &msg.ID, &msg.ConversationID,
         &msg.Role, &msg.Content,
-        &msg.ToolName, &msg.ToolInput,
-        &msg.ToolResult, &msg.Tokens,
+        &msg.ToolName, &msg.ToolUseID,
+        &msg.ToolInput, &msg.ToolResult,
+        &msg.Tokens,
         &msg.Compacted, &msg.CreatedAt,
     )
     if err != nil {
         return nil, fmt.Errorf(
             "failed to create message: %w", err)
     }
-
-    // Touch conversation updated_at
-    _, _ = db.Exec(ctx,
-        `UPDATE conversations
-         SET updated_at = NOW()
-         WHERE id = $1`,
-        conversationID,
-    )
-
     return &msg, nil
 }
 
@@ -855,8 +1422,9 @@ func (db *DB) ListMessages(
     }
 
     query := `SELECT id, conversation_id, role,
-            content, tool_name, tool_input,
-            tool_result, tokens, compacted, created_at
+            content, tool_name, tool_use_id,
+            tool_input, tool_result, tokens,
+            compacted, created_at
          FROM messages
          WHERE conversation_id = $1`
     args := []any{conversationID}
@@ -874,49 +1442,115 @@ func (db *DB) ListMessages(
     return db.scanMessages(ctx, query, args...)
 }
 
-// ListUncompactedMessages returns only messages that
-// have not been compacted, for context assembly.
-func (db *DB) ListUncompactedMessages(
+// AssembleConversationContext calls the
+// assemble_conversation_context() stored function.
+// Returns conversation metadata, uncompacted
+// messages, and token budget estimate in one
+// round-trip. This is the hot path -- called
+// every conversation turn on cache miss.
+func (db *DB) AssembleConversationContext(
     ctx context.Context,
     conversationID int64,
-) ([]models.Message, error) {
-    return db.scanMessages(ctx,
-        `SELECT id, conversation_id, role, content,
-            tool_name, tool_input, tool_result,
-            tokens, compacted, created_at
-         FROM messages
-         WHERE conversation_id = $1
-           AND compacted = FALSE
-         ORDER BY created_at ASC`,
+) (*models.ConversationContext, error) {
+    rows, err := db.Query(ctx,
+        `SELECT conversation_id, campaign_id,
+            scope_type, scope_id, summary,
+            summary_tokens,
+            uncompacted_token_estimate,
+            message_id, role, content,
+            tool_name, tool_use_id,
+            tool_input, tool_result,
+            message_tokens, message_created_at
+         FROM assemble_conversation_context($1)`,
         conversationID,
     )
-}
-
-// MarkMessagesCompacted sets compacted=TRUE on the
-// given message IDs.
-func (db *DB) MarkMessagesCompacted(
-    ctx context.Context,
-    messageIDs []int64,
-) error {
-    if len(messageIDs) == 0 {
-        return nil
-    }
-    _, err := db.Exec(ctx,
-        `UPDATE messages
-         SET compacted = TRUE
-         WHERE id = ANY($1)`,
-        messageIDs,
-    )
     if err != nil {
-        return fmt.Errorf(
-            "failed to mark messages compacted: %w",
+        return nil, fmt.Errorf(
+            "assemble_conversation_context: %w",
             err)
     }
-    return nil
+    defer rows.Close()
+
+    var cc models.ConversationContext
+    first := true
+    for rows.Next() {
+        var m models.Message
+        var convID, campaignID, scopeID int64
+        var scopeType string
+        var summary *string
+        var summaryTokens, tokenEstimate int
+
+        err := rows.Scan(
+            &convID, &campaignID,
+            &scopeType, &scopeID,
+            &summary, &summaryTokens,
+            &tokenEstimate,
+            &m.ID, &m.Role, &m.Content,
+            &m.ToolName, &m.ToolUseID,
+            &m.ToolInput, &m.ToolResult,
+            &m.Tokens, &m.CreatedAt,
+        )
+        if err != nil {
+            return nil, fmt.Errorf(
+                "scan context row: %w", err)
+        }
+
+        if first {
+            cc.Conversation = models.Conversation{
+                ID:            convID,
+                CampaignID:    campaignID,
+                ScopeType: models.ScopeType(
+                    scopeType),
+                ScopeID:       scopeID,
+                Summary:       summary,
+                SummaryTokens: summaryTokens,
+            }
+            cc.TokenEstimate = tokenEstimate
+            first = false
+        }
+
+        m.ConversationID = convID
+        cc.Messages = append(cc.Messages, m)
+    }
+    if err := rows.Err(); err != nil {
+        return nil, fmt.Errorf(
+            "context rows error: %w", err)
+    }
+    if first {
+        return nil, fmt.Errorf(
+            "conversation %d not found",
+            conversationID)
+    }
+    return &cc, nil
 }
 
-// scanMessages is a shared helper for scanning message
-// rows.
+// CompactMessages calls the compact_messages()
+// stored function. Atomically marks messages as
+// compacted and updates the conversation summary.
+func (db *DB) CompactMessages(
+    ctx context.Context,
+    conversationID int64,
+    messageIDs []int64,
+    newSummary string,
+    summaryTokens int,
+) (int, error) {
+    var compactedCount int
+    err := db.QueryRow(ctx,
+        `SELECT compact_messages($1, $2, $3, $4)`,
+        conversationID,
+        messageIDs,
+        newSummary,
+        summaryTokens,
+    ).Scan(&compactedCount)
+    if err != nil {
+        return 0, fmt.Errorf(
+            "compact_messages: %w", err)
+    }
+    return compactedCount, nil
+}
+
+// scanMessages is a shared helper for scanning
+// message rows. Includes tool_use_id in the scan.
 func (db *DB) scanMessages(
     ctx context.Context,
     query string,
@@ -935,8 +1569,9 @@ func (db *DB) scanMessages(
         err := rows.Scan(
             &m.ID, &m.ConversationID,
             &m.Role, &m.Content,
-            &m.ToolName, &m.ToolInput,
-            &m.ToolResult, &m.Tokens,
+            &m.ToolName, &m.ToolUseID,
+            &m.ToolInput, &m.ToolResult,
+            &m.Tokens,
             &m.Compacted, &m.CreatedAt,
         )
         if err != nil {
@@ -959,7 +1594,9 @@ Run: `go test -v -tags integration ./internal/database/ -run TestCreateMessage`
 
 Run: `go test -v -tags integration ./internal/database/ -run TestListMessages`
 
-Run: `go test -v -tags integration ./internal/database/ -run TestListUncompactedMessages`
+Run: `go test -v -tags integration ./internal/database/ -run TestAssembleConversationContext`
+
+Run: `go test -v -tags integration ./internal/database/ -run TestCompactMessages`
 
 Expected: All pass.
 
@@ -968,7 +1605,7 @@ Expected: All pass.
 ```bash
 git add internal/database/conversations.go \
         internal/database/conversations_test.go
-git commit -m "feat: add message CRUD and compaction database layer"
+git commit -m "feat: add message CRUD, context assembly, and compaction via stored functions"
 ```
 
 ---
@@ -993,13 +1630,12 @@ func TestLogTokenUsage(t *testing.T) {
     campaignID := createTestCampaign(t, db)
     userID := createTestUser(t, db)
 
-    conv, err := db.CreateConversation(ctx,
-        campaignID,
-        models.CreateConversationRequest{
-            ScopeType: models.ScopeTypeChapter,
-            ScopeID:   1,
-        },
-    )
+    conv, _, err :=
+        db.GetOrCreateConversation(ctx,
+            campaignID,
+            models.ScopeTypeChapter,
+            int64(1),
+        )
     require.NoError(t, err)
 
     err = db.LogTokenUsage(ctx,
@@ -1016,6 +1652,48 @@ func TestLogTokenUsage(t *testing.T) {
     )
     require.NoError(t, err)
 }
+
+func TestGetTokenUsageSummary(t *testing.T) {
+    db := setupTestDB(t)
+    ctx := context.Background()
+    campaignID := createTestCampaign(t, db)
+    userID := createTestUser(t, db)
+
+    conv, _, err :=
+        db.GetOrCreateConversation(ctx,
+            campaignID,
+            models.ScopeTypeChapter,
+            int64(1),
+        )
+    require.NoError(t, err)
+
+    // Log two entries
+    for i := 0; i < 2; i++ {
+        err = db.LogTokenUsage(ctx,
+            models.TokenUsageLog{
+                ConversationID: conv.ID,
+                CampaignID:     campaignID,
+                UserID:         userID,
+                Model:          "claude-sonnet-4-20250514",
+                InputTokens:    1000,
+                OutputTokens:   500,
+                TotalTokens:    1500,
+                LLMCallType:    models.CallTypeConversation,
+            },
+        )
+        require.NoError(t, err)
+    }
+
+    since := time.Now().Add(-1 * time.Hour)
+    summaries, err := db.GetTokenUsageSummary(
+        ctx, &campaignID, &userID, since, nil)
+    require.NoError(t, err)
+    assert.NotEmpty(t, summaries)
+    assert.Equal(t, int64(2),
+        summaries[0].CallCount)
+    assert.Equal(t, int64(3000),
+        summaries[0].TotalTokens)
+}
 ```
 
 **Step 2: Run test to verify it fails**
@@ -1029,18 +1707,20 @@ Expected: FAIL — `LogTokenUsage` not defined.
 Add to `internal/database/conversations.go`:
 
 ```go
-// LogTokenUsage records token consumption for a single
-// LLM call.
+// LogTokenUsage records token consumption for a
+// single LLM call.
 func (db *DB) LogTokenUsage(
     ctx context.Context,
     usage models.TokenUsageLog,
 ) error {
     _, err := db.Exec(ctx,
         `INSERT INTO token_usage_log
-            (conversation_id, campaign_id, user_id,
-             model, input_tokens, output_tokens,
-             total_tokens, llm_call_type, agent_name)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+            (conversation_id, campaign_id,
+             user_id, model, input_tokens,
+             output_tokens, total_tokens,
+             llm_call_type, agent_name)
+         VALUES ($1, $2, $3, $4, $5, $6,
+                 $7, $8, $9)`,
         usage.ConversationID,
         usage.CampaignID,
         usage.UserID,
@@ -1057,20 +1737,70 @@ func (db *DB) LogTokenUsage(
     }
     return nil
 }
+
+// GetTokenUsageSummary calls
+// get_token_usage_summary(). Pass nil for
+// campaignID or userID for broader aggregation.
+func (db *DB) GetTokenUsageSummary(
+    ctx context.Context,
+    campaignID *int64,
+    userID *int64,
+    since time.Time,
+    until *time.Time,
+) ([]models.TokenUsageSummary, error) {
+    rows, err := db.Query(ctx,
+        `SELECT llm_call_type, model,
+            call_count, total_input_tokens,
+            total_output_tokens, total_tokens
+         FROM get_token_usage_summary(
+             $1, $2, $3, $4)`,
+        campaignID, userID, since, until,
+    )
+    if err != nil {
+        return nil, fmt.Errorf(
+            "get_token_usage_summary: %w", err)
+    }
+    defer rows.Close()
+
+    var summaries []models.TokenUsageSummary
+    for rows.Next() {
+        var s models.TokenUsageSummary
+        err := rows.Scan(
+            &s.LLMCallType, &s.Model,
+            &s.CallCount,
+            &s.TotalInputTokens,
+            &s.TotalOutputTokens,
+            &s.TotalTokens,
+        )
+        if err != nil {
+            return nil, fmt.Errorf(
+                "scan token usage summary: %w",
+                err)
+        }
+        summaries = append(summaries, s)
+    }
+    if err := rows.Err(); err != nil {
+        return nil, fmt.Errorf(
+            "token usage rows error: %w", err)
+    }
+    return summaries, nil
+}
 ```
 
-**Step 4: Run test**
+**Step 4: Run tests**
 
 Run: `go test -v -tags integration ./internal/database/ -run TestLogTokenUsage`
 
-Expected: PASS.
+Run: `go test -v -tags integration ./internal/database/ -run TestGetTokenUsageSummary`
+
+Expected: All pass.
 
 **Step 5: Commit**
 
 ```bash
 git add internal/database/conversations.go \
         internal/database/conversations_test.go
-git commit -m "feat: add token usage logging database layer"
+git commit -m "feat: add token usage logging and summary via stored function"
 ```
 
 ---
@@ -2432,16 +3162,20 @@ func (o *Orchestrator) Compact(
     campaignID int64,
     userID int64,
 ) error {
-    // 1. Load all uncompacted messages
+    // 1. Call db.AssembleConversationContext()
+    //    to get uncompacted messages + summary
     // 2. Split into "old" (to summarise) and
     //    "recent" (to keep)
-    // 3. Build compaction prompt with old messages
-    //    and existing summary
-    // 4. Call streaming provider with summarisation
-    //    prompt + sub-tools for ground truth validation
-    // 5. Save new summary to conversation
-    // 6. Mark old messages as compacted
-    // 7. Log token usage as "compaction" type
+    // 3. Build compaction prompt with old
+    //    messages and existing summary
+    // 4. Call streaming provider with
+    //    summarisation prompt + sub-tools for
+    //    ground truth validation
+    // 5. Call db.CompactMessages() which
+    //    atomically marks messages compacted
+    //    and updates the summary in one
+    //    stored function call
+    // 6. Log token usage as "compaction" type
 }
 ```
 
@@ -2484,10 +3218,11 @@ Test the create, get, list, and send message endpoints.
 Use `httptest` for HTTP-level testing.
 
 ```go
-func TestCreateConversationHandler(t *testing.T) {
+func TestGetOrCreateConversationHandler(t *testing.T) {
     // POST /api/campaigns/1/conversations
     // Body: {"scopeType":"chapter","scopeId":1}
-    // Expect: 201 with conversation object
+    // Expect: 200 or 201 with conversation object
+    // Uses get_or_create_conversation() stored fn
 }
 
 func TestGetConversationHandler(t *testing.T) {
@@ -2888,31 +3623,49 @@ Expected: SSE events stream to the terminal.
 
 ## Summary
 
-| Task | Description | Est. Steps |
-|------|-------------|-----------|
-| 1 | Database migration | 4 |
-| 2 | Conversation models | 4 |
-| 3 | Conversation CRUD DB layer | 5 |
-| 4 | Message DB layer | 5 |
-| 5 | Token usage logging | 5 |
-| 6 | Streaming provider interface | 4 |
-| 7 | Anthropic streaming impl | 5 |
-| 8 | Tool registry | 5 |
-| 9 | Procedural tools (8) | 7 |
-| 10 | Document tools (2) | 5 |
-| 11 | Agent tools (3) | 5 |
-| 12 | Session cache | 5 |
-| 13 | SSE writer | 5 |
-| 14 | System prompt template | 5 |
-| 15 | Orchestrator core loop | 7 |
-| 16 | Compaction | 5 |
-| 17 | API handlers | 5 |
-| 18 | Router registration | 4 |
-| 19 | Tool registry factory | 4 |
-| 20 | Expert conversation prompts | 6 |
-| 21 | Integration test | 3 |
-| 22 | Final verification | 6 |
-| **Total** | | **~114** |
+| Task | Description | Notes |
+|------|-------------|-------|
+| 1 | Database migration | Triggers, views, 4 stored fns |
+| 2 | Conversation models | +ConversationContext, ListItem, TokenUsageSummary |
+| 3 | Conversation CRUD | Uses `get_or_create_conversation()`, `conversation_list` view |
+| 4 | Message DB layer | Uses `assemble_conversation_context()`, `compact_messages()` |
+| 5 | Token usage logging | Uses `get_token_usage_summary()` |
+| 6 | Streaming provider interface | 4 steps |
+| 7 | Anthropic streaming impl | 5 steps |
+| 8 | Tool registry | 5 steps |
+| 9 | Procedural tools (8) | 7 steps |
+| 10 | Document tools (2) | 5 steps |
+| 11 | Agent tools (3) | 5 steps |
+| 12 | Session cache | 5 steps |
+| 13 | SSE writer | 5 steps |
+| 14 | System prompt template | 5 steps |
+| 15 | Orchestrator core loop | 7 steps |
+| 16 | Compaction | Calls `db.CompactMessages()` (stored fn) |
+| 17 | API handlers | 5 steps |
+| 18 | Router registration | 4 steps |
+| 19 | Tool registry factory | 4 steps |
+| 20 | Expert conversation prompts | 6 steps |
+| 21 | Integration test | 3 steps |
+| 22 | Final verification | 6 steps |
+
+**Key design decisions:**
+
+- **messages.tool_use_id** column correlates tool_call
+  to tool_result for context reconstruction.
+- **Triggers** handle `updated_at` on conversations
+  automatically -- no manual UPDATE in Go code.
+- **Stored functions** encapsulate critical operations:
+  - `get_or_create_conversation()` -- atomic upsert
+  - `assemble_conversation_context()` -- hot-path
+    single round-trip context assembly
+  - `compact_messages()` -- atomic mark + summary
+    update
+  - `get_token_usage_summary()` -- flexible
+    aggregation
+- **Views** provide pre-joined read paths:
+  - `conversation_list` -- list with preview/counts
+  - `conversation_context` -- uncompacted messages
+  - `token_usage_by_campaign` / `token_usage_by_user`
 
 Each step is 2-5 minutes. Tasks are ordered by
 dependency: foundation first (migration, models, DB
