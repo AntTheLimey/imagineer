@@ -109,9 +109,19 @@ func TestListConversationsFiltered(t *testing.T) {
 	require.NoError(t, err)
 
 	convs, err := db.ListConversations(
-		ctx, campaignID, "chapter", 0, 20)
+		ctx, campaignID, models.ScopeTypeChapter, 0, 20)
 	require.NoError(t, err)
 	for _, c := range convs {
 		assert.Equal(t, models.ScopeTypeChapter, c.ScopeType)
 	}
+}
+
+func TestGetConversation_NotFound(t *testing.T) {
+	db := setupIntegrationDB(t)
+	ctx := context.Background()
+
+	_, err := db.GetConversation(ctx, 999999)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(),
+		"failed to get conversation")
 }

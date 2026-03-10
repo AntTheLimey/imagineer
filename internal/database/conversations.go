@@ -86,7 +86,7 @@ func (db *DB) GetConversation(
 func (db *DB) ListConversations(
 	ctx context.Context,
 	campaignID int64,
-	scopeType string,
+	scopeType models.ScopeType,
 	scopeID int64,
 	limit int,
 ) ([]models.ConversationListItem, error) {
