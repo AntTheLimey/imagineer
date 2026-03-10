@@ -183,7 +183,8 @@ func buildCreateEntityTool(
 					},
 					"entity_type": {
 						"type": "string",
-						"description": "The type of entity (e.g. npc, location, item, faction, clue, creature, event, document, other)"
+						"description": "The type of entity",
+						"enum": ["npc", "location", "item", "faction", "clue", "creature", "event", "document", "other"]
 					},
 					"description": {
 						"type": "string",
@@ -464,6 +465,9 @@ func buildSearchContentTool(
 			}
 			if params.Limit <= 0 {
 				params.Limit = 10
+			}
+			if params.Limit > 100 {
+				params.Limit = 100
 			}
 
 			results, err := db.SearchCampaignContent(

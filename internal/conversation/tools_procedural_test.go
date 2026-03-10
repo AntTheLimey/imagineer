@@ -194,6 +194,12 @@ func TestProceduralToolInputValidation(t *testing.T) {
 			wantErr:  "query is required",
 		},
 		{
+			name:     "search_entities with type but empty query",
+			toolName: "search_entities",
+			input:    `{"query":"","entity_type":"npc"}`,
+			wantErr:  "query is required",
+		},
+		{
 			name:     "get_entity invalid json",
 			toolName: "get_entity",
 			input:    `{bad`,
