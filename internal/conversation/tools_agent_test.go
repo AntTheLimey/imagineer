@@ -533,6 +533,24 @@ func TestBuildAgentToolSubToolError(t *testing.T) {
 		output.Response)
 }
 
+func TestBuildAgentToolContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+
+	provider := &mockStreamingProvider{}
+	subTools := NewToolRegistry()
+
+	tool := buildAgentTool(
+		"test_agent", "Test agent",
+		"You are a test agent.",
+		subTools, provider)
+
+	_, err := tool.Execute(ctx,
+		json.RawMessage(`{"question":"test"}`))
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cancel")
+}
+
 func TestFilterTools(t *testing.T) {
 	source := newFullTestRegistry()
 

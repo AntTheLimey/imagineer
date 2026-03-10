@@ -167,11 +167,21 @@ func runAgentLoop(
 	subTools *ToolRegistry,
 	question string,
 ) (json.RawMessage, error) {
+	// Note: messages grow unboundedly across iterations.
+	// maxAgentIterations caps the growth, but large tool
+	// results could still approach the context window.
+	// A future improvement could track token usage from
+	// EventUsage events and truncate old results.
 	messages := []llm.StreamingMessage{
 		{Role: "user", Content: question},
 	}
 
 	for iteration := 0; iteration < maxAgentIterations; iteration++ {
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf(
+				"agent cancelled: %w", ctx.Err())
+		}
+
 		req := llm.StreamingRequest{
 			SystemPrompt: systemPrompt,
 			Messages:     messages,
@@ -191,28 +201,25 @@ func runAgentLoop(
 			return nil, err
 		}
 
-		// If no tool calls were made, return the
-		// accumulated text response.
+		// If no tool calls, we have our final response.
 		if len(calls) == 0 {
 			return json.Marshal(agentToolOutput{
 				Response: text,
 			})
 		}
 
-		// Append the assistant's text (if any)
-		// before the tool calls.
-		if text != "" {
-			messages = append(messages,
-				llm.StreamingMessage{
-					Role:    "assistant",
-					Content: text,
-				})
-		}
-
-		// Process each tool call: append the
-		// assistant's tool-use message, execute
-		// the tool, then append the result.
+		// Tool calls present -- execute them.
+		// Note: we intentionally skip appending assistant
+		// text to avoid consecutive same-role messages
+		// that violate the Anthropic API contract. The
+		// text (e.g. "Let me check that") is ephemeral
+		// and not needed for context.
 		for _, call := range calls {
+			if ctx.Err() != nil {
+				return nil, fmt.Errorf(
+					"agent cancelled: %w", ctx.Err())
+			}
+
 			messages = append(messages,
 				llm.StreamingMessage{
 					Role:      "assistant",
@@ -227,11 +234,9 @@ func runAgentLoop(
 				// Return the error as a tool
 				// result so the expert can
 				// recover gracefully.
-				errResult, _ := json.Marshal(
-					map[string]string{
-						"error": execErr.Error(),
-					})
-				result = errResult
+				result = []byte(fmt.Sprintf(
+					`{"error":%q}`,
+					execErr.Error()))
 			}
 
 			messages = append(messages,
@@ -256,7 +261,6 @@ func collectStreamEvents(
 ) (string, []toolCall, error) {
 	var text string
 	var calls []toolCall
-	var current *toolCall
 
 	for event := range ch {
 		switch event.Type {
@@ -266,12 +270,11 @@ func collectStreamEvents(
 		case llm.EventToolUse:
 			// Each EventToolUse carries the
 			// complete tool call information.
-			current = &toolCall{
+			calls = append(calls, toolCall{
 				Name:  event.ToolName,
 				ID:    event.ToolID,
 				Input: event.ToolInput,
-			}
-			calls = append(calls, *current)
+			})
 
 		case llm.EventError:
 			return "", nil, fmt.Errorf(
