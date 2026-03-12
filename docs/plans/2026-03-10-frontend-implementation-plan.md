@@ -3162,6 +3162,67 @@ tests`
 
 ---
 
+### Task 30: Tag Settings UI
+
+Add tag configuration controls (tag max length, context
+radius) to the user settings page. The `useTagSettings`
+hook already stores these values in localStorage but no
+UI exists for users to change them. This was a design
+oversight identified during tagging implementation.
+
+**Depends on:** Tagging Task 2 (useTagSettings hook).
+
+**Files:**
+
+- Modify: `client/src/components/Settings/` (settings
+  page — add a "Tagging" section)
+- Test: `client/src/components/Settings/__tests__/`
+
+**Step 1: Write failing tests**
+
+Write tests that verify:
+
+- A "Tagging" section appears in user settings.
+- The tag max length field displays the current value
+  from useTagSettings.
+- The context radius field displays the current value
+  from useTagSettings.
+- Changing the tag max length field calls
+  updateSettings with the new value.
+- Changing the context radius field calls
+  updateSettings with the new value.
+- Invalid values (negative, zero, non-numeric) are
+  rejected with validation feedback.
+
+**Step 2: Implement tag settings section**
+
+Add a "Tagging" section to the user settings page with
+two number input fields:
+
+- **Tag Max Length** — default 250, min 50, max 1000.
+  Helper text: "Maximum character length for inline
+  tag content."
+- **Context Radius** — default 500, min 100, max 2000.
+  Helper text: "Characters of surrounding document
+  context sent with each tag."
+
+Use MUI `TextField` with `type="number"` and
+`InputProps` for min/max constraints. Wire to
+`useTagSettings` hook.
+
+**Step 3: Verify all tests pass**
+
+```bash
+cd /Users/antonypegg/PROJECTS/imagineer/client \
+    && npx vitest run \
+    src/components/Settings/__tests__/
+```
+
+**Commit message:**
+`feat(client): add tag settings UI to user settings`
+
+---
+
 ## Task Dependency Summary
 
 The following table summarises the dependency
@@ -3200,6 +3261,7 @@ completed.
 | 27   | Structural Change Pipeline      | 4, 13, 18    |
 | 28   | Deprecated Page Cleanup         | All prior     |
 | 29   | End-to-End Smoke Tests          | All prior     |
+| 30   | Tag Settings UI                 | Tagging T2    |
 
 ## New Package Dependencies
 
