@@ -367,6 +367,13 @@ Keep these files up to date throughout every session:
    */
   ```
 
+## Tool Permissions
+
+Compound `cd && <command>` and `git` commands (e.g., `git add`,
+`git commit`, `git status`, `git diff`, `git log`) should run
+without asking for permission. The only exception is `git push`,
+which must always ask for confirmation before executing.
+
 ## Game System Schemas
 
 The `schemas/` directory contains YAML definitions for supported TTRPG
