@@ -45,7 +45,7 @@ func TestHealthEndpoint(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create router without database (health endpoint doesn't need it)
-			router, err := NewRouter(nil, nil, testJWTSecret)
+			router, err := NewRouter(nil, nil, testJWTSecret, nil)
 			require.NoError(t, err)
 
 			// Create request
@@ -243,7 +243,7 @@ func TestAPIErrorResponse_Structure(t *testing.T) {
 
 func TestCORSHeaders(t *testing.T) {
 	// Test that CORS headers are set correctly
-	router, err := NewRouter(nil, nil, testJWTSecret)
+	router, err := NewRouter(nil, nil, testJWTSecret, nil)
 	require.NoError(t, err)
 
 	// Create OPTIONS preflight request
@@ -302,7 +302,7 @@ func TestJSONRequestDecoding(t *testing.T) {
 
 func TestContentTypeHeader(t *testing.T) {
 	// Verify that all JSON responses have correct Content-Type
-	router, err := NewRouter(nil, nil, testJWTSecret)
+	router, err := NewRouter(nil, nil, testJWTSecret, nil)
 	require.NoError(t, err)
 
 	endpoints := []struct {
@@ -327,7 +327,7 @@ func TestContentTypeHeader(t *testing.T) {
 
 func TestRouterMiddleware(t *testing.T) {
 	// Test that the router has required middleware
-	router, err := NewRouter(nil, nil, testJWTSecret)
+	router, err := NewRouter(nil, nil, testJWTSecret, nil)
 	require.NoError(t, err)
 
 	// Test request ID middleware by checking response headers
@@ -341,7 +341,7 @@ func TestRouterMiddleware(t *testing.T) {
 }
 
 func TestHealthEndpoint_ResponseFormat(t *testing.T) {
-	router, err := NewRouter(nil, nil, testJWTSecret)
+	router, err := NewRouter(nil, nil, testJWTSecret, nil)
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
@@ -356,7 +356,7 @@ func TestHealthEndpoint_ResponseFormat(t *testing.T) {
 
 func TestNewRouter_MissingJWTSecret(t *testing.T) {
 	// Test that NewRouter returns an error when jwtSecret is empty
-	router, err := NewRouter(nil, nil, "")
+	router, err := NewRouter(nil, nil, "", nil)
 
 	assert.Nil(t, router)
 	assert.Error(t, err)

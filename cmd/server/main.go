@@ -24,6 +24,7 @@ import (
 
 	"github.com/antonypegg/imagineer/internal/api"
 	"github.com/antonypegg/imagineer/internal/auth"
+	"github.com/antonypegg/imagineer/internal/conversation"
 	"github.com/antonypegg/imagineer/internal/crypto"
 	"github.com/antonypegg/imagineer/internal/database"
 	"github.com/antonypegg/imagineer/internal/ontology"
@@ -126,8 +127,24 @@ func main() {
 		}
 	}
 
+	// Create conversation orchestrator.
+	// The LLM provider is nil at startup because it requires the
+	// user's API key, which is only available per-request. The
+	// orchestrator handles a nil provider gracefully by returning
+	// an error when a message is sent without a configured provider.
+	// TODO: set the provider per-request once per-user API key
+	// injection is implemented.
+	orch := conversation.NewOrchestrator(conversation.OrchestratorConfig{
+		DB:         db,
+		PromptPath: "config/prompts/conversation.tmpl",
+		SchemasDir: "schemas",
+		CacheTTL:   30 * time.Minute,
+	})
+	defer orch.Stop()
+	log.Println("Conversation orchestrator initialised (provider pending per-request)")
+
 	// Create router (requires JWT secret for authentication)
-	router, err := api.NewRouter(db, authHandler, jwtSecret)
+	router, err := api.NewRouter(db, authHandler, jwtSecret, orch)
 	if err != nil {
 		log.Fatalf("Failed to create router: %v", err)
 	}

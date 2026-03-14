@@ -881,3 +881,135 @@ type CreateConstraintOverrideRequest struct {
 	ConstraintType string `json:"constraintType"`
 	OverrideKey    string `json:"overrideKey"`
 }
+
+// ScopeType identifies what a conversation is scoped to.
+type ScopeType string
+
+const (
+	ScopeTypeEntity   ScopeType = "entity"
+	ScopeTypeChapter  ScopeType = "chapter"
+	ScopeTypeSession  ScopeType = "session"
+	ScopeTypeScene    ScopeType = "scene"
+	ScopeTypeCampaign ScopeType = "campaign"
+)
+
+// MessageRole identifies the sender of a message.
+type MessageRole string
+
+const (
+	MessageRoleUser       MessageRole = "user"
+	MessageRoleAssistant  MessageRole = "assistant"
+	MessageRoleSystem     MessageRole = "system"
+	MessageRoleToolCall   MessageRole = "tool_call"
+	MessageRoleToolResult MessageRole = "tool_result"
+)
+
+// LLMCallType categorises an LLM invocation for metering.
+type LLMCallType string
+
+const (
+	CallTypeConversation LLMCallType = "conversation"
+	CallTypeCompaction   LLMCallType = "compaction"
+	CallTypeAgentTool    LLMCallType = "agent_tool"
+)
+
+// Conversation represents a chat thread scoped to a
+// campaign document or entity.
+type Conversation struct {
+	ID            int64     `json:"id"`
+	CampaignID    int64     `json:"campaignId"`
+	ScopeType     ScopeType `json:"scopeType"`
+	ScopeID       int64     `json:"scopeId"`
+	Title         *string   `json:"title,omitempty"`
+	Summary       *string   `json:"summary,omitempty"`
+	SummaryTokens int       `json:"summaryTokens"`
+	CreatedAt     time.Time `json:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+	Messages      []Message `json:"messages,omitempty"`
+}
+
+// CreateConversationRequest contains fields for creating
+// a new conversation.
+type CreateConversationRequest struct {
+	ScopeType ScopeType `json:"scopeType"`
+	ScopeID   int64     `json:"scopeId"`
+}
+
+// Message represents a single message in a conversation.
+type Message struct {
+	ID             int64           `json:"id"`
+	ConversationID int64           `json:"conversationId"`
+	Role           MessageRole     `json:"role"`
+	Content        string          `json:"content"`
+	ToolName       *string         `json:"toolName,omitempty"`
+	ToolUseID      *string         `json:"toolUseId,omitempty"`
+	ToolInput      json.RawMessage `json:"toolInput,omitempty"`
+	ToolResult     json.RawMessage `json:"toolResult,omitempty"`
+	Tokens         *int            `json:"tokens,omitempty"`
+	Compacted      bool            `json:"compacted"`
+	CreatedAt      time.Time       `json:"createdAt"`
+}
+
+// SendMessageRequest contains the user message and
+// optional editor state.
+type SendMessageRequest struct {
+	Content         string  `json:"content"`
+	EditorSelection *string `json:"editorSelection,omitempty"`
+}
+
+// TokenUsageLog records token consumption for a single
+// LLM call.
+type TokenUsageLog struct {
+	ID             int64       `json:"id"`
+	ConversationID int64       `json:"conversationId"`
+	CampaignID     int64       `json:"campaignId"`
+	UserID         int64       `json:"userId"`
+	Model          string      `json:"model"`
+	InputTokens    int         `json:"inputTokens"`
+	OutputTokens   int         `json:"outputTokens"`
+	TotalTokens    int         `json:"totalTokens"`
+	LLMCallType    LLMCallType `json:"llmCallType"`
+	AgentName      *string     `json:"agentName,omitempty"`
+	CreatedAt      time.Time   `json:"createdAt"`
+}
+
+// ConversationContext is the return type from
+// assemble_conversation_context(). Contains
+// conversation metadata and all uncompacted
+// messages in one struct.
+type ConversationContext struct {
+	Conversation  Conversation `json:"conversation"`
+	Messages      []Message    `json:"messages"`
+	TokenEstimate int          `json:"tokenEstimate"`
+}
+
+// ConversationListItem is a row from the
+// conversation_list view, including derived
+// fields for display.
+type ConversationListItem struct {
+	ID                  int64      `json:"id"`
+	CampaignID          int64      `json:"campaignId"`
+	ScopeType           ScopeType  `json:"scopeType"`
+	ScopeID             int64      `json:"scopeId"`
+	Title               *string    `json:"title,omitempty"`
+	SummaryTokens       int        `json:"summaryTokens"`
+	CreatedAt           time.Time  `json:"createdAt"`
+	UpdatedAt           time.Time  `json:"updatedAt"`
+	LastMessageRole     *string    `json:"lastMessageRole,omitempty"`
+	LastMessagePreview  *string    `json:"lastMessagePreview,omitempty"`
+	LastMessageAt       *time.Time `json:"lastMessageAt,omitempty"`
+	TotalMessages       int        `json:"totalMessages"`
+	UncompactedMessages int        `json:"uncompactedMessages"`
+}
+
+// TokenUsageSummary is the return type from
+// get_token_usage_summary(). One row per
+// (llm_call_type, model) combination.
+type TokenUsageSummary struct {
+	LLMCallType       string `json:"llmCallType"`
+	Model             string `json:"model"`
+	CallCount         int64  `json:"callCount"`
+	TotalInputTokens  int64  `json:"totalInputTokens"`
+	TotalOutputTokens int64  `json:"totalOutputTokens"`
+	TotalTokens       int64  `json:"totalTokens"`
+}
