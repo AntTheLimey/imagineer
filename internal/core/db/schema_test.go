@@ -127,6 +127,173 @@ func seedTypedWorld(t *testing.T, pool *pgxpool.Pool) (string, string) {
 	return wid, tid
 }
 
+// seedRelWorld returns (wid, npcType, predType, aliceID, bobID).
+func seedRelWorld(t *testing.T, pool *pgxpool.Pool) (wid, npc, pred, a, b string) {
+	t.Helper()
+	ctx := context.Background()
+	wid, npc = seedTypedWorld(t, pool)
+	if err := pool.QueryRow(ctx, `INSERT INTO world.types (world_id, kind, name, display_label)
+        VALUES ($1,'relation','ally_of','Ally of') RETURNING id`, wid).Scan(&pred); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `INSERT INTO world.entities (world_id, type_id, name)
+        VALUES ($1,$2,'Alice') RETURNING id`, wid, npc).Scan(&a); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `INSERT INTO world.entities (world_id, type_id, name)
+        VALUES ($1,$2,'Bob') RETURNING id`, wid, npc).Scan(&b); err != nil {
+		t.Fatal(err)
+	}
+	return
+}
+
+// addRelation creates the entity row + subclass row in one tx; returns relation id.
+// lo/hi are hours; the interval is [lo, hi).
+func addRelation(t *testing.T, pool *pgxpool.Pool, wid, pred, src, tgt string, lo, hi int64) (string, error) {
+	t.Helper()
+	ctx := context.Background()
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	var relType, id string
+	if err := tx.QueryRow(ctx,
+		`SELECT id FROM world.types WHERE id = $1 AND kind = 'relation'`, pred).Scan(&relType); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.QueryRow(ctx, `INSERT INTO world.entities (world_id, type_id, name)
+        VALUES ($1,$2,'(relation)') RETURNING id`, wid, relType).Scan(&id); err != nil {
+		return "", err
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO world.entity_relations
+        (id, source_id, target_id, predicate_id, validity)
+        VALUES ($1,$2,$3,$4, nummultirange(numrange($5,$6)))`,
+		id, src, tgt, pred, lo, hi)
+	if err != nil {
+		return "", err
+	}
+	return id, tx.Commit(ctx)
+}
+
+func TestRelationRecurrenceAndOverlap(t *testing.T) {
+	pool := migratedPool(t)
+	wid, _, pred, a, b := seedRelWorld(t, pool)
+
+	// First interval: hours [0, 100).
+	if _, err := addRelation(t, pool, wid, pred, a, b, 0, 100); err != nil {
+		t.Fatal(err)
+	}
+	// Recurrence across a disjoint interval [200, 300) is ALLOWED.
+	if _, err := addRelation(t, pool, wid, pred, a, b, 200, 300); err != nil {
+		t.Fatalf("disjoint recurrence rejected: %v", err)
+	}
+	// Overlapping duplicate [50, 150) is REJECTED.
+	if _, err := addRelation(t, pool, wid, pred, a, b, 50, 150); err == nil {
+		t.Fatal("overlapping duplicate allowed")
+	}
+}
+
+func TestNoSelfRelation(t *testing.T) {
+	pool := migratedPool(t)
+	wid, _, pred, a, _ := seedRelWorld(t, pool)
+	if _, err := addRelation(t, pool, wid, pred, a, a, 0, 10); err == nil {
+		t.Fatal("self-relation allowed")
+	}
+}
+
+func TestRelationOfRelation(t *testing.T) {
+	// A relation is an entity: it can be the target of another relation.
+	pool := migratedPool(t)
+	wid, _, pred, a, b := seedRelWorld(t, pool)
+	rel, err := addRelation(t, pool, wid, pred, a, b, 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := addRelation(t, pool, wid, pred, a, rel, 0, 10); err != nil {
+		t.Fatalf("relation-of-relation rejected: %v", err)
+	}
+}
+
+// Two overlapping same-edge rows inserted inside ONE transaction must still
+// fail: the advisory lock only serializes across transactions, so the check
+// itself has to catch the earlier same-txn row (which is visible to it).
+func TestOverlapWithinSingleTransaction(t *testing.T) {
+	pool := migratedPool(t)
+	ctx := context.Background()
+	wid, _, pred, a, b := seedRelWorld(t, pool)
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+
+	insert := func(lo, hi int64) error {
+		var id string
+		if err := tx.QueryRow(ctx, `INSERT INTO world.entities (world_id, type_id, name)
+            VALUES ($1,$2,'(relation)') RETURNING id`, wid, pred).Scan(&id); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `INSERT INTO world.entity_relations
+            (id, source_id, target_id, predicate_id, validity)
+            VALUES ($1,$2,$3,$4, nummultirange(numrange($5,$6)))`, id, a, b, pred, lo, hi)
+		return err
+	}
+	if err := insert(0, 100); err != nil {
+		t.Fatal(err)
+	}
+	if err := insert(50, 150); err == nil {
+		t.Fatal("overlapping same-transaction insert allowed")
+	}
+}
+
+// The unbounded default covers the whole world line, so any second row on the
+// same edge overlaps it.
+func TestRelationDefaultValidityIsUnbounded(t *testing.T) {
+	pool := migratedPool(t)
+	ctx := context.Background()
+	wid, _, pred, a, b := seedRelWorld(t, pool)
+
+	var id string
+	if err := pool.QueryRow(ctx, `INSERT INTO world.entities (world_id, type_id, name)
+        VALUES ($1,$2,'(relation)') RETURNING id`, wid, pred).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	var validity string
+	if err := pool.QueryRow(ctx, `INSERT INTO world.entity_relations
+        (id, source_id, target_id, predicate_id) VALUES ($1,$2,$3,$4)
+        RETURNING validity::text`, id, a, b, pred).Scan(&validity); err != nil {
+		t.Fatal(err)
+	}
+	if validity != "{(,)}" {
+		t.Fatalf("default validity = %q, want {(,)}", validity)
+	}
+	if _, err := addRelation(t, pool, wid, pred, a, b, 900, 1000); err == nil {
+		t.Fatal("row overlapping the unbounded default allowed")
+	}
+}
+
+// Widening an existing interval into a sibling's span must be rejected too.
+func TestRelationUpdateOverlapRejected(t *testing.T) {
+	pool := migratedPool(t)
+	ctx := context.Background()
+	wid, _, pred, a, b := seedRelWorld(t, pool)
+
+	first, err := addRelation(t, pool, wid, pred, a, b, 0, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := addRelation(t, pool, wid, pred, a, b, 200, 300); err != nil {
+		t.Fatal(err)
+	}
+	_, err = pool.Exec(ctx, `UPDATE world.entity_relations
+        SET validity = nummultirange(numrange(0,250)) WHERE id = $1`, first)
+	if err == nil {
+		t.Fatal("update widening into a sibling interval allowed")
+	}
+}
+
 func TestEntities(t *testing.T) {
 	pool := migratedPool(t)
 	ctx := context.Background()
