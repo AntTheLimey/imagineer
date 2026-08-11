@@ -113,3 +113,39 @@ func TestTypeTree(t *testing.T) {
 		t.Fatal("cycle allowed")
 	}
 }
+
+// seedTypedWorld returns (worldID, npcTypeID).
+func seedTypedWorld(t *testing.T, pool *pgxpool.Pool) (string, string) {
+	t.Helper()
+	wid := seedWorld(t, pool)
+	var tid string
+	if err := pool.QueryRow(context.Background(), `INSERT INTO world.types
+        (world_id, kind, name, display_label) VALUES ($1,'entity','npc','NPC')
+        RETURNING id`, wid).Scan(&tid); err != nil {
+		t.Fatal(err)
+	}
+	return wid, tid
+}
+
+func TestEntities(t *testing.T) {
+	pool := migratedPool(t)
+	ctx := context.Background()
+	wid, tid := seedTypedWorld(t, pool)
+
+	var eid, status string
+	err := pool.QueryRow(ctx, `INSERT INTO world.entities
+        (world_id, type_id, name, description)
+        VALUES ($1,$2,'Nell','Thief from Southwark')
+        RETURNING id, canon_status`, wid, tid).Scan(&eid, &status)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status != "draft" {
+		t.Fatalf("default canon_status = %q, want draft", status)
+	}
+	// Bad status rejected.
+	if _, err := pool.Exec(ctx,
+		`UPDATE world.entities SET canon_status = 'confirmed' WHERE id = $1`, eid); err == nil {
+		t.Fatal("invalid canon_status allowed")
+	}
+}
