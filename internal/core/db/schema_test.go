@@ -513,3 +513,35 @@ func TestEras(t *testing.T) {
 		t.Fatal("duplicate era name allowed")
 	}
 }
+
+func TestPropertyGraphNeighborhood(t *testing.T) {
+	pool := migratedPool(t)
+	wid, _, pred, a, b := seedRelWorld(t, pool)
+	if _, err := addRelation(t, pool, wid, pred, a, b, 0, 100); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := pool.Query(context.Background(), `
+        SELECT src, tgt FROM GRAPH_TABLE (world.canon_graph
+            MATCH (s IS entity)-[e IS relates]->(t IS entity)
+            COLUMNS (s.name AS src, t.name AS tgt))`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	found := false
+	for rows.Next() {
+		var src, tgt string
+		if err := rows.Scan(&src, &tgt); err != nil {
+			t.Fatal(err)
+		}
+		if src == "Alice" && tgt == "Bob" {
+			found = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if !found {
+		t.Fatal("Alice→Bob edge not found via GRAPH_TABLE")
+	}
+}
