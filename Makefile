@@ -1,4 +1,4 @@
-.PHONY: help up down reset logs shell psql build run test test-server test-client test-all test-db test-integration lint coverage migrate migrate-status backup restore status client-dev client-build dev ollama-init
+.PHONY: help up down reset logs shell psql build run test test-server test-client test-all test-db test-integration lint coverage migrate migrate-status backup restore status client-dev client-build dev ollama-init db2-up db2-down db2-psql test-core
 
 # Default target
 help:
@@ -30,6 +30,10 @@ help:
 	@echo "  make dev            - Start all services for development"
 	@echo "  make ollama-init    - Pull Ollama embedding model (fallback for manual pulls)"
 	@echo "  make test-integration - Run embedding integration tests (requires Docker)"
+	@echo "  make db2-up         - Start the PostgreSQL 19 rebuild database"
+	@echo "  make db2-down       - Stop the PostgreSQL 19 rebuild database"
+	@echo "  make db2-psql       - Open psql session on the PostgreSQL 19 rebuild database"
+	@echo "  make test-core      - Run internal/core tests against PostgreSQL 19"
 
 # Docker commands
 up:
@@ -168,3 +172,18 @@ ollama-init:
 # Development commands
 dev:
 	@./scripts/dev.sh
+
+# PostgreSQL 19 rebuild environment (Task 1)
+DB2_URL = postgres://imagineer:imagineer@localhost:5544/imagineer_v2?sslmode=disable
+
+db2-up:
+	docker compose up -d postgres19
+
+db2-down:
+	docker compose stop postgres19
+
+db2-psql:
+	psql "$(DB2_URL)"
+
+test-core:
+	TEST_DATABASE_URL_V2="$(DB2_URL)" go test -p 1 ./internal/core/... -v

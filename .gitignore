@@ -68,6 +68,7 @@ temp/
 
 # Docker data volumes
 data/postgres/
+data/postgres19/
 
 # Local development files
 CLAUDE.local.md
