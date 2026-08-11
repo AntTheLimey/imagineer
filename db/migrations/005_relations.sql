@@ -20,6 +20,8 @@ CREATE TABLE world.entity_relations (
     strength       INT CHECK (strength BETWEEN 1 AND 10),
     established_by UUID REFERENCES world.entities(id),
     terminated_by  UUID REFERENCES world.entities(id),
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT no_self_relation CHECK (source_id <> target_id),
     -- An empty multirange overlaps nothing, so it would slip past the
     -- non-overlap trigger and allow unlimited duplicate rows per edge.
@@ -30,10 +32,13 @@ CREATE TABLE world.entity_relations (
 COMMENT ON TABLE world.entity_relations IS 'Subclass of world.entities — the id IS an entity id (never INHERITS: the v3 correction). Stored direction only; inverses are presentation.';
 COMMENT ON COLUMN world.entity_relations.validity IS 'Set of hour intervals over the world line. Recurrence allowed across disjoint intervals; overlap of the same (source,target,predicate) forbidden.';
 COMMENT ON COLUMN world.entity_relations.established_by IS 'Transition (spec §4.6): the occurrence explaining the interval opening. NULL = asserted, not explained.';
+COMMENT ON COLUMN world.entity_relations.terminated_by IS 'Transition (spec §4.6): the occurrence explaining the interval closing. NULL = asserted, not explained.';
 
 CREATE INDEX rel_edge ON world.entity_relations (source_id, target_id, predicate_id);
 CREATE INDEX ON world.entity_relations (target_id);
 CREATE INDEX ON world.entity_relations (predicate_id);
+CREATE TRIGGER touch BEFORE UPDATE ON world.entity_relations
+    FOR EACH ROW EXECUTE FUNCTION core.touch_updated_at();
 
 CREATE FUNCTION world.relations_no_overlap() RETURNS trigger AS $$
 BEGIN

@@ -21,6 +21,7 @@ CREATE TABLE world.eras (
     UNIQUE (world_id, sequence)
 );
 COMMENT ON TABLE world.eras IS 'Named hour-ranges on the world line. Fuzziness is range width — no scale enum (spec §4.7).';
+COMMENT ON COLUMN world.eras.sequence IS 'Display and sort order of eras within a world. Unique per world; independent of span, which may overlap or leave gaps.';
 CREATE UNIQUE INDEX eras_name ON world.eras (world_id, lower(name));
 CREATE TRIGGER touch BEFORE UPDATE ON world.eras
     FOR EACH ROW EXECUTE FUNCTION core.touch_updated_at();

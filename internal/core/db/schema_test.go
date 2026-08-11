@@ -276,6 +276,41 @@ func TestRelationDefaultValidityIsUnbounded(t *testing.T) {
 	}
 }
 
+// Relations are entities and carry the same audit columns as every other
+// table: created_at, updated_at, and the touch trigger that maintains it.
+func TestRelationTimestampsTouched(t *testing.T) {
+	pool := migratedPool(t)
+	ctx := context.Background()
+	wid, _, pred, a, b := seedRelWorld(t, pool)
+
+	id, err := addRelation(t, pool, wid, pred, a, b, 100, 200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var same bool
+	if err := pool.QueryRow(ctx, `SELECT created_at = updated_at
+        FROM world.entity_relations WHERE id = $1`, id).Scan(&same); err != nil {
+		t.Fatal(err)
+	}
+	if !same {
+		t.Fatal("created_at and updated_at differ on insert")
+	}
+	// strength is outside the no_overlap trigger's column list, so this
+	// exercises the touch trigger alone.
+	if _, err := pool.Exec(ctx,
+		`UPDATE world.entity_relations SET strength = 5 WHERE id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+	var touched bool
+	if err := pool.QueryRow(ctx, `SELECT updated_at > created_at
+        FROM world.entity_relations WHERE id = $1`, id).Scan(&touched); err != nil {
+		t.Fatal(err)
+	}
+	if !touched {
+		t.Fatal("updated_at not advanced by the touch trigger")
+	}
+}
+
 // Widening an existing interval into a sibling's span must be rejected too.
 func TestRelationUpdateOverlapRejected(t *testing.T) {
 	pool := migratedPool(t)

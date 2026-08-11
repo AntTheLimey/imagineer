@@ -12,6 +12,11 @@
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 
+-- The Go migration runner creates this before applying anything, since its
+-- ledger table lives here. Repeated so the file also stands alone under
+-- plain psql; IF NOT EXISTS keeps both paths idempotent.
+CREATE SCHEMA IF NOT EXISTS core;
+
 CREATE SCHEMA app;
 CREATE SCHEMA world;
 CREATE SCHEMA campaign;

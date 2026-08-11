@@ -41,6 +41,7 @@ CREATE TABLE world.calendars (
 );
 COMMENT ON TABLE world.calendars IS 'Meaning of the numeric hours line (spec §7). Unit is always hours.';
 COMMENT ON COLUMN world.calendars.display_mapping IS 'Named scheme ("gregorian-rata-die") or table-driven months/weekdays with hours-per-day.';
+CREATE INDEX ON world.calendars (world_id);
 CREATE UNIQUE INDEX one_primary_calendar_per_world
     ON world.calendars (world_id) WHERE is_primary;
 CREATE TRIGGER touch BEFORE UPDATE ON world.calendars
