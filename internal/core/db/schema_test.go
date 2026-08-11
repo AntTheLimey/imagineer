@@ -44,3 +44,22 @@ func TestBaseSchemas(t *testing.T) {
 		t.Fatalf("schemas found = %d, err = %v", n, err)
 	}
 }
+
+func TestOnePrimaryCalendarPerWorld(t *testing.T) {
+	pool := migratedPool(t)
+	ctx := context.Background()
+	var uid, wid string
+	pool.QueryRow(ctx, `INSERT INTO app.users (email, display_name)
+        VALUES ('gm@example.com','Ant') RETURNING id`).Scan(&uid)
+	pool.QueryRow(ctx, `INSERT INTO world.worlds (owner_id, name)
+        VALUES ($1,'Canticle') RETURNING id`, uid).Scan(&wid)
+	if _, err := pool.Exec(ctx, `INSERT INTO world.calendars
+        (world_id, is_primary, epoch_label) VALUES ($1, true, 'Rata Die')`, wid); err != nil {
+		t.Fatal(err)
+	}
+	_, err := pool.Exec(ctx, `INSERT INTO world.calendars
+        (world_id, is_primary, epoch_label) VALUES ($1, true, 'Other')`, wid)
+	if err == nil {
+		t.Fatal("second primary calendar was allowed")
+	}
+}
