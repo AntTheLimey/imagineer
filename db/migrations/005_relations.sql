@@ -20,7 +20,12 @@ CREATE TABLE world.entity_relations (
     strength       INT CHECK (strength BETWEEN 1 AND 10),
     established_by UUID REFERENCES world.entities(id),
     terminated_by  UUID REFERENCES world.entities(id),
-    CONSTRAINT no_self_relation CHECK (source_id <> target_id)
+    CONSTRAINT no_self_relation CHECK (source_id <> target_id),
+    -- An empty multirange overlaps nothing, so it would slip past the
+    -- non-overlap trigger and allow unlimited duplicate rows per edge.
+    -- numrange(5,5) collapses to empty, which a caller with lo = hi
+    -- produces silently, so the degenerate case is reachable by accident.
+    CONSTRAINT validity_not_empty CHECK (validity <> '{}'::nummultirange)
 );
 COMMENT ON TABLE world.entity_relations IS 'Subclass of world.entities — the id IS an entity id (never INHERITS: the v3 correction). Stored direction only; inverses are presentation.';
 COMMENT ON COLUMN world.entity_relations.validity IS 'Set of hour intervals over the world line. Recurrence allowed across disjoint intervals; overlap of the same (source,target,predicate) forbidden.';
