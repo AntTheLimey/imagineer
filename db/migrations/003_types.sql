@@ -35,6 +35,15 @@ CREATE FUNCTION world.types_no_cycle() RETURNS trigger AS $$
 DECLARE
     cur UUID := NEW.parent_id;
 BEGIN
+    -- All parent_id mutations for a world serialize through this
+    -- advisory lock, so the walk below always sees committed truth
+    -- for that world's tree. Without it, two concurrent re-parents
+    -- (e.g. Y.parent_id = Z while Z.parent_id = Y) can each walk the
+    -- other's pre-transaction ancestor chain under READ COMMITTED,
+    -- see no cycle, and both commit — producing Y->Z->Y. An advisory
+    -- xact lock is used instead of FOR UPDATE row locks to avoid
+    -- deadlock-abort noise between two same-world re-parents.
+    PERFORM pg_advisory_xact_lock(hashtextextended('world.types:' || NEW.world_id::text, 0));
     WHILE cur IS NOT NULL LOOP
         IF cur = NEW.id THEN
             RAISE EXCEPTION 'type tree cycle involving %', NEW.id;
