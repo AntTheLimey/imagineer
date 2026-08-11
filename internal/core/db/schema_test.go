@@ -63,3 +63,53 @@ func TestOnePrimaryCalendarPerWorld(t *testing.T) {
 		t.Fatal("second primary calendar was allowed")
 	}
 }
+
+// seedWorld inserts a user+world and returns the world id.
+func seedWorld(t *testing.T, pool *pgxpool.Pool) string {
+	t.Helper()
+	ctx := context.Background()
+	var uid, wid string
+	pool.QueryRow(ctx, `INSERT INTO app.users (email, display_name)
+        VALUES (concat(uuidv7()::text,'@x.io'),'GM') RETURNING id`).Scan(&uid)
+	if err := pool.QueryRow(ctx, `INSERT INTO world.worlds (owner_id, name)
+        VALUES ($1,'W') RETURNING id`, uid).Scan(&wid); err != nil {
+		t.Fatal(err)
+	}
+	return wid
+}
+
+func TestTypeTree(t *testing.T) {
+	pool := migratedPool(t)
+	ctx := context.Background()
+	wid := seedWorld(t, pool)
+
+	var root, child string
+	// Root type: parent_id NULL must be allowed (the v3 correction).
+	if err := pool.QueryRow(ctx, `INSERT INTO world.types
+        (world_id, kind, name, display_label) VALUES ($1,'entity','thing','Thing')
+        RETURNING id`, wid).Scan(&root); err != nil {
+		t.Fatal(err)
+	}
+	pool.QueryRow(ctx, `INSERT INTO world.types
+        (world_id, parent_id, kind, name, display_label)
+        VALUES ($1,$2,'entity','npc','NPC') RETURNING id`, wid, root).Scan(&child)
+
+	// Case-insensitive sibling name collision rejected.
+	if _, err := pool.Exec(ctx, `INSERT INTO world.types
+        (world_id, parent_id, kind, name, display_label)
+        VALUES ($1,$2,'entity','NPC','Dup')`, wid, root); err == nil {
+		t.Fatal("duplicate sibling name allowed")
+	}
+	// Duplicate root name (parent_id NULL) rejected: NULLS NOT DISTINCT
+	// on the expression index must treat two NULL parents as colliding.
+	if _, err := pool.Exec(ctx, `INSERT INTO world.types
+        (world_id, kind, name, display_label)
+        VALUES ($1,'entity','thing','Thing 2')`, wid); err == nil {
+		t.Fatal("duplicate root name allowed")
+	}
+	// Cycle rejected: root cannot become child of its descendant.
+	if _, err := pool.Exec(ctx,
+		`UPDATE world.types SET parent_id = $1 WHERE id = $2`, child, root); err == nil {
+		t.Fatal("cycle allowed")
+	}
+}
