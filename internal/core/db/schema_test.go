@@ -492,3 +492,24 @@ func TestEntities(t *testing.T) {
 		t.Fatal("invalid canon_status allowed")
 	}
 }
+
+func TestEras(t *testing.T) {
+	pool := migratedPool(t)
+	ctx := context.Background()
+	wid := seedWorld(t, pool)
+	_, err := pool.Exec(ctx, `INSERT INTO world.eras (world_id, name, span, sequence)
+        VALUES ($1, 'The Vienna Affair', numrange(15890000, 15900000), 1)`, wid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Duplicate sequence rejected.
+	if _, err := pool.Exec(ctx, `INSERT INTO world.eras (world_id, name, span, sequence)
+        VALUES ($1, 'Other', numrange(1,2), 1)`, wid); err == nil {
+		t.Fatal("duplicate sequence allowed")
+	}
+	// Duplicate era name, case-insensitive, within the same world rejected.
+	if _, err := pool.Exec(ctx, `INSERT INTO world.eras (world_id, name, span, sequence)
+        VALUES ($1, 'THE VIENNA AFFAIR', numrange(3,4), 2)`, wid); err == nil {
+		t.Fatal("duplicate era name allowed")
+	}
+}
