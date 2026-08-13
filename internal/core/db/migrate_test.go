@@ -36,7 +36,7 @@ func testPool(t *testing.T) *pgxpool.Pool {
 func TestMigrateAppliesOnceInOrder(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
-	pool.Exec(ctx, `DROP TABLE IF EXISTS mig_probe; DROP SCHEMA IF EXISTS core CASCADE`)
+	_, _ = pool.Exec(ctx, `DROP TABLE IF EXISTS mig_probe; DROP SCHEMA IF EXISTS core CASCADE`)
 
 	dir := fstest.MapFS{
 		"001_a.sql": {Data: []byte(`CREATE TABLE mig_probe (n INT);`)},

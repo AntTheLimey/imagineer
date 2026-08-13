@@ -51,10 +51,14 @@ func TestOnePrimaryCalendarPerWorld(t *testing.T) {
 	pool := migratedPool(t)
 	ctx := context.Background()
 	var uid, wid string
-	pool.QueryRow(ctx, `INSERT INTO app.users (email, display_name)
-        VALUES ('gm@example.com','Ant') RETURNING id`).Scan(&uid)
-	pool.QueryRow(ctx, `INSERT INTO world.worlds (owner_id, name)
-        VALUES ($1,'Canticle') RETURNING id`, uid).Scan(&wid)
+	if err := pool.QueryRow(ctx, `INSERT INTO app.users (email, display_name)
+        VALUES ('gm@example.com','Ant') RETURNING id`).Scan(&uid); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `INSERT INTO world.worlds (owner_id, name)
+        VALUES ($1,'Canticle') RETURNING id`, uid).Scan(&wid); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := pool.Exec(ctx, `INSERT INTO world.calendars
         (world_id, is_primary, epoch_label) VALUES ($1, true, 'Rata Die')`, wid); err != nil {
 		t.Fatal(err)
@@ -71,8 +75,10 @@ func seedWorld(t *testing.T, pool *pgxpool.Pool) string {
 	t.Helper()
 	ctx := context.Background()
 	var uid, wid string
-	pool.QueryRow(ctx, `INSERT INTO app.users (email, display_name)
-        VALUES (concat(uuidv7()::text,'@x.io'),'GM') RETURNING id`).Scan(&uid)
+	if err := pool.QueryRow(ctx, `INSERT INTO app.users (email, display_name)
+        VALUES (concat(uuidv7()::text,'@x.io'),'GM') RETURNING id`).Scan(&uid); err != nil {
+		t.Fatal(err)
+	}
 	if err := pool.QueryRow(ctx, `INSERT INTO world.worlds (owner_id, name)
         VALUES ($1,'W') RETURNING id`, uid).Scan(&wid); err != nil {
 		t.Fatal(err)
@@ -92,9 +98,11 @@ func TestTypeTree(t *testing.T) {
         RETURNING id`, wid).Scan(&root); err != nil {
 		t.Fatal(err)
 	}
-	pool.QueryRow(ctx, `INSERT INTO world.types
+	if err := pool.QueryRow(ctx, `INSERT INTO world.types
         (world_id, parent_id, kind, name, display_label)
-        VALUES ($1,$2,'entity','npc','NPC') RETURNING id`, wid, root).Scan(&child)
+        VALUES ($1,$2,'entity','npc','NPC') RETURNING id`, wid, root).Scan(&child); err != nil {
+		t.Fatal(err)
+	}
 
 	// Case-insensitive sibling name collision rejected.
 	if _, err := pool.Exec(ctx, `INSERT INTO world.types
@@ -158,7 +166,7 @@ func addRelation(t *testing.T, pool *pgxpool.Pool, wid, pred, src, tgt string, l
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	var relType, id string
 	if err := tx.QueryRow(ctx,
 		`SELECT id FROM world.types WHERE id = $1 AND kind = 'relation'`, pred).Scan(&relType); err != nil {
@@ -229,7 +237,7 @@ func TestOverlapWithinSingleTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	insert := func(lo, hi int64) error {
 		var id string
@@ -406,7 +414,7 @@ func TestConcurrentOverlapSerialized(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer txA.Rollback(ctx)
+	defer func() { _ = txA.Rollback(ctx) }()
 	if err := insert(txA, 0, 100); err != nil {
 		t.Fatal(err)
 	}
@@ -420,7 +428,7 @@ func TestConcurrentOverlapSerialized(t *testing.T) {
 			done <- err
 			return
 		}
-		defer txB.Rollback(ctx)
+		defer func() { _ = txB.Rollback(ctx) }()
 		if err := insert(txB, 50, 150); err != nil {
 			done <- err
 			return
@@ -472,7 +480,7 @@ func TestConcurrentReparentSerialized(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer txA.Rollback(ctx)
+	defer func() { _ = txA.Rollback(ctx) }()
 	if _, err := txA.Exec(ctx,
 		`UPDATE world.types SET parent_id = $1 WHERE id = $2`, z, y); err != nil {
 		t.Fatal(err)
@@ -485,7 +493,7 @@ func TestConcurrentReparentSerialized(t *testing.T) {
 			done <- err
 			return
 		}
-		defer txB.Rollback(ctx)
+		defer func() { _ = txB.Rollback(ctx) }()
 		// Different row, so nothing but the advisory lock can block this.
 		if _, err := txB.Exec(ctx,
 			`UPDATE world.types SET parent_id = $1 WHERE id = $2`, y, z); err != nil {

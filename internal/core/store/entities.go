@@ -64,7 +64,7 @@ func (s *Store) CreateRelation(ctx context.Context, worldID, predicateID,
 	if err != nil {
 		return uuid.Nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	var id uuid.UUID
 	if err := tx.QueryRow(ctx, `INSERT INTO world.entities (world_id, type_id, name)
         VALUES ($1,$2,'(relation)') RETURNING id`, worldID, predicateID).Scan(&id); err != nil {

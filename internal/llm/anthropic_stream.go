@@ -162,11 +162,7 @@ func (p *AnthropicStreamProvider) CompleteStream(
 			[]anthropicToolDefinition, len(req.Tools),
 		)
 		for i, t := range req.Tools {
-			tools[i] = anthropicToolDefinition{
-				Name:        t.Name,
-				Description: t.Description,
-				InputSchema: t.InputSchema,
-			}
+			tools[i] = anthropicToolDefinition(t)
 		}
 		body.Tools = tools
 	}

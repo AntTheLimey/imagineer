@@ -57,12 +57,12 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool, dir fs.FS) ([]string, erro
 			return applied, err
 		}
 		if _, err := tx.Exec(ctx, string(sqlBytes)); err != nil {
-			tx.Rollback(ctx)
+			_ = tx.Rollback(ctx)
 			return applied, fmt.Errorf("%s: %w", name, err)
 		}
 		if _, err := tx.Exec(ctx,
 			`INSERT INTO core.schema_history (filename) VALUES ($1)`, name); err != nil {
-			tx.Rollback(ctx)
+			_ = tx.Rollback(ctx)
 			return applied, err
 		}
 		if err := tx.Commit(ctx); err != nil {
