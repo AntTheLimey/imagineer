@@ -8,6 +8,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Rebuild 01 — Core Schema and Time (PostgreSQL 19)
+  - New `postgres19` compose service (pinned `postgres:19beta2`,
+    swappable via `PG19_IMAGE`) beside the legacy stack, with
+    `db2-up`/`db2-down`/`db2-psql`/`test-core` Make targets.
+  - Plain-SQL migration runner (`internal/core/db`) and seven
+    migrations building the `app`/`world`/`campaign`/`ingest`
+    namespaces: worlds, calendars (one primary per world), a
+    per-world unified type tree with an advisory-lock-guarded
+    cycle check, entities, relations-as-entities in a subclass
+    table with `NUMMULTIRANGE` validity in world-hours
+    (recurrence allowed, same-edge overlap rejected by a
+    concurrency-proven constraint trigger), eras, and a SQL/PGQ
+    property graph.
+  - Pure-Go `worldtime` library mapping proleptic-Gregorian
+    dates to the hours line (Rata Die epoch, verified against
+    an independent oracle), and a store layer covering worlds,
+    types, entities, relations, and as-of-hour queries.
+  - Removed in the same change: legacy schema migrations
+    (`migrations/001`–`008`) — the rebuild schema in
+    `db/migrations/` is the schema going forward.
+
 - Canticle Campaign Seed Data
   - Initial seed of the Canticle campaign with 90 entities
     and 55 relationships covering the London, Lyon, and
