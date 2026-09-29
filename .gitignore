@@ -1,6 +1,9 @@
 # Claude
 .claude/settings.local.json
 
+# Git worktrees
+.worktrees/
+
 # Build output
 bin/
 dist/
@@ -65,6 +68,7 @@ temp/
 
 # Docker data volumes
 data/postgres/
+data/postgres19/
 
 # Local development files
 CLAUDE.local.md

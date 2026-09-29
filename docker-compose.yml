@@ -53,6 +53,25 @@ services:
     networks:
       - imagineer-network
 
+  postgres19:
+    build:
+      context: .
+      dockerfile: docker/postgres19/Dockerfile
+      args:
+        - PG19_IMAGE=${PG19_IMAGE:-postgres:19beta2}
+    container_name: imagineer-postgres19
+    environment:
+      - POSTGRES_DB=imagineer_v2
+      - POSTGRES_USER=imagineer
+      - POSTGRES_PASSWORD=imagineer
+    ports:
+      - "5544:5432"
+    volumes:
+      # postgres:19beta2 (PG18+ layout) rejects a mount directly at
+      # /var/lib/postgresql/data; it wants a single mount at the parent
+      # so it can place data in a major-version-specific subdirectory.
+      - ./data/postgres19:/var/lib/postgresql
+
   mcp-server:
     build:
       context: ../pgedge-postgres-mcp

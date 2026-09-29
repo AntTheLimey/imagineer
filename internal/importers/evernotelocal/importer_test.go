@@ -257,6 +257,7 @@ func TestNewImporter(t *testing.T) {
 	importer := New()
 	if importer == nil {
 		t.Fatal("New() returned nil")
+		return
 	}
 	if importer.executor == nil {
 		t.Error("New() did not initialize executor")

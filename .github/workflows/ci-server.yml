@@ -25,7 +25,7 @@ jobs:
         strategy:
             matrix:
                 go-version: ['1.23', '1.24']
-                postgres-version: ['17', '18']
+                postgres-version: ['19beta2']
             fail-fast: false
 
         services:
@@ -61,19 +61,19 @@ jobs:
               run: go mod download
 
             - name: Install golangci-lint
-              if: matrix.go-version == '1.24' && matrix.postgres-version == '18'
+              if: matrix.go-version == '1.24' && matrix.postgres-version == '19beta2'
               run: |
                   go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
             - name: Lint code
-              if: matrix.go-version == '1.24' && matrix.postgres-version == '18'
+              if: matrix.go-version == '1.24' && matrix.postgres-version == '19beta2'
               run: golangci-lint run ./...
 
             - name: Run go vet
               run: go vet ./...
 
             - name: Check formatting
-              if: matrix.go-version == '1.24' && matrix.postgres-version == '18'
+              if: matrix.go-version == '1.24' && matrix.postgres-version == '19beta2'
               run: |
                   gofmt -l . > /tmp/gofmt.out
                   if [ -s /tmp/gofmt.out ]; then
@@ -92,30 +92,17 @@ jobs:
                     sleep 2
                   done
 
-            - name: Run migrations
-              env:
-                  PGHOST: localhost
-                  PGPORT: 5432
-                  PGDATABASE: imagineer_test
-                  PGUSER: imagineer
-                  PGPASSWORD: postgres
-              run: |
-                  for f in migrations/*.sql; do
-                    echo "Applying $f..."
-                    psql -f "$f"
-                  done
-
             - name: Run tests with coverage
               env:
-                  TEST_DATABASE_URL: postgres://imagineer:postgres@localhost:5432/imagineer_test
-              run: go test -v -race -coverprofile=coverage.out ./...
+                  TEST_DATABASE_URL_V2: postgres://imagineer:postgres@localhost:5432/imagineer_test
+              run: go test -v -race -p 1 -coverprofile=coverage.out ./...
 
             - name: Generate coverage report
-              if: matrix.go-version == '1.24' && matrix.postgres-version == '18'
+              if: matrix.go-version == '1.24' && matrix.postgres-version == '19beta2'
               run: go tool cover -func=coverage.out
 
             - name: Upload coverage artifact
-              if: matrix.go-version == '1.24' && matrix.postgres-version == '18'
+              if: matrix.go-version == '1.24' && matrix.postgres-version == '19beta2'
               uses: actions/upload-artifact@v4
               with:
                   name: server-coverage
